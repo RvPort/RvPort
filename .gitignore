@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+!.github/env/*.env
 .pnpm-store/
 .husky/
 __pycache__/

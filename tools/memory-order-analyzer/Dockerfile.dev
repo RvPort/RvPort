@@ -5,7 +5,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG LLVM_DEB_VERSION=1:21.1.8~++20251221032922+2078da43e25a-1~exp1~20251221153059.70
 COPY development-packages.lock /opt/development-packages.lock
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates=20260601~24.04.1 curl=8.5.0-2ubuntu10.15
+    ca-certificates curl
 RUN curl --fail --show-error --location --max-time 60 \
        https://apt.llvm.org/llvm-snapshot.gpg.key -o /usr/share/keyrings/llvm.asc \
     && echo '8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /usr/share/keyrings/llvm.asc' | sha256sum -c - \

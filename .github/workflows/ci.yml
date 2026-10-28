@@ -1,0 +1,675 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# ============================================================================
+# 流水线阶段（按依赖串行，阶段内并行）
+#   1. lint      — 提交规范 + 前端 lint/typecheck
+#   2. unittest  — 各组件单元测试与覆盖率门槛（90% 行/分支）
+#   3. compile   — 各组件生产构建校验
+#   4. build     — 构建镜像（push 事件推送 GHCR；PR 事件仅构建不推送）
+#   5. deploy    — 部署 dev / test（并行，需 environment 人工审批）
+#
+# 触发策略：
+#   - push（任意分支）：跑完 1→5，build 推送镜像，deploy 等待人工审批
+#   - pull_request    ：只跑 1→4 的构建校验，不推送镜像，不出现 deploy
+#   - workflow_dispatch：同 push
+# ============================================================================
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/rvport/rvport-backend
+  FRONTEND_IMAGE: ghcr.io/rvport/rvport-frontend
+
+jobs:
+  # ==========================================================================
+  # 阶段 1 — lint
+  # ==========================================================================
+  commit-check:
+    name: Lint / Commit Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check latest commit message
+        run: |
+          MSG=$(git log -1 --format="%s")
+          echo "最新提交: $MSG"
+          if echo "$MSG" | grep -qiP '^merge'; then
+            echo "SKIP (merge commit)"
+          elif echo "$MSG" | grep -qP '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: .+'; then
+            echo "OK — 符合 Conventional Commits 规范"
+          else
+            echo "::error:: 不符合 Conventional Commits 规范，需要格式: type(scope): description"
+            echo "::error:: 当前提交: $MSG"
+            exit 1
+          fi
+
+  frontend-lint:
+    name: Lint / Frontend (eslint + typecheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: ESLint
+        working-directory: frontend
+        run: pnpm lint
+
+      - name: Typecheck
+        working-directory: frontend
+        run: pnpm typecheck
+
+  # ==========================================================================
+  # 阶段 2 — unittest（覆盖率门槛 90% 行/分支）
+  # ==========================================================================
+  backend-java:
+    name: Unittest / Backend Java
+    needs: commit-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+          cache: 'maven'
+
+      - name: Maven clean verify (with JaCoCo coverage gate)
+        working-directory: backend
+        run: mvn -B clean verify -T 1C
+
+      - name: Upload surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: ignore
+
+      - name: Upload JaCoCo reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jacoco-reports
+          path: backend/target/site/jacoco/
+          if-no-files-found: ignore
+
+  backend-python:
+    name: Unittest / Backend Python
+    needs: commit-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend unit-test image
+        run: docker build --target unit-test -t rvport-backend-unit:local -f backend/Dockerfile .
+
+      - name: Run backend Python coverage tests
+        run: |
+          docker run --name rvport-backend-python --memory=2g --cpus=2 \
+            -e PYTHONPATH=/workspace/tools/memory-order-analyzer/python \
+            rvport-backend-unit:local sh -c \
+            'python3 -m coverage run --branch --source=src/main/resources/analysis,src/main/resources/bitcode -m pytest src/test/python; test_status=$?; python3 -m coverage json -o /tmp/backend-python-coverage.json; python3 -m coverage report --fail-under=90; coverage_status=$?; if [ "$test_status" -ne 0 ]; then exit "$test_status"; fi; exit "$coverage_status"'
+
+      - name: Verify per-script 90% line/branch gate
+        run: |
+          docker cp rvport-backend-python:/tmp/backend-python-coverage.json ./backend-python-coverage.json
+          docker run --rm --memory=1g --cpus=1 \
+            --mount "type=bind,source=$PWD/backend-python-coverage.json,target=/tmp/coverage.json,readonly" \
+            rvport-backend-unit:local python3 -c \
+            'import json; r=json.load(open("/tmp/coverage.json")); rows=[r["totals"],*[f["summary"] for f in r["files"].values()]]; assert all(s["covered_lines"]*100 >= s["num_statements"]*90 and s["covered_branches"]*100 >= s["num_branches"]*90 for s in rows), "行或分支覆盖率未达到 90%"; print("整体和每个脚本的行、分支覆盖率均达到 90%")'
+
+      - name: Upload backend python coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-python-coverage
+          path: backend-python-coverage.json
+          if-no-files-found: ignore
+
+  frontend-unit:
+    name: Unittest / Frontend
+    needs: commit-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit tests
+        working-directory: frontend
+        run: pnpm test
+
+  kb-scanner:
+    name: Unittest / KB Scanner
+    needs: commit-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build kb-scanner test image
+        run: docker build -f tools/kb-scanner/Dockerfile.test -t rvport-kb-scanner-test:local .
+
+      - name: Run kb-scanner full unit tests + coverage gates
+        run: docker run --name rvport-kb-unit --memory=4g --cpus=2 --network=none rvport-kb-scanner-test:local
+
+      - name: Cleanup container
+        if: always()
+        run: docker rm -f rvport-kb-unit >/dev/null 2>&1 || true
+
+  floating-point-scanner:
+    name: Unittest / Floating-Point Scanner
+    needs: commit-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build fp-scanner dev image
+        run: docker build -t rvport-fp-dev:local tools/floating-point-precision-scanner -f tools/floating-point-precision-scanner/Dockerfile.dev
+
+      - name: Run Python + C++ coverage
+        run: |
+          docker run --name rvport-fp-unit --memory=8g --cpus=2 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
+            rvport-fp-dev:local make coverage cpp-coverage
+
+      - name: Upload fp-scanner coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fp-scanner-coverage
+          path: tools/floating-point-precision-scanner/artifacts/coverage/
+          if-no-files-found: ignore
+
+      - name: Cleanup container
+        if: always()
+        run: docker rm -f rvport-fp-unit >/dev/null 2>&1 || true
+
+  memory-order-analyzer:
+    name: Unittest / Memory-Order Analyzer
+    needs: commit-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build moa dev image
+        run: docker build -t memory-order-analyzer-dev:llvm21 -f tools/memory-order-analyzer/Dockerfile.dev tools/memory-order-analyzer
+
+      - name: Run moa quality gate
+        run: |
+          docker run --name rvport-moa-unit --memory=8g --cpus=2 --network none \
+            --mount "type=bind,source=$PWD/tools/memory-order-analyzer,target=/workspace,readonly" \
+            --mount "type=volume,source=moa-dev-output,target=/output" \
+            memory-order-analyzer-dev:llvm21 \
+            python3 -m memory_order_analyzer.quality --output /output/quality-ci
+
+      - name: Upload moa coverage summary
+        if: always()
+        run: |
+          CID=$(docker ps -aq --filter name=rvport-moa-unit 2>/dev/null | head -1)
+          if [ -n "$CID" ]; then
+            mkdir -p moa-coverage
+            docker cp "$CID:/output/quality-ci" ./moa-coverage/ 2>/dev/null || true
+          fi
+        shell: bash
+
+      - name: Upload moa artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moa-quality-report
+          path: moa-coverage/
+          if-no-files-found: ignore
+
+      - name: Cleanup container and volume
+        if: always()
+        run: |
+          docker rm -f rvport-moa-unit >/dev/null 2>&1 || true
+          docker volume rm moa-dev-output >/dev/null 2>&1 || true
+
+  # ==========================================================================
+  # 阶段 3 — compile（生产构建校验，不推送镜像）
+  # ==========================================================================
+  compile-backend:
+    name: Compile / Backend
+    needs: [backend-java, backend-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+          cache: 'maven'
+
+      - name: Maven package (skip tests, verify production build)
+        working-directory: backend
+        run: mvn -B -DskipTests package -T 1C
+
+      - name: Upload backend jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/*.jar
+          if-no-files-found: error
+
+  compile-frontend:
+    name: Compile / Frontend
+    needs: [frontend-lint, frontend-unit]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Production build
+        working-directory: frontend
+        run: pnpm build
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          if-no-files-found: error
+
+  compile-tools:
+    name: Compile / Tools
+    needs: [kb-scanner, floating-point-scanner, memory-order-analyzer]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build fp-scanner dev image
+        run: docker build -t rvport-fp-dev:local tools/floating-point-precision-scanner -f tools/floating-point-precision-scanner/Dockerfile.dev
+
+      - name: Compile fp-scanner C++ workers
+        run: |
+          docker run --rm --memory=8g --cpus=2 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
+            rvport-fp-dev:local make cpp-configure
+
+      - name: Build moa dev image
+        run: docker build -t memory-order-analyzer-dev:llvm21 -f tools/memory-order-analyzer/Dockerfile.dev tools/memory-order-analyzer
+
+      - name: Verify moa module entrypoint
+        run: |
+          docker run --rm --memory=4g --cpus=2 --network none \
+            --mount "type=bind,source=$PWD/tools/memory-order-analyzer,target=/workspace,readonly" \
+            memory-order-analyzer-dev:llvm21 \
+            python3 -m memory_order_analyzer --help
+
+  # ==========================================================================
+  # 阶段 4 — build（构建并推送镜像，tag: v<yyyyMMdd>-<HHmmss>）
+  # ==========================================================================
+  build:
+    name: Build / Docker Images
+    needs: [compile-backend, compile-frontend, compile-tools]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tags.outputs.TAG }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tags
+        run: |
+          TAG="v$(date -u +'%Y%m%d-%H%M%S')"
+          echo "TAG=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "镜像 Tag: ${TAG}"
+
+      # PR 事件只做镜像构建验证，不推送到 GHCR（避免 PR 的 latest 覆盖可部署镜像）。
+      - name: Resolve push flag
+        id: pushflag
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "PUSH=false" >> "$GITHUB_OUTPUT"
+            echo "PR 事件：仅构建校验，不推送镜像"
+          else
+            echo "PUSH=true" >> "$GITHUB_OUTPUT"
+            echo "推送镜像到 ${REGISTRY}"
+          fi
+
+      - name: Login to GHCR
+        if: steps.pushflag.outputs.PUSH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: ${{ steps.pushflag.outputs.PUSH }}
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ steps.tags.outputs.TAG }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/deploy/docker/Dockerfile
+          push: ${{ steps.pushflag.outputs.PUSH }}
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ steps.tags.outputs.TAG }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          if [ "${{ steps.pushflag.outputs.PUSH }}" = "true" ]; then
+            echo "  镜像构建 & 推送完成"
+          else
+            echo "  镜像构建校验完成（PR 事件，未推送）"
+          fi
+          echo "  Tag: ${{ steps.tags.outputs.TAG }}"
+          echo "  后端: ${{ env.BACKEND_IMAGE }}:${{ steps.tags.outputs.TAG }}"
+          echo "  前端: ${{ env.FRONTEND_IMAGE }}:${{ steps.tags.outputs.TAG }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # ==========================================================================
+  # 阶段 5 — deploy（并行，需 environment 人工审批）
+  # ==========================================================================
+  deploy-dev:
+    name: Deploy / dev
+    needs: build
+    # 任意分支推送均可部署（不限 ci/master）；PR 事件只跑到 build，不出现 deploy。
+    # 仍需 environment: dev 的人工审批。
+    if: needs.build.result == 'success' && github.event_name != 'pull_request'
+    runs-on: self-hosted
+    environment: dev
+    env:
+      DEPLOY_DIR: /opt/ryport/deploy/ryport-dev
+      PROJECT: ryport-dev
+      HEALTH_PORT: '8080'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm target
+        run: |
+          echo "部署目标: dev (端口 8080/8081)"
+          echo "镜像 tag: ${{ needs.build.outputs.tag }}"
+          echo "部署目录: ${DEPLOY_DIR}"
+
+      - name: Pre-check target directory
+        run: |
+          if [ ! -d "${DEPLOY_DIR}" ]; then
+            echo "::error:: 部署目录不存在: ${DEPLOY_DIR}"
+            exit 1
+          fi
+          echo "[OK] 部署目录存在"
+
+      - name: Pre-check ports
+        run: |
+          # 允许本项目已有容器占用端口（覆盖部署场景），仅拦截其他项目的占用。
+          # 用 docker 原生 --filter publish=<port> 判断占用：它支持端口范围（如 9000-9001），
+          # 比解析 {{.Ports}} 文本可靠（后者在范围映射时会漏判）。
+          PORTS='8080 8081 5432 6379 5672 15672 9000 9001'
+          for port in ${PORTS}; do
+            holders=$(docker ps --filter "publish=${port}" \
+              --format '{{.Names}}|{{.Label "com.docker.compose.project"}}' || true)
+            if [ -z "${holders}" ]; then
+              echo "[OK] 端口 ${port} 空闲"
+              continue
+            fi
+            foreign=$(echo "${holders}" | grep -v "|${PROJECT}$" || true)
+            if [ -z "${foreign}" ]; then
+              echo "[OK] 端口 ${port} 仅由本项目 ${PROJECT} 占用（覆盖部署）"
+            else
+              echo "::error:: 端口 ${port} 被其他容器占用，拒绝部署"
+              echo "${foreign}"
+              exit 1
+            fi
+          done
+          echo '端口检查通过'
+
+      - name: Ensure infra network exists
+        run: |
+          # compose 中该网络声明为 external，需预先存在。
+          # 已有网络保留不动（其中可能附着本项目容器），仅缺失时创建。
+          NET="${PROJECT}-infra"
+          if docker network inspect "${NET}" >/dev/null 2>&1; then
+            echo "[OK] 网络 ${NET} 已存在，保持不变"
+          else
+            docker network create "${NET}"
+            echo "[OK] 网络 ${NET} 已创建"
+          fi
+
+      - name: Copy compose and init files (overwrite only)
+        run: |
+          cp docker-compose.yml "${DEPLOY_DIR}/docker-compose.yml"
+          mkdir -p "${DEPLOY_DIR}/backend/infra/postgres"
+          cp -r backend/infra/postgres/init "${DEPLOY_DIR}/backend/infra/postgres/"
+          echo "[OK] compose 与 postgres init 已更新"
+
+      - name: Write .env (from repository env file + image tag)
+        run: |
+          cp .github/env/dev.env "${DEPLOY_DIR}/.env"
+          printf '\nBACKEND_IMAGE=%s:%s\n' "${BACKEND_IMAGE}" "${{ needs.build.outputs.tag }}" >> "${DEPLOY_DIR}/.env"
+          printf 'FRONTEND_IMAGE=%s:%s\n' "${FRONTEND_IMAGE}" "${{ needs.build.outputs.tag }}" >> "${DEPLOY_DIR}/.env"
+          echo "[OK] .env 已写入（追加 GHCR 镜像 tag）"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull images (verify tag exists)
+        run: |
+          docker pull "${BACKEND_IMAGE}:${{ needs.build.outputs.tag }}" || { echo '::error:: 后端镜像 tag 不存在'; exit 1; }
+          docker pull "${FRONTEND_IMAGE}:${{ needs.build.outputs.tag }}" || { echo '::error:: 前端镜像 tag 不存在'; exit 1; }
+          echo '[OK] 镜像拉取成功'
+
+      - name: Compose up (non-destructive, no-build)
+        run: |
+          cd "${DEPLOY_DIR}"
+          docker compose -f docker-compose.yml --project-name "${PROJECT}" \
+            up -d --wait --wait-timeout 120 --no-build
+          docker compose -f docker-compose.yml --project-name "${PROJECT}" ps
+
+      - name: Health check backend
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${HEALTH_PORT}/actuator/health" >/dev/null 2>&1; then
+              echo '[OK] 后端健康检查通过'
+              exit 0
+            fi
+            sleep 5
+          done
+          echo '::error:: 后端健康检查超时'
+          exit 1
+
+      - name: Summary
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  dev 部署完成"
+          echo "  镜像 tag: ${{ needs.build.outputs.tag }}"
+          echo "  API:  http://10.20.101.1:8080"
+          echo "  前端: http://10.20.101.1:8081"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  deploy-test:
+    name: Deploy / test
+    needs: build
+    # 任意分支推送均可部署（不限 ci/master）；PR 事件只跑到 build，不出现 deploy。
+    # 仍需 environment: test 的人工审批。
+    if: needs.build.result == 'success' && github.event_name != 'pull_request'
+    runs-on: self-hosted
+    environment: test
+    env:
+      DEPLOY_DIR: /opt/ryport/deploy/ryport-test
+      PROJECT: ryport-test
+      HEALTH_PORT: '18080'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm target
+        run: |
+          echo "部署目标: test (端口 18080/18081)"
+          echo "镜像 tag: ${{ needs.build.outputs.tag }}"
+          echo "部署目录: ${DEPLOY_DIR}"
+
+      - name: Pre-check target directory
+        run: |
+          if [ ! -d "${DEPLOY_DIR}" ]; then
+            echo "::error:: 部署目录不存在: ${DEPLOY_DIR}"
+            exit 1
+          fi
+          echo "[OK] 部署目录存在"
+
+      - name: Pre-check ports
+        run: |
+          # 允许本项目已有容器占用端口（覆盖部署场景），仅拦截其他项目的占用。
+          # 用 docker 原生 --filter publish=<port> 判断占用：它支持端口范围（如 19000-19001），
+          # 比解析 {{.Ports}} 文本可靠（后者在范围映射时会漏判）。
+          PORTS='18080 18081 15432 16379 15673 25672 19000 19001'
+          for port in ${PORTS}; do
+            holders=$(docker ps --filter "publish=${port}" \
+              --format '{{.Names}}|{{.Label "com.docker.compose.project"}}' || true)
+            if [ -z "${holders}" ]; then
+              echo "[OK] 端口 ${port} 空闲"
+              continue
+            fi
+            foreign=$(echo "${holders}" | grep -v "|${PROJECT}$" || true)
+            if [ -z "${foreign}" ]; then
+              echo "[OK] 端口 ${port} 仅由本项目 ${PROJECT} 占用（覆盖部署）"
+            else
+              echo "::error:: 端口 ${port} 被其他容器占用，拒绝部署"
+              echo "${foreign}"
+              exit 1
+            fi
+          done
+          echo '端口检查通过'
+
+      - name: Ensure infra network exists
+        run: |
+          # compose 中该网络声明为 external，需预先存在。
+          # 已有网络保留不动（其中可能附着本项目容器），仅缺失时创建。
+          NET="${PROJECT}-infra"
+          if docker network inspect "${NET}" >/dev/null 2>&1; then
+            echo "[OK] 网络 ${NET} 已存在，保持不变"
+          else
+            docker network create "${NET}"
+            echo "[OK] 网络 ${NET} 已创建"
+          fi
+
+      - name: Copy compose and init files (overwrite only)
+        run: |
+          cp docker-compose.yml "${DEPLOY_DIR}/docker-compose.yml"
+          mkdir -p "${DEPLOY_DIR}/backend/infra/postgres"
+          cp -r backend/infra/postgres/init "${DEPLOY_DIR}/backend/infra/postgres/"
+          echo "[OK] compose 与 postgres init 已更新"
+
+      - name: Write .env (from repository env file + image tag)
+        run: |
+          cp .github/env/test.env "${DEPLOY_DIR}/.env"
+          printf '\nBACKEND_IMAGE=%s:%s\n' "${BACKEND_IMAGE}" "${{ needs.build.outputs.tag }}" >> "${DEPLOY_DIR}/.env"
+          printf 'FRONTEND_IMAGE=%s:%s\n' "${FRONTEND_IMAGE}" "${{ needs.build.outputs.tag }}" >> "${DEPLOY_DIR}/.env"
+          echo "[OK] .env 已写入（追加 GHCR 镜像 tag）"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull images (verify tag exists)
+        run: |
+          docker pull "${BACKEND_IMAGE}:${{ needs.build.outputs.tag }}" || { echo '::error:: 后端镜像 tag 不存在'; exit 1; }
+          docker pull "${FRONTEND_IMAGE}:${{ needs.build.outputs.tag }}" || { echo '::error:: 前端镜像 tag 不存在'; exit 1; }
+          echo '[OK] 镜像拉取成功'
+
+      - name: Compose up (non-destructive, no-build)
+        run: |
+          cd "${DEPLOY_DIR}"
+          docker compose -f docker-compose.yml --project-name "${PROJECT}" \
+            up -d --wait --wait-timeout 120 --no-build
+          docker compose -f docker-compose.yml --project-name "${PROJECT}" ps
+
+      - name: Health check backend
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${HEALTH_PORT}/actuator/health" >/dev/null 2>&1; then
+              echo '[OK] 后端健康检查通过'
+              exit 0
+            fi
+            sleep 5
+          done
+          echo '::error:: 后端健康检查超时'
+          exit 1
+
+      - name: Summary
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  test 部署完成"
+          echo "  镜像 tag: ${{ needs.build.outputs.tag }}"
+          echo "  API:  http://10.20.101.1:18080"
+          echo "  前端: http://10.20.101.1:18081"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

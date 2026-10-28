@@ -2,7 +2,7 @@ name: ${COMPOSE_PROJECT_NAME:-rvport}
 
 services:
   frontend:
-    image: rvport-frontend:local
+    image: ${FRONTEND_IMAGE:-rvport-frontend:local}
     build:
       context: ./frontend
       dockerfile: deploy/docker/Dockerfile
@@ -107,7 +107,7 @@ services:
       - rvport-infra
 
   backend:
-    image: rvport-backend:local
+    image: ${BACKEND_IMAGE:-rvport-backend:local}
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -205,7 +205,7 @@ services:
       - rvport-infra
 
   backend-worker:
-    image: rvport-backend:local
+    image: ${BACKEND_IMAGE:-rvport-backend:local}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -288,11 +288,27 @@ services:
 
 networks:
   rvport-infra:
+    # 声明为 external：已部署环境中的该网络由更早版本的 compose 文件创建，
+    #   其 com.docker.compose.network 标签为历史键名，而标签创建后无法修改，
+    #   若由 compose 托管会因标签不匹配而拒绝启动。改为 external 后 compose
+    #   只负责连接，不校验、不创建、不删除，从而兼容已有网络。
+    #   网络需预先存在：部署流程会按需创建；本地开发执行一次
+    #   `docker network create rvport-infra` 即可。
+    external: true
     name: ${COMPOSE_PROJECT_NAME:-rvport}-infra
 
+# 卷的最终名称可通过环境变量覆盖。
+# 默认值保持 `<项目名>_<卷键名>` 的历史语义，用于本地开发；
+# 已部署环境在各自的 .env 中显式指定实际卷名，以便沿用迁移前已存在的卷，
+# 避免改名后静默创建空卷、表现为数据"丢失"。
 volumes:
   rvport-postgres-data:
+    name: ${RVPORT_POSTGRES_DATA_VOLUME:-${COMPOSE_PROJECT_NAME:-rvport}_rvport-postgres-data}
   rvport-rabbitmq-data:
+    name: ${RVPORT_RABBITMQ_DATA_VOLUME:-${COMPOSE_PROJECT_NAME:-rvport}_rvport-rabbitmq-data}
   rvport-redis-data:
+    name: ${RVPORT_REDIS_DATA_VOLUME:-${COMPOSE_PROJECT_NAME:-rvport}_rvport-redis-data}
   rvport-minio-data:
+    name: ${RVPORT_MINIO_DATA_VOLUME:-${COMPOSE_PROJECT_NAME:-rvport}_rvport-minio-data}
   rvport-backend-runtime:
+    name: ${RVPORT_BACKEND_RUNTIME_VOLUME:-${COMPOSE_PROJECT_NAME:-rvport}_rvport-backend-runtime}
