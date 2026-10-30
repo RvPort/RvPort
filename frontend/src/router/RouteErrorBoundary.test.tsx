@@ -40,3 +40,23 @@ describe('RouteErrorBoundary', () => {
     expect(screen.getByText('错误详情')).toBeInTheDocument()
   })
 })
+
+it('refreshes recovery guidance and hides empty details when the routing error changes', () => {
+  useRouteErrorMock.mockReturnValue(new Error('Failed to fetch dynamically imported module'))
+  const view = render(<RouteErrorBoundary />)
+  expect(screen.getByRole('heading', { name: '页面资源需要更新' })).toBeInTheDocument()
+  useRouteErrorMock.mockReturnValue({
+    status: 403,
+    statusText: 'Forbidden',
+    internal: false,
+    data: null
+  })
+  view.rerender(<RouteErrorBoundary />)
+  expect(screen.getByRole('heading', { name: '没有访问权限' })).toBeInTheDocument()
+  expect(screen.getByText('403 Forbidden')).toBeInTheDocument()
+  useRouteErrorMock.mockReturnValue('')
+  view.rerender(<RouteErrorBoundary />)
+  expect(screen.getByRole('heading', { name: '页面暂时无法显示' })).toBeInTheDocument()
+  expect(screen.queryByText('错误详情')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '返回首页' })).toHaveAttribute('href', '/home')
+})

@@ -182,6 +182,10 @@ export interface ProjectWorkflowStageStatus {
   id: string
   status: ProjectPipelineStageStatus
   reasonCode?: string
+  analysisStatus?: string | null
+  analysisComplete?: boolean | null
+  message?: string | null
+  messageEn?: string | null
 }
 
 export interface ProjectWorkflowStatus {
@@ -253,6 +257,9 @@ export interface ProjectEvaluationReportInputListParams {
 }
 
 export interface ProjectEvaluationReportSummary {
+  pendingVerificationCount?: number | null
+  pendingVerification?: Record<string, unknown>[] | null
+  memoryOrderAnalysis?: Record<string, unknown> | null
   codeFileCount?: number
   codeFindingCount?: number
   codeModuleCount?: number
@@ -964,11 +971,7 @@ export interface ProjectOverview {
   }
   workflow: {
     recommendedStageId: ProjectPanelId | null
-    stages: Array<{
-      id: ProjectPanelId
-      status: ProjectPipelineStageStatus
-      reasonCode: string
-    }>
+    stages: Array<ProjectWorkflowStageStatus & { id: ProjectPanelId; reasonCode: string }>
   }
   recentTasks: ProjectOverviewTask[]
   latestTaskEventId: number

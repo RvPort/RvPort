@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { advanceAuthSession } from '@/store/authSession'
 import { renderWithQueryClient } from '@/test/test-utils'
+import { feedback } from '@/utils/feedback'
 
 import { MigrationInputActions, MigrationInputDetailFooter } from './MigrationInputActions'
 
@@ -29,6 +30,133 @@ const defaultProps = {
 }
 
 describe('MigrationInputActions', () => {
+  it('内存序候选纳入只改变报告选择，仍待核实，新 Finding 不继承确认', async () => {
+    const key = ['memory-order-candidate']
+    const candidate = {
+      id: 'result-1',
+      runId: 'run-1',
+      findingKind: 'SOURCE_CANDIDATE',
+      severity: 'INFO',
+      confidence: null,
+      detail: { conclusion: { verdict: 'source-candidate' } },
+      reportInclusion: { confirmedForNextReport: false, migrationInputStatus: null }
+    }
+    updateProjectMigrationInput.mockResolvedValue({ id: 'migration-input-1', status: 'CONFIRMED' })
+    const props = {
+      ...defaultProps,
+      sourceType: 'MEMORY_ORDER_FINDING' as const,
+      pendingVerification: true,
+      invalidateQueryKeys: [key]
+    }
+    const view = renderWithQueryClient(<MigrationInputDetailFooter {...props} status={null} />)
+    view.queryClient.setQueryData(key, candidate)
+    await userEvent.click(screen.getByRole('button', { name: '纳入报告' }))
+    await screen.findByRole('button', { name: /排\s*除/ })
+    expect(view.queryClient.getQueryData(key)).toMatchObject({
+      findingKind: 'SOURCE_CANDIDATE',
+      severity: 'INFO',
+      confidence: null,
+      detail: candidate.detail,
+      reportInclusion: { confirmedForNextReport: true, migrationInputStatus: 'CONFIRMED' }
+    })
+    view.rerender(<MigrationInputDetailFooter {...props} status="CONFIRMED" />)
+    expect(screen.getByText('已纳入，仍待核实')).toBeVisible()
+    view.rerender(
+      <MigrationInputDetailFooter {...props} sourceRefId="result-new-run" status={null} />
+    )
+    expect(screen.getByText('待核实项，默认待确认')).toBeVisible()
+    expect(screen.queryByText('已纳入，仍待核实')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '纳入报告' })).toBeVisible()
+  })
+  it('patches nested report inclusion metadata while preserving unrelated and malformed cached entries', async () => {
+    updateProjectMigrationInput.mockResolvedValue({ id: 'migration-input-1', status: 'CONFIRMED' })
+    const key = ['source-results']
+    const view = renderWithQueryClient(
+      <MigrationInputActions {...defaultProps} invalidateQueryKeys={[key]} />
+    )
+    const untouched = { id: 'other', reportInclusion: { confirmedForNextReport: false } }
+    view.queryClient.setQueryData([...key, 'list'], {
+      items: [
+        null,
+        'legacy',
+        untouched,
+        {
+          id: 'result-1',
+          reportInclusion: {
+            includedInLatestReport: true,
+            latestReportId: 'report-old',
+            confirmedForNextReport: false
+          }
+        }
+      ]
+    })
+    view.queryClient.setQueryData([...key, 'primitive'], 'unchanged')
+    view.queryClient.setQueryData([...key, 'null'], null)
+    view.queryClient.setQueryData([...key, 'detail'], { id: 'result-1', reportInclusion: 'legacy' })
+    await userEvent.click(screen.getByRole('button', { name: '纳入报告' }))
+    await screen.findByRole('button', { name: '排除' })
+    expect(view.queryClient.getQueryData([...key, 'list'])).toEqual({
+      items: [
+        null,
+        'legacy',
+        untouched,
+        {
+          id: 'result-1',
+          migrationInputRefId: 'migration-input-1',
+          migrationInputStatus: 'CONFIRMED',
+          reportInclusion: {
+            includedInLatestReport: true,
+            latestReportId: 'report-old',
+            confirmedForNextReport: true,
+            migrationInputRefId: 'migration-input-1',
+            migrationInputStatus: 'CONFIRMED'
+          }
+        }
+      ]
+    })
+    expect(view.queryClient.getQueryData([...key, 'primitive'])).toBe('unchanged')
+    expect(view.queryClient.getQueryData([...key, 'null'])).toBeNull()
+    expect(view.queryClient.getQueryData([...key, 'detail'])).toMatchObject({
+      reportInclusion: 'legacy',
+      migrationInputStatus: 'CONFIRMED'
+    })
+  })
+
+  it('reports an absent imported reference, remains retryable and respects a refreshed initial status', async () => {
+    const error = vi.spyOn(feedback, 'error').mockImplementation(() => undefined)
+    importProjectMigrationInputs.mockResolvedValue({ items: [] })
+    getProjectMigrationInputs.mockResolvedValue({
+      items: [],
+      hasMore: false,
+      page: 1,
+      pageSize: 200,
+      total: 0
+    })
+    const view = renderWithQueryClient(
+      <MigrationInputActions {...defaultProps} migrationInputRefId={null} />
+    )
+    await userEvent.click(screen.getByRole('button', { name: '纳入报告' }))
+    await waitFor(() => expect(error).toHaveBeenCalledWith('报告问题状态更新失败'))
+    expect(updateProjectMigrationInput).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByRole('button', { name: /纳入报告/ })).toBeEnabled())
+    updateProjectMigrationInput.mockResolvedValue({ id: 'migration-input-2', status: 'CONFIRMED' })
+    view.rerender(
+      <MigrationInputActions {...defaultProps} migrationInputRefId="migration-input-2" />
+    )
+    await userEvent.click(screen.getByRole('button', { name: /纳入报告/ }))
+    await screen.findByRole('button', { name: '排除' })
+    view.rerender(
+      <MigrationInputActions
+        {...defaultProps}
+        migrationInputRefId="migration-input-2"
+        initialStatus="EXCLUDED"
+        presentation="footer"
+      />
+    )
+    expect(screen.getByRole('button', { name: '纳入报告' })).toHaveClass('ant-btn-primary')
+    expect(screen.queryByRole('button', { name: '排除' })).not.toBeInTheDocument()
+    error.mockRestore()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -221,4 +349,64 @@ describe('MigrationInputActions', () => {
     act(() => advanceAuthSession())
     expect(screen.getByRole('button', { name: '纳入报告' })).toBeEnabled()
   })
+})
+
+it('excludes a confirmed footer entry once, updates nested inclusion metadata and can include it again', async () => {
+  let finish!: (value: unknown) => void
+  updateProjectMigrationInput.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      })
+  )
+  const key = ['report-footer-results']
+  const view = renderWithQueryClient(
+    <MigrationInputDetailFooter {...defaultProps} status="CONFIRMED" invalidateQueryKeys={[key]} />
+  )
+  view.queryClient.setQueryData(key, {
+    id: defaultProps.sourceRefId,
+    reportInclusion: { confirmedForNextReport: true, includedInLatestReport: true }
+  })
+  const exclude = screen.getByRole('button', { name: /排\s*除/ })
+  expect(exclude).toHaveClass('ant-btn-default')
+  fireEvent.click(exclude)
+  fireEvent.click(await screen.findByRole('button', { name: '确认排除' }))
+  await waitFor(() => expect(updateProjectMigrationInput).toHaveBeenCalledOnce())
+  expect(exclude).toBeDisabled()
+  await act(async () => finish({ id: defaultProps.migrationInputRefId, status: 'EXCLUDED' }))
+  expect(view.queryClient.getQueryData(key)).toMatchObject({
+    reportInclusion: { confirmedForNextReport: false, includedInLatestReport: true }
+  })
+  const include = await screen.findByRole('button', { name: '纳入报告' })
+  expect(include).toHaveClass('ant-btn-primary')
+  updateProjectMigrationInput.mockResolvedValueOnce({
+    id: defaultProps.migrationInputRefId,
+    status: 'CONFIRMED'
+  })
+  await waitFor(() => expect(include).toBeEnabled())
+  fireEvent.click(include)
+  await waitFor(() => expect(screen.getByRole('button', { name: /^排\s*除$/ })).toBeInTheDocument())
+  expect(updateProjectMigrationInput).toHaveBeenLastCalledWith(defaultProps.migrationInputRefId, {
+    status: 'CONFIRMED'
+  })
+})
+
+it('retains the original status for a legacy update response and avoids inventing status when none is available', async () => {
+  updateProjectMigrationInput.mockResolvedValue({ id: defaultProps.migrationInputRefId })
+  const key = ['legacy-footer-result']
+  const view = renderWithQueryClient(
+    <MigrationInputActions {...defaultProps} initialStatus="EXCLUDED" invalidateQueryKeys={[key]} />
+  )
+  view.queryClient.setQueryData(key, { id: defaultProps.sourceRefId })
+  fireEvent.click(screen.getByRole('button', { name: '纳入报告' }))
+  await waitFor(() =>
+    expect(view.queryClient.getQueryData(key)).toMatchObject({ migrationInputStatus: 'EXCLUDED' })
+  )
+  view.rerender(
+    <MigrationInputActions {...defaultProps} sourceRefId="different" invalidateQueryKeys={[key]} />
+  )
+  fireEvent.click(screen.getByRole('button', { name: /纳入报告/ }))
+  await waitFor(() => expect(updateProjectMigrationInput).toHaveBeenCalledTimes(2))
+  expect(view.queryClient.getQueryData(key)).toMatchObject({ migrationInputStatus: 'EXCLUDED' })
+  expect(screen.queryByRole('button', { name: '排除' })).not.toBeInTheDocument()
 })

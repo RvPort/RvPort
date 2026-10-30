@@ -53,3 +53,43 @@ describe('force change password page', () => {
     })
   })
 })
+
+it('blocks whitespace, reused and account-equivalent passwords before any request', async () => {
+  useAuthStore.setState({
+    user: {
+      id: 'user',
+      username: 'AccountName1',
+      displayName: null,
+      email: null,
+      isSuperAdmin: false,
+      mustChangePassword: true,
+      status: 'ACTIVE',
+      lastLoginAt: null,
+      createdAt: '',
+      updatedAt: null
+    }
+  })
+  const actor = userEvent.setup()
+  renderWithQueryClient(
+    <MemoryRouter>
+      <ForceChangePasswordPage />
+    </MemoryRouter>
+  )
+  await actor.type(screen.getByLabelText('当前密码'), '   ')
+  await actor.tab()
+  expect(await screen.findByText('当前密码不能只包含空白字符')).toBeInTheDocument()
+  await actor.clear(screen.getByLabelText('当前密码'))
+  await actor.type(screen.getByLabelText('当前密码'), 'CurrentPass1')
+  await actor.type(screen.getByLabelText('新密码'), '   ')
+  await actor.tab()
+  expect(await screen.findByText('新密码不能只包含空白字符')).toBeInTheDocument()
+  await actor.clear(screen.getByLabelText('新密码'))
+  await actor.type(screen.getByLabelText('新密码'), 'CurrentPass1')
+  await actor.tab()
+  expect(await screen.findByText('新密码不能与当前密码相同')).toBeInTheDocument()
+  await actor.clear(screen.getByLabelText('新密码'))
+  await actor.type(screen.getByLabelText('新密码'), 'aCCOUNTnAME1')
+  await actor.tab()
+  expect(await screen.findByText('新密码不能与账号相同')).toBeInTheDocument()
+  expect(changePassword).not.toHaveBeenCalled()
+})

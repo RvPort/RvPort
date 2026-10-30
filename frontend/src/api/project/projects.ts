@@ -7,8 +7,8 @@ import type {
   ProjectOverview,
   ProjectOverviewTask,
   ProjectPanelId,
-  ProjectPipelineStageStatus,
-  ProjectStage
+  ProjectStage,
+  ProjectWorkflowStageStatus
 } from '@/types/project'
 import type { ProjectTaskStatus } from '@/types/project/task'
 
@@ -72,11 +72,7 @@ export interface BackendProjectOverview {
   }
   workflow: {
     recommendedStageId: string | null
-    stages: Array<{
-      id: string
-      status: ProjectPipelineStageStatus
-      reasonCode: string
-    }>
+    stages: Array<ProjectWorkflowStageStatus & { reasonCode: string }>
   }
   recentTasks: ProjectOverviewTask[]
   latestTaskEventId: number

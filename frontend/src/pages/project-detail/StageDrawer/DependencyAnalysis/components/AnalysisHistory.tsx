@@ -11,6 +11,7 @@ import { projectQueryKeys } from '../../../queryKeys'
 import { riskTagLabel, summaryCount, summaryGroupEntries, taskStatusTag } from './presentation'
 
 import styles from '../index.module.scss'
+import tableButtons from '@/styles/tableButtons.module.scss'
 
 export default function AnalysisHistory({
   projectId,
@@ -51,7 +52,12 @@ export default function AnalysisHistory({
         fixed: 'right',
         width: 84,
         render: (_, record) => (
-          <Button size="small" type="link" onClick={() => onOpenAnalysis(record)}>
+          <Button
+            className={tableButtons.textButton}
+            size="small"
+            type="link"
+            onClick={() => onOpenAnalysis(record)}
+          >
             查看
           </Button>
         )

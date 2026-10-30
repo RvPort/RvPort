@@ -38,12 +38,14 @@ export function useRiskAnalysis(
   const [search, setSearch] = useState('')
   const [severity, setSeverity] = useState('all')
   const [findingId, setFindingId] = useState<string>()
+  const [diagnosticRunId, setDiagnosticRunId] = useState<string>()
   const [showLogs, setShowLogs] = useState(false)
   const [creationError, setCreationError] = useState<string>()
   const [creationErrorCode, setCreationErrorCode] = useState<string>()
   const buildPrerequisiteRejected = buildPrerequisiteErrorCodes.has(creationErrorCode ?? '')
   const enabled = visible && Boolean(projectId)
-  const currentEnabled = enabled && !runId && !showHistory && !findingId
+  const currentEnabled = enabled && !runId && !showHistory && !findingId && !diagnosticRunId
+  const inspectedRunId = diagnosticRunId ?? runId
   const keys = projectQueryKeys.specializedAnalyses(projectId, stageId)
   const readiness = useQuery({
     queryKey: projectQueryKeys.readiness(projectId, stageId),
@@ -56,11 +58,11 @@ export function useRiskAnalysis(
     enabled: currentEnabled
   })
   const selectedRun = useQuery({
-    queryKey: projectQueryKeys.specializedRun(projectId, stageId, runId),
-    queryFn: () => getSpecializedAnalysis(projectId!, stageId, runId!),
-    enabled: enabled && Boolean(runId)
+    queryKey: projectQueryKeys.specializedRun(projectId, stageId, inspectedRunId),
+    queryFn: () => getSpecializedAnalysis(projectId!, stageId, inspectedRunId!),
+    enabled: enabled && Boolean(inspectedRunId)
   })
-  const run = runId ? selectedRun.data : latest.data?.result
+  const run = inspectedRunId ? selectedRun.data : latest.data?.result
   const finding = useQuery({
     queryKey: projectQueryKeys.specializedFinding(projectId, stageId, findingId),
     queryFn: () => getSpecializedFinding(projectId!, stageId, findingId!),
@@ -136,6 +138,7 @@ export function useRiskAnalysis(
     }
   })
   function selectRun(id: string | undefined) {
+    setDiagnosticRunId(undefined)
     setRunId(id)
     setShowHistory(false)
     setFindingId(undefined)
@@ -153,10 +156,16 @@ export function useRiskAnalysis(
     finding,
     findingId,
     setFindingId,
+    diagnosticRunId,
+    openDiagnostics: () => {
+      if (run) setDiagnosticRunId(run.id)
+    },
+    closeDiagnostics: () => setDiagnosticRunId(undefined),
     runId,
     selectRun,
     showHistory,
     openHistory: () => {
+      setDiagnosticRunId(undefined)
       setFindingId(undefined)
       setShowHistory(true)
     },

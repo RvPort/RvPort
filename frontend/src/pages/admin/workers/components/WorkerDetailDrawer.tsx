@@ -14,6 +14,7 @@ import { feedback } from '@/utils/feedback'
 import { adminQueryKeys } from '../../queryKeys'
 
 import styles from '../index.module.scss'
+import tableButtons from '@/styles/tableButtons.module.scss'
 
 interface WorkerDetailDrawerProps {
   workerInstanceId: string | null
@@ -93,6 +94,7 @@ export default function WorkerDetailDrawer({
           onConfirm={() => cancelTaskMutation.mutate(task.taskId)}
         >
           <Button
+            className={tableButtons.textButton}
             danger
             loading={cancelTaskMutation.isPending && cancelTaskMutation.variables === task.taskId}
             disabled={cancelTaskMutation.isPending && cancelTaskMutation.variables !== task.taskId}

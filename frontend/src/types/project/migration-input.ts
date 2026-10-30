@@ -1,8 +1,5 @@
 export type ProjectMigrationInputSourceType =
-  | 'KB_FINDING'
-  | 'DEPENDENCY_RESULT'
-  | 'FLOATING_POINT_FINDING'
-  | 'MEMORY_ORDER_FINDING'
+  'KB_FINDING' | 'DEPENDENCY_RESULT' | 'FLOATING_POINT_FINDING' | 'MEMORY_ORDER_FINDING'
 export type ProjectMigrationInputStatus = 'CANDIDATE' | 'CONFIRMED' | 'EXCLUDED'
 
 export interface ProjectMigrationInputImportRequest {

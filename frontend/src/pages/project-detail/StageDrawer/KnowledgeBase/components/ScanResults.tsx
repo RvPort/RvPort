@@ -25,6 +25,7 @@ import type { FindingFilters } from '../types'
 import { AiSuggestionStatus, type AiSuggestionStatusProps } from './AiSuggestionStatus'
 
 import styles from '../index.module.scss'
+import tableButtons from '@/styles/tableButtons.module.scss'
 
 export function ScanResults({
   aiSuggestion,
@@ -54,7 +55,11 @@ export function ScanResults({
       width: 168,
       render: (value: string | null, record) => (
         <Tooltip title={value || backendPendingText}>
-          <Button className={styles.tableLink} type="link" onClick={() => onOpenFinding(record.id)}>
+          <Button
+            className={`${tableButtons.textButton} ${styles.tableLink}`}
+            type="link"
+            onClick={() => onOpenFinding(record.id)}
+          >
             {value || backendPendingText}
           </Button>
         </Tooltip>

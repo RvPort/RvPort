@@ -1,4 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type KeyboardEventHandler,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import {
   Background,
   Controls,
@@ -40,6 +48,7 @@ interface WorkflowCanvasProps {
   focusEnabled?: boolean
   focusGroupId?: string
   onNodeClick: NodeMouseHandler
+  onStageKeyDown: KeyboardEventHandler<HTMLDivElement>
   onNodeMouseEnter: NodeMouseHandler
   onNodeMouseLeave: NodeMouseHandler
 }
@@ -71,6 +80,7 @@ const WorkflowCanvas = memo(function WorkflowCanvas({
   focusRequest,
   focusEnabled = true,
   onNodeClick,
+  onStageKeyDown,
   onNodeMouseEnter,
   onNodeMouseLeave
 }: WorkflowCanvasProps) {
@@ -122,6 +132,7 @@ const WorkflowCanvas = memo(function WorkflowCanvas({
       nodesDraggable={false}
       nodesConnectable={false}
       onNodeClick={onNodeClick}
+      onKeyDownCapture={onStageKeyDown}
       onNodeMouseEnter={onNodeMouseEnter}
       onNodeMouseLeave={onNodeMouseLeave}
       defaultEdgeOptions={defaultEdgeOptions}
@@ -174,6 +185,23 @@ function Workflow({
     },
     [onStageClick]
   )
+  const handleStageKeyDown = useCallback<KeyboardEventHandler<HTMLDivElement>>(
+    (event) => {
+      if (!onStageClick || event.key !== 'Enter' || event.repeat || event.nativeEvent.isComposing)
+        return
+      const target = event.target
+      if (!(target instanceof HTMLElement)) return
+      // 只处理聚焦在 ReactFlow 节点外壳上的 Enter；不截获节点内控件的键盘事件。
+      const node = nodes.find(
+        (item) => item.id === target.dataset.id && item.type === 'pipeline-stage'
+      )
+      if (!node) return
+      event.preventDefault()
+      event.stopPropagation()
+      onStageClick(node.id)
+    },
+    [nodes, onStageClick]
+  )
   const handleNodeMouseEnter = useCallback<NodeMouseHandler>((_, node) => {
     setHoveredNodeId(node.id)
   }, [])
@@ -191,6 +219,7 @@ function Workflow({
         focusRequest={focusRequest}
         focusEnabled={focusEnabled}
         onNodeClick={handleNodeClick}
+        onStageKeyDown={handleStageKeyDown}
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
       />

@@ -12,6 +12,7 @@ import { projectQueryKeys } from '../../../queryKeys'
 import { environmentScriptStatusConfig } from '../constants'
 
 import styles from '../index.module.scss'
+import tableButtons from '@/styles/tableButtons.module.scss'
 
 interface ExecutionsProps {
   environment: ProjectEnvironment
@@ -92,7 +93,12 @@ export default function Executions({ environment, onViewLog, projectId }: Execut
       fixed: 'right',
       width: 104,
       render: (_, execution) => (
-        <Button size="small" type="link" onClick={() => onViewLog(execution)}>
+        <Button
+          className={tableButtons.textButton}
+          size="small"
+          type="link"
+          onClick={() => onViewLog(execution)}
+        >
           查看日志
         </Button>
       )

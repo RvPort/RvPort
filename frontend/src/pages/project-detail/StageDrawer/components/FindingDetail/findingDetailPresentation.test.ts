@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest'
 import type { ProjectKnowledgeBaseFindingDetail } from '@/types/project/knowledge-base'
 
 import {
+  formatFindingLocation,
   getCompletionLabel,
+  getEvidenceKindLabel,
+  getEvidenceRelationLabel,
   getFindingDetailModel,
   getFindingSourceLocation,
   getReachabilityLabel,
@@ -122,4 +125,39 @@ describe('Finding detail presentation', () => {
     expect(getReasonCodeLabel('missing_input')).toBe('缺少完成判断所需的输入')
     expect(getReasonCodeLabel('future_reason')).toBe('future_reason')
   })
+})
+
+it('represents missing legacy line bounds and source positions without invented line numbers', () => {
+  const detail = createDetail({ lineStart: null, lineEnd: null })
+  expect(getFindingSourceLocation(detail, getFindingDetailModel(detail))).toEqual({
+    file: 'src/main.cpp',
+    span: { start: { line: undefined }, end: { line: undefined } }
+  })
+  expect(formatFindingLocation()).toBe('未提供源码位置')
+  expect(formatFindingLocation({ file: 'a.c', span: { start: {}, end: { line: 4 } } })).toBe('a.c')
+  expect(formatFindingLocation({ file: 'a.c', span: { start: { line: 2 } } })).toBe('a.c:2')
+  expect(
+    formatFindingLocation({ file: 'a.c', span: { start: { line: 2 }, end: { line: 4 } } })
+  ).toBe('a.c:2–4')
+  expect(
+    formatFindingLocation({ file: 'a.c', span: { start: { line: 2 }, end: { line: 2 } } })
+  ).toBe('a.c:2')
+  expect(getEvidenceRelationLabel()).toBeUndefined()
+  expect(getEvidenceRelationLabel('plugin-relation')).toBe('plugin-relation')
+  expect(getEvidenceKindLabel()).toBe('证据')
+  expect(getEvidenceKindLabel('plugin-step')).toBe('plugin-step')
+  expect(getReasonCodeLabel()).toBe('暂无数据')
+})
+
+it('uses structured source precedence and preserves future completion and reachability labels', () => {
+  const detail = createDetail({ fact: { primaryLocation: { file: 'fact.c' } } })
+  const model = getFindingDetailModel(detail)
+  expect(
+    getFindingSourceLocation(detail, model, { id: 'selected', location: { file: 'occurrence.c' } })
+  ).toEqual({ file: 'occurrence.c' })
+  expect(getFindingSourceLocation(detail, model)).toEqual({ file: 'fact.c' })
+  expect(getCompletionLabel('future')).toBe('future')
+  expect(getCompletionLabel()).toBe('暂无数据')
+  expect(getReachabilityLabel('future')).toBe('future')
+  expect(getReachabilityLabel()).toBe('暂无数据')
 })

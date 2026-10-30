@@ -21,6 +21,7 @@ import { feedback } from '@/utils/feedback'
 import { projectQueryKeys } from '../../queryKeys'
 
 import styles from './MigrationInputActions.module.scss'
+import tableButtons from '@/styles/tableButtons.module.scss'
 
 type ReportInputActionStatus = ProjectMigrationInputStatus
 const emptyQueryKeys: QueryKey[] = []
@@ -171,6 +172,7 @@ export function MigrationInputActions({
           onConfirm={() => mutation.mutate('EXCLUDED')}
         >
           <Button
+            className={isFooter ? undefined : tableButtons.textButton}
             danger
             disabled={mutation.isPending}
             loading={pendingStatus === 'EXCLUDED'}
@@ -188,6 +190,7 @@ export function MigrationInputActions({
     return (
       <Space size={0}>
         <Button
+          className={isFooter ? undefined : tableButtons.textButton}
           disabled={mutation.isPending}
           loading={pendingStatus === 'CONFIRMED'}
           size={isFooter ? 'middle' : 'small'}
@@ -203,6 +206,7 @@ export function MigrationInputActions({
   return (
     <Space size={0}>
       <Button
+        className={isFooter ? undefined : tableButtons.textButton}
         disabled={mutation.isPending}
         loading={pendingStatus === 'CONFIRMED'}
         size={isFooter ? 'middle' : 'small'}
@@ -217,15 +221,22 @@ export function MigrationInputActions({
 
 export function MigrationInputDetailFooter({
   status,
+  pendingVerification,
   ...actionProps
 }: Omit<React.ComponentProps<typeof MigrationInputActions>, 'initialStatus' | 'presentation'> & {
   status?: ProjectMigrationInputStatus | null
+  pendingVerification?: boolean
 }) {
   return (
     <Flex align="center" className={styles.detailFooter} justify="flex-end">
       <div className={styles.detailFooterStatus}>
         <span>报告状态</span>
         <MigrationInputStatusTag status={status} />
+        {pendingVerification ? (
+          <Tag color="warning">
+            {status === 'CONFIRMED' ? '已纳入，仍待核实' : '待核实项，默认待确认'}
+          </Tag>
+        ) : null}
       </div>
       <MigrationInputActions
         {...actionProps}

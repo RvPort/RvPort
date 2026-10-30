@@ -21,7 +21,7 @@ RvPort 是面向个人用户的迁移门户，不是企业后台管理系统。A
 
 ## 代码结构规则
 
-- 字号、字重、行高和间距遵循 [STYLE_GUIDE.md](STYLE_GUIDE.zh-CN.md)。主题数值只在 `src/theme.ts` 定义；页面及区域标题使用 `src/styles/mixins.scss` 的语义 mixin，保留内部次级信息层级。
+- 字号、字重、行高和间距遵循 [样式规范](docs/STYLE_GUIDE.zh-CN.md)。主题数值只在 `src/theme.ts` 定义；页面及区域标题使用 `src/styles/mixins.scss` 的语义 mixin，保留内部次级信息层级。
 
 - 页面入口负责组合视图；数据请求、状态转换和复杂展示分别放入 `use*.ts`、`queryKeys.ts`/`queries.ts`、`presentation.ts(x)` 与 `components/`。
 - 不从一个业务阶段目录引用另一个阶段的内部组件、工具或 CSS Module。跨阶段复用先提升到最近的公共 `components/` 或 `utils/`。

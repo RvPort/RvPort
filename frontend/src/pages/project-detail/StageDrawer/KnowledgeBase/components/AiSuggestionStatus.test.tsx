@@ -73,3 +73,26 @@ describe('AiSuggestionStatus', () => {
     expect(screen.getByRole('button', { name: '重新读取' })).toBeInTheDocument()
   })
 })
+
+it.each([
+  ['SUCCEEDED', '本次 AI 建议已经生成。'],
+  ['PARTIAL_SUCCESS', '部分 Finding 已生成 AI 建议。']
+] as const)('does not invent a result count for %s legacy AI runs', (status, description) => {
+  renderStatus({ run: { ...run(status), summary: {} } })
+  expect(screen.getByText(description)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '重新生成' })).toBeEnabled()
+})
+it('explains a future readiness reason without enabling generation', () => {
+  renderStatus({
+    readiness: {
+      ready: false,
+      reason: 'NEW_SERVER_REASON',
+      findingCount: 3,
+      kbScanRunId: 'scan-1',
+      model: {},
+      modelConfigured: false
+    }
+  })
+  expect(screen.getByText('当前暂不能生成 AI 建议')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '生成 AI 建议' })).toBeDisabled()
+})

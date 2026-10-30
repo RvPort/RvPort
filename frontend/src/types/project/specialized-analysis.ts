@@ -27,7 +27,9 @@ export interface SpecializedAnalysis {
   summary: Record<string, unknown>
   findingCount: number
   candidateCount: number
-  diagnosticCount: number
+  diagnosticCount?: number | null
+  analysisStatus?: string | null
+  analysisComplete?: boolean | null
   currentSourceRevision: boolean
   staleReasons: string[]
   requestArtifactId: string | null

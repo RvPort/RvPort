@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createTestQueryClient } from '@/test/test-utils'
@@ -115,5 +115,46 @@ describe('useProjectPipelineData', () => {
 
     await waitFor(() => expect(result.current.workflowStatus?.currentStageId).toBe('x86-build'))
     expect(result.current.currentStageTitle).toBe('x86 构建')
+  })
+  it('falls back to the project stage when no workflow recommendation exists and uses refreshed timestamps', async () => {
+    const current = {
+      ...overview,
+      project: { ...overview.project, updatedAt: '2026-10-28T00:00:00Z' },
+      workflow: { recommendedStageId: null, stages: [] }
+    }
+    getProjectOverview.mockResolvedValue(current)
+    const { result } = renderHook(() => useProjectPipelineData('project-1'), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      )
+    })
+    await waitFor(() => expect(result.current.overview).toEqual(current))
+    expect(result.current.workflowStatus).toMatchObject({
+      currentStageId: '',
+      updatedAt: current.project.updatedAt
+    })
+    expect(result.current.currentStageTitle).toBe('项目创建')
+  })
+  it('preserves loaded overview data through a failed refresh and exposes a successful retry', async () => {
+    const { result } = renderHook(() => useProjectPipelineData('project-1'), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      )
+    })
+    await waitFor(() => expect(result.current.overview).toEqual(overview))
+    getProjectOverview.mockRejectedValueOnce(new Error('offline'))
+    await act(async () => {
+      await result.current.refetch()
+    })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.overview).toEqual(overview)
+    expect(result.current.currentStageTitle).toBe('知识库扫描')
+    const refreshed = { ...overview, project: { ...overview.project, name: '新名称' } }
+    getProjectOverview.mockResolvedValue(refreshed)
+    await act(async () => {
+      await result.current.refetch()
+    })
+    await waitFor(() => expect(result.current.isError).toBe(false))
+    await waitFor(() => expect(result.current.overview).toEqual(refreshed))
   })
 })

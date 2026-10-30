@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -54,4 +54,64 @@ describe('reset password modal', () => {
       })
     })
   })
+})
+
+it('validates account equality, whitespace and confirmation before calling the current submission handler', async () => {
+  const actor = userEvent.setup()
+  let onSubmit = vi.fn(async () => {})
+  let onCancel = vi.fn()
+  let loading = false
+  const target = { ...user, username: 'AccountName1' }
+  const draw = () => (
+    <ResetPasswordModal
+      visible
+      loading={loading}
+      user={target}
+      onSubmit={onSubmit}
+      onCancel={onCancel}
+    />
+  )
+  const view = renderWithQueryClient(draw())
+  await actor.type(screen.getByLabelText('新密码'), 'aCCOUNTnAME1')
+  await actor.tab()
+  expect(await screen.findByText('新密码不能与账号相同')).toBeInTheDocument()
+  await actor.clear(screen.getByLabelText('新密码'))
+  await actor.type(screen.getByLabelText('新密码'), '   ')
+  await actor.tab()
+  expect(await screen.findByText('新密码不能只包含空白字符')).toBeInTheDocument()
+  await actor.clear(screen.getByLabelText('新密码'))
+  await actor.type(screen.getByLabelText('新密码'), 'ValidPassword1')
+  await actor.type(screen.getByLabelText('确认新密码'), 'Different1')
+  await actor.tab()
+  expect(await screen.findByText('两次输入的新密码不一致')).toBeInTheDocument()
+  expect(onSubmit).not.toHaveBeenCalled()
+  await actor.clear(screen.getByLabelText('确认新密码'))
+  await actor.type(screen.getByLabelText('确认新密码'), 'ValidPassword1')
+  loading = true
+  view.rerender(draw())
+  expect(screen.getByLabelText('新密码')).toBeDisabled()
+  expect(screen.getByRole('button', { name: /取\s*消/ })).toBeDisabled()
+  loading = false
+  const old = onSubmit
+  let resolve!: () => void
+  onSubmit = vi.fn(
+    () =>
+      new Promise<void>((done) => {
+        resolve = done
+      })
+  )
+  view.rerender(draw())
+  await waitFor(() => expect(screen.getByRole('button', { name: /重置密码/ })).toBeEnabled())
+  await actor.click(screen.getByRole('button', { name: /重置密码/ }))
+  await actor.click(screen.getByRole('button', { name: '确认重置' }))
+  expect(onSubmit).toHaveBeenCalledWith({ newPassword: 'ValidPassword1' })
+  expect(old).not.toHaveBeenCalled()
+  await waitFor(() => expect(screen.getByLabelText('新密码')).toBeDisabled())
+  await import('@testing-library/react').then(({ act }) => act(async () => resolve()))
+  const oldCancel = onCancel
+  onCancel = vi.fn()
+  view.rerender(draw())
+  await actor.click(within(screen.getByRole('dialog')).getByRole('button', { name: /取\s*消/ }))
+  expect(onCancel).toHaveBeenCalledOnce()
+  expect(oldCancel).not.toHaveBeenCalled()
 })

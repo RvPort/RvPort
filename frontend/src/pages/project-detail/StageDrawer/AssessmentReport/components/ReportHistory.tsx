@@ -7,6 +7,8 @@ import { formatDateTime, getTaskStatusPresentation } from '@/utils/display'
 
 import { projectQueryKeys } from '../../../queryKeys'
 
+import tableButtons from '@/styles/tableButtons.module.scss'
+
 export default function ReportHistory({
   projectId,
   onOpen
@@ -45,7 +47,7 @@ export default function ReportHistory({
         {
           title: '操作',
           render: (_, row) => (
-            <Button type="link" onClick={() => onOpen(row.id)}>
+            <Button className={tableButtons.textButton} type="link" onClick={() => onOpen(row.id)}>
               查看
             </Button>
           )

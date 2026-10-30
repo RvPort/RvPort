@@ -400,3 +400,12 @@ Git 源码导入 SHALL 跟随已有任务状态显示进行中或失败；初次
 - **WHEN** 后端明确将新分析结果纳入报告输入
 - **THEN** 工作台 SHALL 保持知识库扫描和依赖分析的 `n/2` 必需输入汇合计数与连线，两项专项分析通过确认后的报告输入纳入结果
 - **AND** SHALL NOT 将画布中的可选分析自行升级为报告执行的必需门禁
+
+### Requirement: 分析完整性不由执行终态推断
+
+Workflow、Step 和阶段内容 SHALL 保留服务端执行事实，并独立提示分析完整性。
+
+#### Scenario: 已完成节点包含部分分析
+
+- **WHEN** 任务为 SUCCEEDED 或节点为 DONE，但 analysisStatus=PARTIAL 或 analysisComplete=false
+- **THEN** 前端 SHALL 提示“部分分析完成”，不把零正式风险解释为迁移安全

@@ -2,10 +2,12 @@ import type {
   SpecializedAnalysisStatus,
   SpecializedFinding
 } from '@/types/project/specialized-analysis'
+import { memoryOrderKind } from '@/utils/analysisResult'
 
 import type { RiskFinding, RiskSeverity } from './types'
 
 export const severityLabels: Record<RiskSeverity, string> = {
+  critical: '严重风险',
   high: '高风险',
   medium: '中风险',
   low: '低风险',
@@ -13,6 +15,7 @@ export const severityLabels: Record<RiskSeverity, string> = {
   unknown: '未定级'
 }
 export const severityColors: Record<RiskSeverity, string> = {
+  critical: 'error',
   high: 'error',
   medium: 'warning',
   low: 'success',
@@ -58,6 +61,16 @@ function translatedList(value: unknown, labels: Record<string, string>) {
 }
 export function presentFinding(finding: SpecializedFinding): RiskFinding {
   const conclusion = object(finding.detail.conclusion)
+  const memoryOrder = finding.analyzerType === 'MEMORY_ORDER'
+  const kind = memoryOrder
+    ? memoryOrderKind(finding.findingKind, finding.detail)
+    : finding.findingKind
+  const pending = memoryOrder && kind !== 'FINDING'
+  const version = finding.detail.schemaVersion
+  const protocolWarning =
+    memoryOrder && version !== undefined && version !== '2.0' && version !== '3.0'
+      ? `不支持的结果协议：${String(version)}，请核对原始结果。`
+      : undefined
   const plan = object(conclusion.validationPlan)
   // 仅展示接口提供的验证项；未知枚举保留原文，不能由规则名称推断方案。
   const validationPlan = [
@@ -98,20 +111,42 @@ export function presentFinding(finding: SpecializedFinding): RiskFinding {
       })
     }
   ].filter((item) => item.value)
-  const level = finding.severity?.toLowerCase() ?? 'unknown'
+  const level = pending ? 'info' : (finding.severity?.toLowerCase() ?? 'unknown')
   const severity = level in severityLabels ? (level as RiskSeverity) : 'unknown'
   return {
+    memoryOrder,
+    protocolWarning,
+    evidenceLevel: memoryOrder
+      ? translated(conclusion.evidenceLevel, {
+          'source-only': '仅源码证据',
+          incomplete: '证据不完整',
+          'bounded-model': '受限模型证据'
+        })
+      : undefined,
     id: finding.id,
+    runId: finding.runId,
     code: finding.findingCode ?? '--',
     title: finding.title || finding.titleEn || finding.findingCode || '未命名分析结果',
     severity,
     confidence:
-      translated(finding.confidence, { high: '高', medium: '中', low: '低', unknown: '未知' }) ||
-      '未提供',
+      memoryOrder && (pending || conclusion.confidence === null || finding.confidence === null)
+        ? '未评估'
+        : translated(finding.confidence, {
+            high: '高',
+            medium: '中',
+            low: '低',
+            unknown: '未知'
+          }) || '未提供',
     location: finding.filePath ?? '未提供位置',
     line: finding.startLine,
-    detail: finding.message || finding.messageEn || '未提供说明',
-    impact: string(conclusion.impact) || string(conclusion.impactEn) || '',
+    detail:
+      (memoryOrder ? string(conclusion.reason) || string(conclusion.reason_en) : '') ||
+      finding.message ||
+      finding.messageEn ||
+      '未提供说明',
+    impact: memoryOrder
+      ? string(conclusion.detail) || string(conclusion.detail_en)
+      : string(conclusion.impact) || string(conclusion.impactEn) || '',
     suggestion: finding.suggestion || finding.suggestionEn || '未提供修复建议',
     validation: finding.testSuggestion || finding.testSuggestionEn || '',
     validationPlan,
@@ -130,8 +165,8 @@ export function presentFinding(finding: SpecializedFinding): RiskFinding {
         failed: '分析失败',
         unknown: '状态未知'
       }) || '状态未知',
-    findingKind: finding.findingKind,
-    requiresHumanConfirmation: finding.requiresHumanConfirmation,
+    findingKind: kind,
+    requiresHumanConfirmation: pending || finding.requiresHumanConfirmation,
     rawDetail: finding.detail
   }
 }

@@ -2,7 +2,7 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { renderWithProjectOverview } from '@/test/project-overview-utils'
+import { renderWithStrictProjectOverview as renderWithProjectOverview } from '@/test/strict-project-overview-utils'
 
 import DependencyAnalysis from '.'
 

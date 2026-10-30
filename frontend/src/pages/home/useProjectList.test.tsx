@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -17,6 +17,32 @@ function createWrapper() {
 }
 
 describe('useProjectList', () => {
+  it('fetches the next declared page and stops at the terminal page while preserving filters', async () => {
+    getProjects
+      .mockResolvedValueOnce({ items: [], page: 1, pageSize: 20, total: 21, hasMore: true })
+      .mockResolvedValueOnce({ items: [], page: 2, pageSize: 20, total: 21, hasMore: false })
+    const { result } = renderHook(
+      () => useProjectList({ keyword: '', status: 'ARCHIVED', stage: 'ARCHIVED' }),
+      { wrapper: createWrapper() }
+    )
+    await waitFor(() => expect(result.current.hasNextPage).toBe(true))
+    await act(async () => {
+      await result.current.fetchNextPage()
+    })
+    await waitFor(() => expect(result.current.hasNextPage).toBe(false))
+    expect(getProjects).toHaveBeenNthCalledWith(2, {
+      keyword: undefined,
+      status: 'ARCHIVED',
+      stage: 'ARCHIVED',
+      page: 2,
+      pageSize: 20
+    })
+    await act(async () => {
+      await result.current.fetchNextPage()
+    })
+    expect(getProjects).toHaveBeenCalledTimes(2)
+    expect(result.current.total).toBe(21)
+  })
   it('includes supported filters in the infinite query identity', () => {
     expect(projectListQueryKey({ keyword: 'demo', stage: 'SCANNING', status: 'ACTIVE' })).toEqual([
       'projects',

@@ -36,8 +36,14 @@ export function getWorkflowStageData(stageId?: string, workflowStatus?: ProjectW
   const presentation = deriveWorkflowPresentation(workflowStatus).get(stage.id)
   const status = presentation?.status ?? (stage.status.toUpperCase() as ProjectPipelineStageStatus)
   const assistStatus = presentation?.assistStatus ?? null
+  const fact = workflowStatus?.stages.find((item) => item.id === stage.id)
+  const analysisWarning =
+    fact?.analysisStatus === 'PARTIAL' || fact?.analysisComplete === false
+      ? '部分分析完成'
+      : undefined
 
   return {
+    analysisWarning,
     assistStatus,
     assistText: assistStatus
       ? getWorkflowAssistText(assistStatus, presentation?.dependencyIds ?? [])

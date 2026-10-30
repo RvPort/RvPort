@@ -62,7 +62,7 @@ const execution = {
   logEventCount: 1
 }
 
-function setup(presentation: 'drawer' | 'panel') {
+function setup(presentation: 'drawer' | 'panel', onDirtyChange?: (dirty: boolean) => void) {
   const client = createTestQueryClient()
   const tree = (visible = true) => (
     <ConfigProvider theme={{ token: { motion: false } }}>
@@ -77,7 +77,12 @@ function setup(presentation: 'drawer' | 'panel') {
           }}
         >
           <StagePresentationContext.Provider value={presentation}>
-            <Env projectId="project-1" visible={visible} onClose={vi.fn()} />
+            <Env
+              projectId="project-1"
+              visible={visible}
+              onClose={vi.fn()}
+              onDirtyChange={onDirtyChange}
+            />
           </StagePresentationContext.Provider>
         </ProjectOverviewContext.Provider>
       </QueryClientProvider>
@@ -102,6 +107,46 @@ describe('environment presentation and history scope', () => {
     }))
     api.getProjectEnvironmentScriptExecution.mockRejectedValue(new Error('unavailable'))
   })
+
+  it('replaces stale environment rows after refreshing the list', async () => {
+    const actor = userEvent.setup()
+    setup('panel')
+    expect(await screen.findByText('second')).toBeInTheDocument()
+    api.getProjectEnvironments.mockResolvedValue({
+      items: [createEnvironment({ id: 'env-3', name: 'replacement' })],
+      total: 1,
+      page: 1,
+      pageSize: 20
+    })
+    await actor.click(screen.getByRole('button', { name: '刷新环境列表' }))
+    expect(await screen.findByText('replacement')).toBeInTheDocument()
+    expect(screen.queryByText('second')).not.toBeInTheDocument()
+  })
+
+  it.each(['drawer', 'panel'] as const)(
+    'preserves a dirty environment draft when continuing and clears it only after discard in %s',
+    async (presentation) => {
+      const actor = userEvent.setup()
+      const onDirtyChange = vi.fn()
+      setup(presentation, onDirtyChange)
+      await actor.click(await screen.findByRole('button', { name: /新建环境/ }))
+      const name = await screen.findByLabelText('服务器名称')
+      await actor.type(name, 'unsaved-environment')
+      await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true))
+      await actor.click(screen.getByRole('button', { name: /取\s*消/ }))
+      await actor.click(await screen.findByRole('button', { name: '继续编辑' }))
+      expect(name).toHaveValue('unsaved-environment')
+      expect(onDirtyChange).toHaveBeenLastCalledWith(true)
+      await actor.click(screen.getByRole('button', { name: /取\s*消/ }))
+      await actor.click(await screen.findByRole('button', { name: '放弃更改' }))
+      await waitFor(() => expect(screen.queryByLabelText('服务器名称')).not.toBeInTheDocument())
+      expect(await screen.findByText('second')).toBeInTheDocument()
+      await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false))
+      await actor.click(screen.getByRole('button', { name: /新建环境/ }))
+      expect(await screen.findByLabelText('服务器名称')).toHaveValue('')
+    }
+  )
+
   it.each(['drawer', 'panel'] as const)(
     'uses the stage drawer only in %s and a modal only in panel for forms and scripts',
     async (presentation) => {

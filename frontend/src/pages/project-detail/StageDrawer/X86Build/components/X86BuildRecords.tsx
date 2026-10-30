@@ -12,6 +12,7 @@ import { isTerminalBuildReadinessStatus } from '../../buildReadinessContext'
 import { BitcodeStatusTag } from './BitcodeResult'
 
 import styles from '../index.module.scss'
+import tableButtons from '@/styles/tableButtons.module.scss'
 const buildStatusOptions: Array<{ label: string; value: ProjectTaskStatus }> = [
   { label: '等待中', value: 'PENDING' },
   { label: '排队中', value: 'QUEUED' },
@@ -85,12 +86,17 @@ export default function X86BuildRecords({
         width: 126,
         render: (_, record) => (
           <Flex gap={4}>
-            <Button size="small" type="link" onClick={() => onSelect(record)}>
+            <Button
+              className={tableButtons.textButton}
+              size="small"
+              type="link"
+              onClick={() => onSelect(record)}
+            >
               详情
             </Button>
             {!isTerminalBuildReadinessStatus(record.status) ? (
               <Popconfirm title="确认取消构建？" onConfirm={() => onCancel(record.id)}>
-                <Button size="small" type="link">
+                <Button className={tableButtons.textButton} size="small" type="link">
                   取消
                 </Button>
               </Popconfirm>

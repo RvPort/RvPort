@@ -11,6 +11,7 @@ import { getRevisionLabel, optimizationCycleStatusOptions } from '../presentatio
 import { OptimizationStatusTag } from './OptimizationStatusTag'
 
 import styles from '../index.module.scss'
+import tableButtons from '@/styles/tableButtons.module.scss'
 
 interface CycleHistoryProps {
   projectId: string
@@ -68,7 +69,12 @@ function columns(
       fixed: 'right',
       width: 84,
       render: (_, record) => (
-        <Button size="small" type="link" onClick={() => onOpen(record)}>
+        <Button
+          className={tableButtons.textButton}
+          size="small"
+          type="link"
+          onClick={() => onOpen(record)}
+        >
           查看
         </Button>
       )

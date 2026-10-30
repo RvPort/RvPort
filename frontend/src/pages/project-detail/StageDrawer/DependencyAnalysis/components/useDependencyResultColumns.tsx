@@ -18,6 +18,7 @@ import { MigrationInputActions } from '../../components/MigrationInputActions'
 import { tooltipTextCell } from './presentation'
 
 import styles from '../index.module.scss'
+import tableButtons from '@/styles/tableButtons.module.scss'
 
 export function useDependencyResultColumns(
   analysis: ProjectDependencyAnalysis,
@@ -36,7 +37,7 @@ export function useDependencyResultColumns(
         render: (value, record) => (
           <Tooltip title={value}>
             <Button
-              className={styles.dependencyLink}
+              className={`${tableButtons.textButton} ${styles.dependencyLink}`}
               type="link"
               onClick={() => onOpenResult(record.id)}
             >

@@ -10,13 +10,18 @@ import styles from './FindingSource.module.scss'
 export interface FindingSourceState {
   data?: {
     findingId: string
+    runId?: string
+    sourceRevisionId?: string
     filePath: string
     lines: { lineNumber: number; text: string; highlighted: boolean }[]
   }
   unavailableReason?: string
+  expectedSourceRevisionId?: string
 }
 
 const unavailableReasons: Record<string, string> = {
+  SOURCE_EVIDENCE_IDENTITY_UNVERIFIED:
+    '源码片段的 Finding、文件、digest 或位置范围未匹配，不能作为当前证据。',
   SOURCE_REVISION_NOT_FOUND: '本次分析绑定的源码版本不存在。',
   FINDING_SOURCE_LOCATION_UNAVAILABLE:
     '本条结果没有有效的源码位置，或行号范围已超出文件。旧结果可尝试重新扫描。',
@@ -28,10 +33,12 @@ const unavailableReasons: Record<string, string> = {
 
 export default function FindingSource({
   finding,
-  source
+  source,
+  ariaLabel = '源码证据'
 }: {
   finding: Pick<RiskFinding, 'id' | 'location'>
   source?: FindingSourceState
+  ariaLabel?: string
 }) {
   // 切换结果时不能把上一条 finding 的缓存片段当作当前证据。
   const data = source?.data?.findingId === finding.id ? source.data : undefined
@@ -66,7 +73,7 @@ export default function FindingSource({
       <MonacoEditor
         key={finding.id}
         className={evidenceStyles.findingCodeEditor}
-        ariaLabel="源码证据"
+        ariaLabel={ariaLabel}
         height="100%"
         language={language}
         readOnly

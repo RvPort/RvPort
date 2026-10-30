@@ -292,4 +292,96 @@ describe('useTaskLogStream', () => {
     })
     unmount()
   })
+  it('ignores malformed and foreign notifications and polls only when the document becomes visible', async () => {
+    getProjectTaskLogIncrements.mockResolvedValue(response(2, 'current'))
+    const { result } = renderHook(() => useTaskLogStream({ enabled: true, taskId: 'task-1' }), {
+      wrapper: createWrapper()
+    })
+    await waitFor(() => expect(result.current.isFetching).toBe(false))
+    const source = MockEventSource.instances[0]
+    act(() => {
+      source.onopen?.(new Event('open'))
+      for (const type of ['task.log.updated', 'task.log.completed']) {
+        source.listeners.get(type)!(new MessageEvent(type, { data: 'invalid json' }))
+        source.emit(type, { taskId: 'foreign', latestEventId: 99 })
+      }
+    })
+    expect(result.current.connectionStatus).toBe('connected')
+    expect(getProjectTaskLogIncrements).toHaveBeenCalledOnce()
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+    expect(getProjectTaskLogIncrements).toHaveBeenCalledOnce()
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+    await waitFor(() => expect(getProjectTaskLogIncrements).toHaveBeenCalledTimes(2))
+  })
+  it('automatically retries non-Error read failures and uses the latest completion callback once', async () => {
+    getProjectTaskLogIncrements
+      .mockRejectedValueOnce('offline')
+      .mockResolvedValue(response(3, 'recovered'))
+    vi.useFakeTimers()
+    let completed = vi.fn()
+    const { result, rerender } = renderHook(
+      () => useTaskLogStream({ enabled: true, taskId: 'task-1', onCompleted: completed }),
+      { wrapper: createWrapper() }
+    )
+    await vi.waitFor(() => expect(result.current.error?.message).toBe('实时日志读取失败'))
+    await act(async () => vi.advanceTimersByTimeAsync(1500))
+    await vi.waitFor(() => expect(result.current.cursor).toBe(3))
+    const old = completed
+    completed = vi.fn()
+    rerender()
+    const source = MockEventSource.instances[0]
+    act(() =>
+      source.emit('task.log.completed', { taskId: 'task-1', latestEventId: 3, status: 'SUCCEEDED' })
+    )
+    await vi.waitFor(() => expect(completed).toHaveBeenCalledOnce())
+    expect(old).not.toHaveBeenCalled()
+    const calls = getProjectTaskLogIncrements.mock.calls.length
+    act(() => {
+      result.current.retry()
+      source.emit('task.log.updated', { taskId: 'task-1', latestEventId: 4 })
+    })
+    expect(getProjectTaskLogIncrements).toHaveBeenCalledTimes(calls)
+  })
+  it('ignores browser callbacks queued before a task switch', async () => {
+    getProjectTaskLogIncrements.mockResolvedValue(response(1))
+    const { result, rerender } = renderHook(
+      ({ taskId }) => useTaskLogStream({ enabled: true, taskId }),
+      { initialProps: { taskId: 'task-1' }, wrapper: createWrapper() }
+    )
+    await waitFor(() => expect(result.current.isFetching).toBe(false))
+    const old = MockEventSource.instances[0],
+      open = old.onopen!,
+      error = old.onerror!
+    const completed = old.listeners.get('task.log.completed')!
+    rerender({ taskId: 'task-2' })
+    await waitFor(() => expect(getProjectTaskLogIncrements).toHaveBeenCalledTimes(2))
+    act(() => {
+      open(new Event('open'))
+      error(new Event('error'))
+      completed(
+        new MessageEvent('task.log.completed', {
+          data: JSON.stringify({ taskId: 'task-1', latestEventId: 99 })
+        })
+      )
+    })
+    expect(MockEventSource.instances).toHaveLength(2)
+    expect(result.current.completed).toBe(false)
+    expect(result.current.connectionStatus).toBe('connecting')
+  })
+  it('keeps disabled or unsupported stream sessions safe to retry', async () => {
+    getProjectTaskLogIncrements.mockResolvedValue(response(1))
+    vi.stubGlobal('EventSource', undefined)
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useTaskLogStream({ enabled, taskId: 'task-1' }),
+      { initialProps: { enabled: false }, wrapper: createWrapper() }
+    )
+    act(() => result.current.retry())
+    expect(getProjectTaskLogIncrements).not.toHaveBeenCalled()
+    rerender({ enabled: true })
+    expect(result.current.connectionStatus).toBe('idle')
+    await waitFor(() => expect(result.current.isFetching).toBe(false))
+    expect(result.current.cursor).toBe(1)
+  })
 })

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as api from '@/api/project/specialized-analysis'
 import { cancelProjectTask } from '@/api/project/task'
 import { getProjectStageReadiness } from '@/api/project/workflow'
-import { renderWithQueryClient } from '@/test/test-utils'
+import { renderWithStrictQueryClient as renderWithQueryClient } from '@/test/strict-mode-utils'
 
 import { StagePresentationContext } from '../components/StagePresentationContext'
 import { finding, latest, readiness, run } from './fixtures.test-support'
@@ -79,12 +79,230 @@ beforeEach(() => {
     (_p, _s, id, format) => `/api/${id}?format=${format}`
   )
 })
+
+function reductionFinding(id: string, line: number, confidence: string, resultStatus: string) {
+  const location = {
+    file: 'src/two-loops.c',
+    line,
+    context: { lines: [{ line, text: `${id} += values[i];` }] }
+  }
+  return {
+    ...finding,
+    id,
+    externalFindingId: id,
+    analyzerType: 'FLOATING_POINT' as const,
+    findingCode: 'reduction-reassociation',
+    title: '同函数归约',
+    filePath: location.file,
+    startLine: line,
+    confidence,
+    resultStatus,
+    detail: {
+      schemaVersion: '2.0',
+      ruleVersion: '1.1',
+      fact: { symbol: 'two_loops', physicalTuId: 'same-tu', primaryLocation: location },
+      primaryOccurrenceId: `${id}-occurrence`,
+      occurrences: [{ id: `${id}-occurrence`, location }],
+      evidenceChain: {
+        status: 'partial',
+        steps: [
+          {
+            id: `${id}-step`,
+            kind: 'sourceObservation',
+            title: `${id} 的归约证据`,
+            source: location
+          }
+        ]
+      }
+    }
+  }
+}
+
+it.each([false, true])('诊断在独立二级页查看并返回原概览：历史=%s', async (historical) => {
+  const user = userEvent.setup()
+  const selected = {
+    ...run,
+    id: historical ? 'historical-run' : run.id,
+    status: 'PARTIAL' as const,
+    summary: {
+      diagnosticsAggregated: true,
+      frontierCount: 22,
+      primaryDiagnostic: { code: 'adapter_dependency_incomplete', detail: '统一适配器执行失败' },
+      diagnostics: [
+        {
+          code: 'adapter_dependency_incomplete',
+          detail: '统一适配器执行失败',
+          suggestion: '补充构建证据'
+        }
+      ]
+    }
+  }
+  vi.mocked(api.getSpecializedAnalysisLatest).mockResolvedValue(latest(historical ? run : selected))
+  vi.mocked(api.getSpecializedAnalysis).mockResolvedValue(selected)
+  vi.mocked(api.getSpecializedAnalyses).mockResolvedValue({
+    items: [selected],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+    hasMore: false
+  })
+  renderWithQueryClient(surface())
+  if (historical) {
+    await user.click(await screen.findByRole('button', { name: '查看历史记录' }))
+    await user.click(await screen.findByRole('button', { name: /^查看$/ }))
+  }
+  await user.click(await screen.findByRole('button', { name: '查看诊断明细' }))
+  expect(await screen.findByRole('region', { name: '诊断记录' })).toBeVisible()
+  expect(screen.getByText('adapter_dependency_incomplete')).toBeVisible()
+  expect(screen.getByText('建议：补充构建证据')).toBeVisible()
+  expect(screen.queryByRole('button', { name: finding.title! })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '下载JSON' })).toHaveAttribute(
+    'href',
+    `/api/${selected.id}?format=json`
+  )
+  await user.click(screen.getByRole('button', { name: '返回分析概览' }))
+  expect(await screen.findByRole('button', { name: '查看诊断明细' })).toBeVisible()
+  expect(screen.queryByText('adapter_dependency_incomplete')).not.toBeInTheDocument()
+  expect(api.getSpecializedAnalysis).toHaveBeenCalledWith(
+    'project',
+    'memory-order-analysis',
+    selected.id
+  )
+  if (historical) expect(screen.getByRole('button', { name: '返回历史记录' })).toBeVisible()
+})
+
+it('诊断二级页加载失败提供重试，历史未知诊断不显示为零', async () => {
+  const user = userEvent.setup()
+  vi.mocked(api.getSpecializedAnalysis).mockRejectedValue(new Error('Unavailable'))
+  renderWithQueryClient(surface())
+  await user.click(await screen.findByRole('button', { name: '查看诊断明细' }))
+  expect(await screen.findByText('分析诊断加载失败')).toBeVisible()
+  expect(screen.queryByRole('region', { name: '诊断记录' })).not.toBeInTheDocument()
+  vi.mocked(api.getSpecializedAnalysis).mockResolvedValue({
+    ...run,
+    diagnosticCount: null,
+    summary: { diagnosticsAggregated: false }
+  })
+  await user.click(screen.getByRole('button', { name: '重新加载' }))
+  expect(await screen.findByText(/未知不代表零诊断/)).toBeVisible()
+  expect(within(screen.getByText('分析诊断').parentElement!).getByText('未知')).toBeVisible()
+  expect(screen.getByRole('button', { name: '返回分析概览' })).toBeVisible()
+})
+
+it('浮点 v2 同函数同规则同文件的两个循环维持两条 Finding，并独立展示证据、可信度与状态', async () => {
+  const user = userEvent.setup()
+  const records = [
+    reductionFinding('loop-a', 10, '0.8', 'COMPLETE'),
+    reductionFinding('loop-b', 30, '0.3', 'PARTIAL')
+  ]
+  vi.mocked(api.getSpecializedAnalysisLatest).mockResolvedValue(
+    latest({ ...run, analyzerType: 'FLOATING_POINT', findingCount: 2 })
+  )
+  vi.mocked(api.getSpecializedFindings).mockResolvedValue({
+    items: records,
+    total: 2,
+    page: 1,
+    pageSize: 20,
+    hasMore: false
+  })
+  vi.mocked(api.getSpecializedFinding).mockImplementation(async (_project, _stage, id) =>
+    records.find((item) => item.id === id)!
+  )
+  renderWithQueryClient(surface('floating-point-analysis'))
+  expect(await screen.findAllByRole('button', { name: '同函数归约' })).toHaveLength(2)
+  for (const [i, item] of records.entries()) {
+    await user.click(screen.getAllByRole('button', { name: '同函数归约' })[i])
+    expect(await screen.findByText(`src/two-loops.c:${item.startLine}`)).toBeVisible()
+    expect(screen.queryByRole('combobox', { name: '选择分析命中位置' })).not.toBeInTheDocument()
+    expect(screen.getByText(i === 0 ? '分析完成' : '部分分析完成')).toBeVisible()
+    const evidence = screen.getByRole('button', { name: `源码观察：${item.id} 的归约证据` })
+    await user.click(evidence)
+    expect(screen.getByLabelText('源码证据')).toHaveTextContent(`${item.id} += values[i];`)
+    expect(screen.getByLabelText('源码证据')).not.toHaveTextContent(
+      `${records[1 - i].id} += values[i];`
+    )
+    await user.click(screen.getByText('扫描事实'))
+    expect(await screen.findByText(item.confidence)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: '返回风险列表' }))
+    await screen.findAllByRole('button', { name: '同函数归约' })
+  }
+  expect(api.getSpecializedFinding).toHaveBeenCalledWith(
+    'project',
+    'floating-point-analysis',
+    'loop-a'
+  )
+  expect(api.getSpecializedFinding).toHaveBeenCalledWith(
+    'project',
+    'floating-point-analysis',
+    'loop-b'
+  )
+})
+
+it('浮点历史 v2 单条 Finding 多位置不拆成多条记录，按 primaryOccurrenceId 展示并允许切换', async () => {
+  const user = userEvent.setup()
+  const base = reductionFinding('historical', 10, '0.5', 'PARTIAL')
+  const second = {
+    id: 'second',
+    location: {
+      file: 'src/two-loops.c',
+      line: 30,
+      context: { lines: [{ line: 30, text: 'historical_second += x;' }] }
+    }
+  }
+  const legacy = {
+    ...base,
+    detail: {
+      ...base.detail,
+      primaryOccurrenceId: 'second',
+      occurrences: [...base.detail.occurrences, second]
+    }
+  }
+  vi.mocked(api.getSpecializedFindings).mockResolvedValue({
+    items: [legacy],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+    hasMore: false
+  })
+  vi.mocked(api.getSpecializedFinding).mockResolvedValue(legacy)
+  renderWithQueryClient(surface('floating-point-analysis'))
+  expect(await screen.findAllByRole('button', { name: '同函数归约' })).toHaveLength(1)
+  await user.click(screen.getByRole('button', { name: '同函数归约' }))
+  expect(await screen.findByText('src/two-loops.c:30')).toBeVisible()
+  expect(screen.getByLabelText('源码证据')).toHaveTextContent('historical_second += x;')
+  await user.click(screen.getByRole('combobox', { name: '选择分析命中位置' }))
+  await user.click(screen.getByText('位置 1 · src/two-loops.c:10'))
+  expect(screen.getByLabelText('源码证据')).toHaveTextContent('historical += values[i];')
+  expect(screen.getByText('src/two-loops.c:10')).toBeVisible()
+})
+
 describe('real specialized analysis', () => {
   it.each(['memory-order-analysis', 'floating-point-analysis'])(
     'renders embedded historical source from the detail response: %s',
     async (id) => {
       vi.mocked(api.getSpecializedFinding).mockResolvedValue({
         ...finding,
+        detail: {
+          ...finding.detail,
+          fact: {
+            primaryLocation: {
+              file: 'src/old.cpp',
+              sourceSha256: 'snapshot-digest',
+              span: { start: { line: 43 }, end: { line: 44 } },
+              context: {
+                lines: [
+                  { line: 42, text: '' },
+                  { line: 43, text: 'sum += old_value;' },
+                  { line: 44, text: 'return sum;' }
+                ],
+                highlights: [
+                  { line: 43, startColumn: 1, endColumn: 18 },
+                  { line: 44, startColumn: 1, endColumn: 12 }
+                ]
+              }
+            }
+          }
+        },
         codeContext: {
           findingId: finding.id,
           runId: finding.runId,
@@ -202,7 +420,7 @@ describe('real specialized analysis', () => {
         )
       )
       await user.click(await screen.findByRole('button', { name: finding.title! }))
-      expect(await screen.findByText('分析结果未提供源码片段')).toBeVisible()
+      expect(await screen.findByText(/源码片段的 Finding、文件、digest/)).toBeVisible()
       expect(
         within(screen.getByRole('region', { name: '建议下一步' })).getByRole('button', {
           name: '纳入报告 MEMORY_ORDER_FINDING'
@@ -279,9 +497,14 @@ describe('real specialized analysis', () => {
         hasMore: false
       })
       renderWithQueryClient(surface())
-      expect(await screen.findByText(/2 项分析诊断/)).toBeVisible()
+      if (status === 'PARTIAL') {
+        expect(
+          within((await screen.findByText('分析诊断')).parentElement!).getByText('2')
+        ).toBeVisible()
+      } else expect(await screen.findByText(/2 项分析诊断/)).toBeVisible()
       expect(screen.queryByRole('heading', { name: '分析完成' })).not.toBeInTheDocument()
-      if (status === 'PARTIAL') expect(screen.getByText(/不能据此认定没有风险/)).toBeVisible()
+      if (status === 'PARTIAL')
+        expect(screen.getByText('部分范围未完成，零正式风险不代表迁移安全。')).toBeVisible()
       else expect(await screen.findByText(/本次执行未完成/)).toBeVisible()
     }
   )
@@ -468,5 +691,6 @@ it('does not interpret zero findings as whole-program safety', async () => {
   })
   renderWithQueryClient(surface())
   expect((await screen.findAllByText(/本次分析范围内未发现支持的风险/))[0]).toBeVisible()
-  expect(screen.getByText(/结果仍需结合源码与业务条件确认/)).toBeVisible()
+  expect(screen.getByText(/结论限于本次分析的证据和模型范围/)).toBeVisible()
+  expect(screen.getByText(/零正式风险不代表迁移安全/)).toBeVisible()
 })

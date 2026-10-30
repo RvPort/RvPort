@@ -1,12 +1,27 @@
 import { describe, expect, it } from 'vitest'
 
 import { finding } from './fixtures.test-support'
-import { presentFinding } from './presentation'
+import { presentFinding, severityColors, severityLabels } from './presentation'
 
 describe('专项分析接口内容展示', () => {
+  it.each(['MEMORY_ORDER', 'FLOATING_POINT'] as const)(
+    '%s 保留正式 critical 风险，不降为未定级',
+    (analyzerType) => {
+      const result = presentFinding({ ...finding, analyzerType, severity: 'CRITICAL' })
+      expect(result.severity).toBe('critical')
+      expect(severityLabels[result.severity]).toBe('严重风险')
+      expect(severityColors[result.severity]).toBe('error')
+    }
+  )
+  it('候选携带旧 CRITICAL 字段也不升级为正式风险', () => {
+    expect(
+      presentFinding({ ...finding, severity: 'CRITICAL', findingKind: 'SOURCE_CANDIDATE' })
+    ).toMatchObject({ severity: 'info', findingKind: 'SOURCE_CANDIDATE' })
+  })
   it('读取验证方案及分析依据，中文完成状态不覆盖人工确认要求', () => {
     const result = presentFinding({
       ...finding,
+      analyzerType: 'FLOATING_POINT',
       confidence: 'medium',
       resultStatus: 'COMPLETE',
       detail: {
@@ -33,7 +48,7 @@ describe('专项分析接口内容展示', () => {
     ])
   })
   it('不为缺失数据生成方案或影响，保留数字置信度和未知值', () => {
-    const empty = presentFinding({ ...finding, detail: {} })
+    const empty = presentFinding({ ...finding, analyzerType: 'FLOATING_POINT', detail: {} })
     expect(empty.validationPlan).toEqual([])
     expect(empty.evidenceOrigin).toBe('')
     expect(empty.impact).toBe('')

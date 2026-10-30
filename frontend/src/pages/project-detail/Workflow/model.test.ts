@@ -19,6 +19,21 @@ function status(overrides: Partial<ProjectWorkflowStatus> = {}): ProjectWorkflow
 }
 
 describe('workflow model structural sharing', () => {
+  it.each([{ analysisStatus: 'PARTIAL' }, { analysisComplete: false }])(
+    '保留 DONE 事实并在工作流和 Step 数据提示部分分析：%j',
+    (partial) => {
+      const current = status({
+        stages: [{ id: 'memory-order-analysis', status: 'DONE', ...partial }]
+      })
+      expect(getWorkflowStageData('memory-order-analysis', current)).toMatchObject({
+        status: 'done',
+        analysisWarning: '部分分析完成'
+      })
+      expect(
+        createWorkflowNodes(current).find((node) => node.id === 'memory-order-analysis')?.data
+      ).toMatchObject({ status: 'done', hint: expect.stringContaining('部分分析完成') })
+    }
+  )
   it('preserves unchanged nodes when one stage changes', () => {
     const first = createWorkflowNodes(status())
     const next = createWorkflowNodes(status({ stages: [{ id: 'env', status: 'DONE' }] }), first)

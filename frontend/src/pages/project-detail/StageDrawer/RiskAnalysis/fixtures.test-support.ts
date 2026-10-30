@@ -24,7 +24,7 @@ export const run: SpecializedAnalysis = {
   status: 'COMPLETE_WITH_RISK',
   verdict: 'risks_found',
   exitCode: 3,
-  summary: {},
+  summary: { diagnosticsAggregated: true },
   findingCount: 1,
   candidateCount: 0,
   diagnosticCount: 0,
@@ -66,7 +66,13 @@ export const finding: SpecializedFinding = {
   semanticDigest: null,
   detail: {
     fact: { primaryLocation: { file: 'src/main.cpp' } },
-    conclusion: { impact: '可能读取旧数据', assumptions: ['仅分析发布协议片段'] }
+    conclusion: {
+      verdict: 'risk',
+      reason: '请检查发布协议',
+      detail: '可能读取旧数据',
+      impact: '可能读取旧数据',
+      assumptions: ['仅分析发布协议片段']
+    }
   },
   reportInclusion: {
     migrationInputRefId: null,

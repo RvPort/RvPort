@@ -6,14 +6,14 @@ Commands assume that RvPort has deployed the source into the current working dir
 
 ## Example selection and prerequisites
 
-| Difficulty | Repository | Purpose | Basic environment dependencies |
-|---|---|---|---|
-| Simple | [simdinfo](https://github.com/abetlen/simdinfo) | x86 SIMD detection and RISC-V adaptation branches | `gcc`, `make` |
-| Simple | [cJSON](https://github.com/DaveGamble/cJSON) | ANSI C library and unit tests | `gcc`, `make`, `cmake` |
-| Medium | [zlib](https://github.com/madler/zlib) | Compression library and CMake/CTest | `gcc`, `make`, `cmake` |
-| Complex | [SQLite](https://github.com/sqlite/sqlite) | Code generation, CLI, full regression suite | `gcc`, `make`; full tests also require `tcl`, `tcl-devel` |
-| Complex | [libarchive](https://github.com/libarchive/libarchive) | Multiple archive formats, feature detection, CLI, tests | `gcc`, `make`, `cmake`; full features require compression-format `*-devel` packages |
-| High complexity, optional | [curl](https://github.com/curl/curl) | Optional protocol, TLS, compression, and SSH dependencies | `gcc`, `make`, `autoconf`, `automake`, `libtool`, `pkgconf-pkg-config`, `perl` |
+| Difficulty                | Repository                                             | Purpose                                                   | Basic environment dependencies                                                      |
+| ------------------------- | ------------------------------------------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Simple                    | [simdinfo](https://github.com/abetlen/simdinfo)        | x86 SIMD detection and RISC-V adaptation branches         | `gcc`, `make`                                                                       |
+| Simple                    | [cJSON](https://github.com/DaveGamble/cJSON)           | ANSI C library and unit tests                             | `gcc`, `make`, `cmake`                                                              |
+| Medium                    | [zlib](https://github.com/madler/zlib)                 | Compression library and CMake/CTest                       | `gcc`, `make`, `cmake`                                                              |
+| Complex                   | [SQLite](https://github.com/sqlite/sqlite)             | Code generation, CLI, full regression suite               | `gcc`, `make`; full tests also require `tcl`, `tcl-devel`                           |
+| Complex                   | [libarchive](https://github.com/libarchive/libarchive) | Multiple archive formats, feature detection, CLI, tests   | `gcc`, `make`, `cmake`; full features require compression-format `*-devel` packages |
+| High complexity, optional | [curl](https://github.com/curl/curl)                   | Optional protocol, TLS, compression, and SSH dependencies | `gcc`, `make`, `autoconf`, `automake`, `libtool`, `pkgconf-pkg-config`, `perl`      |
 
 Start with simdinfo to verify that each architecture takes its intended compilation branch. Then get cJSON and zlib working, followed by SQLite and libarchive for more complex build/test flows. Import curl after those examples are stable.
 

@@ -103,3 +103,27 @@ describe('x86 build Bitcode presentation', () => {
     })
   })
 })
+
+it('shows skipped units, empty successful artifacts and reason-free failed artifacts accurately', () => {
+  expect(
+    getBitcodePresentation({
+      status: 'SUCCEEDED',
+      bitcode: { ...ready, status: 'PARTIAL', succeededCount: 8, skippedCount: 2 }
+    }).detail
+  ).toBe('8/10 个编译单元成功，2 个跳过')
+  expect(
+    getBitcodePresentation({ status: 'SUCCEEDED', bitcode: { ...ready, plannedCount: 0 } }).detail
+  ).toBe('Bitcode 已生成。')
+  expect(
+    getBitcodePresentation({
+      status: 'SUCCEEDED',
+      bitcode: { ...ready, status: 'FAILED', plannedCount: 0 }
+    }).detail
+  ).toBe('Bitcode 生成失败。')
+  expect(
+    getBitcodePresentation({
+      status: 'SUCCEEDED',
+      bitcode: { ...ready, status: 'NOT_ATTEMPTED', plannedCount: 0 }
+    }).detail
+  ).toBe('未尝试生成 Bitcode。')
+})

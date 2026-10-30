@@ -96,9 +96,10 @@ export function useKnowledgeBaseDrawer(
   })
   const currentScan =
     latestScan?.freshness === 'CURRENT' ? (latestScan.result ?? undefined) : undefined
+  const submissionContext = `${projectId}:${readinessQuery.data?.context.sourceRevisionId}:${readinessQuery.data?.context.runtimeEnvironmentVersion}`
   const submission = useStageSubmission(
     latestScan?.execution?.id ?? latestScan?.result?.id,
-    `${projectId}:${readinessQuery.data?.context.sourceRevisionId}:${readinessQuery.data?.context.runtimeEnvironmentVersion}`
+    submissionContext
   )
   const scan = selectedScanId ? selectedScan : currentScan
   const scanId = selectedScanId ?? currentScan?.id
@@ -167,7 +168,7 @@ export function useKnowledgeBaseDrawer(
   })
   const findingDetail = finding ? { ...finding, codeContext } : undefined
   const scanSubmission = useSubmissionSession(
-    `kb-scan:${projectId}`,
+    `kb-scan:${submissionContext}`,
     visible && view.type === 'config'
   )
   const { isPending: isCreatingAiSuggestion, mutateAsync: createAiSuggestion } = useSessionMutation(

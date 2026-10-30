@@ -46,6 +46,7 @@ Save reports before removing the stopped container created for the run. `pnpm bu
 - `src/pages/`, `src/components/`: pages and shared components.
 - `src/types/`, `src/store/`, `src/utils/`: types, state, and shared utilities.
 - `deploy/`: Docker and Nginx deployment configuration.
+- `docs/`: detailed frontend guidance, currently the style guide.
 - `openspec/`: independent frontend specifications, active changes, and historical archives.
 
-See [UI conventions](AGENTS.en.md) and the [style guide](STYLE_GUIDE.md). Keep tests close to their domain source. Update contract tests and backend documentation alongside API changes.
+See [UI conventions](AGENTS.en.md) and the [style guide](docs/STYLE_GUIDE.md). Keep tests close to their domain source. Update contract tests and backend documentation alongside API changes.

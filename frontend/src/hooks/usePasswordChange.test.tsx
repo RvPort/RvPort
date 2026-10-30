@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useAuthStore } from '@/store/authStore'
@@ -79,4 +79,40 @@ describe('confirmed logout after password change', () => {
     expect(useAuthStore.getState().user?.id).toBe('B')
     expect(result.current.passwordChanged).toBe(false)
   })
+  it('does not attempt a password change or logout without an initial password payload', async () => {
+    const { result } = renderHook(() => usePasswordChange(vi.fn()))
+    await act(async () => {
+      await result.current.submit()
+    })
+    expect(changePassword).not.toHaveBeenCalled()
+    expect(logout).not.toHaveBeenCalled()
+  })
+  it.each(['success', 'failure'])(
+    'ignores a late logout %s after the user identity changes',
+    async (outcome) => {
+      let finish!: () => void
+      logout.mockImplementationOnce(
+        () =>
+          new Promise((resolve, reject) => {
+            finish = () =>
+              outcome === 'success' ? resolve({ loggedOut: true }) : reject(new Error('offline'))
+          })
+      )
+      const done = vi.fn()
+      const { result } = renderHook(() => usePasswordChange(done))
+      let pending!: Promise<void>
+      act(() => {
+        pending = result.current.submit({ currentPassword: 'old', newPassword: 'new' })
+      })
+      await waitFor(() => expect(logout).toHaveBeenCalledOnce())
+      act(() => useAuthStore.getState().setUser({ ...user, id: 'B' }))
+      await act(async () => {
+        finish()
+        await pending
+      })
+      expect(useAuthStore.getState().user?.id).toBe('B')
+      expect(done).not.toHaveBeenCalled()
+      expect(warning).not.toHaveBeenCalled()
+    }
+  )
 })

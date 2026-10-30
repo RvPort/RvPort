@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { AxiosError } from 'axios'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -104,6 +105,56 @@ describe('owned mutation', () => {
       finish()
       await pending
     })
+    expect(result.current.isPending).toBe(false)
+  })
+  it.each([
+    ['opaque failure', '提交失败，请重试'],
+    [new AxiosError('already reported'), undefined]
+  ])(
+    'handles nonstandard request errors without duplicating transport feedback: %s',
+    async (error, expected) => {
+      const { result } = renderHook(
+        () =>
+          useSessionMutation({
+            sessionKey: 'error-shape',
+            active: true,
+            mutationFn: async () => {
+              throw error
+            }
+          }),
+        { wrapper }
+      )
+      await act(async () => {
+        await result.current.mutateAsync(undefined)
+      })
+      if (expected) expect(feedback.error).toHaveBeenCalledExactlyOnceWith(expected)
+      else expect(feedback.error).not.toHaveBeenCalled()
+      expect(result.current.isPending).toBe(false)
+    }
+  )
+
+  it('delegates current request failures to the caller and passes the failed variables to settlement', async () => {
+    const failure = new Error('profile rejected'),
+      onError = vi.fn(),
+      onSettled = vi.fn()
+    const mutationFn = vi.fn<(id: string) => Promise<never>>().mockRejectedValue(failure)
+    const { result } = renderHook(
+      () =>
+        useSessionMutation({
+          sessionKey: 'caller-error',
+          active: true,
+          mutationFn,
+          onError,
+          onSettled
+        }),
+      { wrapper }
+    )
+    await act(async () => {
+      await result.current.mutateAsync('profile-7')
+    })
+    expect(onError).toHaveBeenCalledExactlyOnceWith(failure, 'profile-7')
+    expect(onSettled).toHaveBeenCalledExactlyOnceWith(undefined, failure, 'profile-7')
+    expect(feedback.error).not.toHaveBeenCalled()
     expect(result.current.isPending).toBe(false)
   })
 })
