@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "engines": {"node": "22.23.2", "npm": "10.9.8"},
+  "dependencies": {"@bitkyc08/opencodex": "2.94.0"}
+}

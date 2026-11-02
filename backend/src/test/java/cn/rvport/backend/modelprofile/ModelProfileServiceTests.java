@@ -154,15 +154,19 @@ class ModelProfileServiceTests {
         UUID profileId = UUID.randomUUID();
         UUID actorId = UUID.randomUUID();
         UUID runtimeId = UUID.randomUUID();
-        ModelProfilesRecord current = record(profileId, "Existing", false, "codex", "OPENAI_COMPATIBLE",
+        ModelProfilesRecord current = record(profileId, "Existing", true, "codex", "OPENAI_COMPATIBLE",
                 "https://saved.example.com/v1", "saved-model", "RESPONSES", null, 30, 1800);
         AgentRuntimesRecord runtime = runtime(runtimeId, "CODEX", "codex");
         when(repository.findById(profileId)).thenReturn(java.util.Optional.of(current));
         when(agentRuntimeRepository.findByType(cn.rvport.backend.codexprovider.AgentType.CODEX)).thenReturn(java.util.Optional.of(runtime));
         ArgumentCaptor<CodexProviderResolvedConfig> configCaptor = ArgumentCaptor.forClass(CodexProviderResolvedConfig.class);
-        when(probeService.test(configCaptor.capture(), eq(runtime))).thenReturn(CodexProviderTestResult.success("ok", Instant.parse("2026-08-13T00:00:00Z")));
+        var dispatcher = org.mockito.Mockito.mock(CodexProbeDispatcher.class);
+        when(dispatcher.execute(eq(null), eq(profileId), eq(runtimeId), configCaptor.capture(), eq(10)))
+                .thenReturn(CodexProviderTestResult.success("ok", Instant.parse("2026-08-13T00:00:00Z")));
+        var service = service();
+        service.setCodexProbeDispatcher(dispatcher);
 
-        CodexProviderTestResult result = service().test(profileId, new ModelProfileRequest(
+        CodexProviderTestResult result = service.test(profileId, new ModelProfileRequest(
                 null, true, null, null, "https://override.example.com/v1", "override-model",
                 "CHAT", "TemporaryKey123", true, 10, 60, Set.of("enabled", "baseUrl", "model", "wireApi", "apiKey", "timeoutSeconds", "maxRuntimeSeconds")
         ), actorId);
@@ -237,6 +241,10 @@ class ModelProfileServiceTests {
                 eq("SUCCESS"), eq(true), eq(true), any(JSONB.class), any(JSONB.class),
                 eq(null), eq("ok"), any(), any(), any());
         verify(repository).updateProbeRunStatus(eq(runId), eq(AgentProbeRunStatus.SUCCESS), any(), eq(null), any());
+        var testedAt = OffsetDateTime.parse("2026-08-28T00:00:00Z");
+        verify(agentRuntimeRepository).updateProbeResult(eq(runtimeId), eq("SUCCESS"), eq("ok"), any(), eq(testedAt));
+        verify(repository).updateTestResult(eq(profileId), eq("SUCCESS"), eq("ok"), eq(testedAt), eq("CODEX"),
+                eq(true), eq(true), any(), eq(actorId));
         verify(repository, never()).findAssignment(any());
     }
 

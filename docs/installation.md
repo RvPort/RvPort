@@ -74,7 +74,7 @@ These commands retain named volumes. `docker compose down -v` deletes the projec
 ## Troubleshooting
 
 - Toolchain downloads fail: check container connectivity to package sources, GitHub releases, and dependency repositories. Retain complete build logs; an older image is not evidence of a successful rebuild.
-- Node or npm mirrors time out or reset connections: use the official sources with `docker compose --parallel 1 build --build-arg NODEJS_MIRROR=https://nodejs.org/dist --build-arg NPM_REGISTRY=https://registry.npmjs.org`. Keep dependency versions unchanged; changing build arguments may invalidate cached layers.
+- Node or npm mirrors time out or reset connections: use the official sources with `docker compose --parallel 1 build --build-arg NODEJS_MIRROR=https://nodejs.org/dist`. Keep dependency versions unchanged; changing build arguments may invalidate cached layers.
 - Database schema is missing: confirm that Liquibase ran on the API node, and inspect migration logs and the target database name.
 - Credentials cannot be saved or read: verify that the master key is a valid Base64-encoded 32-byte value and that an existing deployment's key has not been changed accidentally.
 - Workers do not execute tasks: check RabbitMQ, worker logs, database connectivity, and worker registration.

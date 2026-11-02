@@ -105,7 +105,7 @@ class ModelProfileRepositoryTests {
             repository.updateTestResult(PROFILE_ID, "COMPATIBLE", "ok", NOW, AgentType.CODEX.name(),
                     true, true, details, ACTOR_ID);
             assertThat(database.lastExecution().normalizedSql()).contains("last_test_status = ?",
-                    "last_test_agent_type = ?", "last_test_details = cast(");
+                    "last_test_agent_type = ?", "last_test_details = cast(", "last_tested_at is null", "last_tested_at <= cast(? as timestamp(6) with time zone)");
             repository.updateConnectivityResult(PROFILE_ID, "SUCCEEDED", "reachable", details, NOW, 123L, ACTOR_ID);
             assertThat(database.lastExecution().normalizedSql()).contains("last_connectivity_status = ?",
                     "last_connectivity_duration_ms = ?");
@@ -129,6 +129,8 @@ class ModelProfileRepositoryTests {
             assertThat(database.lastExecution().normalizedSql()).contains("started_at = cast(").doesNotContain("finished_at = cast(");
             repository.updateProbeRunStatus(RUN_ID, AgentProbeRunStatus.SUCCESS, "done", null, NOW);
             assertThat(database.lastExecution().normalizedSql()).contains("finished_at = cast(").doesNotContain("started_at = cast(");
+            assertThat(database.lastExecution().normalizedSql()).contains("status in");
+            assertThat(database.lastExecution().bindings()).contains("PENDING", "RUNNING");
             database.verifyComplete();
         }
     }

@@ -22,6 +22,11 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitQueueConfiguration {
 
     @Bean
+    Queue codexProbeQueue() {
+        return QueueBuilder.durable(cn.rvport.backend.modelprofile.CodexProbeDispatcher.QUEUE).quorum().build();
+    }
+
+    @Bean
     DirectExchange taskExchange(TaskQueueProperties properties) {
         return ExchangeBuilder.directExchange(properties.exchange())
                 .durable(true)

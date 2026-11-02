@@ -5,8 +5,12 @@ public record CodexProcessResult(
         boolean timedOut,
         String stdout,
         String stderr,
-        String mergedOutput
+        String mergedOutput,
+        ProcessExecutionDiagnostics diagnostics
 ) {
+    public CodexProcessResult(int exitCode, boolean timedOut, String stdout, String stderr, String mergedOutput) {
+        this(exitCode, timedOut, stdout, stderr, mergedOutput, null);
+    }
     public CodexProcessResult(int exitCode, boolean timedOut, String stdout, String stderr) {
         this(exitCode, timedOut, stdout, stderr, firstNonBlank(stdout, stderr));
     }
