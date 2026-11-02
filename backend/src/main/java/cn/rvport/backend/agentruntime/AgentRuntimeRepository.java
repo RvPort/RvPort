@@ -59,6 +59,7 @@ public class AgentRuntimeRepository {
                 .set(AGENT_RUNTIMES.LAST_PROBE_AT, probedAt)
                 .set(AGENT_RUNTIMES.UPDATED_AT, OffsetDateTime.now())
                 .where(AGENT_RUNTIMES.ID.eq(runtimeId))
+                .and(AGENT_RUNTIMES.LAST_PROBE_AT.isNull().or(AGENT_RUNTIMES.LAST_PROBE_AT.le(probedAt)))
                 .execute();
     }
 }

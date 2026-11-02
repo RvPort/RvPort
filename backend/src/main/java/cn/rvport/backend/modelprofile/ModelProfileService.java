@@ -56,6 +56,12 @@ public class ModelProfileService {
     private final AgentRuntimeRepository agentRuntimeRepository;
     private final AgentRuntimeService agentRuntimeService;
     private final ExecutorService agentProbeExecutor;
+    private CodexProbeDispatcher codexProbeDispatcher;
+
+    @Autowired
+    void setCodexProbeDispatcher(CodexProbeDispatcher dispatcher) {
+        this.codexProbeDispatcher = dispatcher;
+    }
 
     @Autowired
     public ModelProfileService(
@@ -167,7 +173,7 @@ public class ModelProfileService {
         ModelProfilesRecord current = require(profileId);
         AgentRuntimesRecord runtime = resolveRuntimeForTest(overrideRequest);
         CodexProviderResolvedConfig config = resolveForTest(current, overrideRequest, runtime.getExecutablePath());
-        CodexProviderTestResult result = probeService.test(config, runtime);
+        CodexProviderTestResult result = probe(null, profileId, runtime, config, overrideRequest != null);
         agentRuntimeRepository.updateProbeResult(
                 runtime.getId(),
                 result.status(),
@@ -411,12 +417,12 @@ public class ModelProfileService {
         try {
             ModelProfilesRecord profile = require(profileId);
             CodexProviderResolvedConfig config = resolved(profile, null, runtime.getExecutablePath());
-            CodexProviderTestResult result = probeService.test(config, runtime);
+            CodexProviderTestResult result = probe(runId, profileId, runtime, config, false);
             OffsetDateTime finishedAt = OffsetDateTime.now(ZoneOffset.UTC);
             long durationMs = Duration.ofNanos(System.nanoTime() - startedNanos).toMillis();
             String errorCode = result.success() ? null : firstFailureCode(result);
             repository.createProbeResult(
-                    UUID.randomUUID(),
+                    probeResultId(runId, runtime.getId()),
                     runId,
                     profileId,
                     runtime.getId(),
@@ -432,13 +438,14 @@ public class ModelProfileService {
                     finishedAt,
                     durationMs
             );
+            OffsetDateTime testedAt = OffsetDateTime.ofInstant(result.testedAt(), ZoneOffset.UTC);
             agentRuntimeRepository.updateProbeResult(runtime.getId(), result.status(), result.message(),
-                    toJsonb(result.details()), finishedAt);
+                    toJsonb(result.details()), testedAt);
             repository.updateTestResult(
                     profileId,
                     result.status(),
                     result.message(),
-                    finishedAt,
+                    testedAt,
                     result.agentType(),
                     result.basicAvailable(),
                     result.agentCompatible(),
@@ -449,7 +456,7 @@ public class ModelProfileService {
         } catch (Exception ex) {
             OffsetDateTime finishedAt = OffsetDateTime.now(ZoneOffset.UTC);
             repository.createProbeResult(
-                    UUID.randomUUID(),
+                    probeResultId(runId, runtime.getId()),
                     runId,
                     profileId,
                     runtime.getId(),
@@ -474,7 +481,23 @@ public class ModelProfileService {
                 .filter(check -> !check.succeeded())
                 .findFirst()
                 .map(cn.rvport.backend.codexprovider.CodexProviderProbeCheckResult::errorCode)
-                .orElse(null);
+                .orElse((String) result.details().get("errorCode"));
+    }
+
+    static UUID probeResultId(UUID runId, UUID runtimeId) {
+        return UUID.nameUUIDFromBytes((runId + ":" + runtimeId).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private CodexProviderTestResult probe(UUID runId, UUID profileId, AgentRuntimesRecord runtime,
+            CodexProviderResolvedConfig config, boolean override) {
+        if ("CODEX".equals(runtime.getAgentType()) && config.wireApi() == CodexProviderWireApi.CHAT) {
+            if (codexProbeDispatcher == null) {
+                return CodexProbeDispatcher.failure(runtime.getId(), "AGENT_PROBE_DISPATCH_UNAVAILABLE");
+            }
+            return codexProbeDispatcher.execute(runId, profileId, runtime.getId(),
+                    override ? config : null, config.timeoutSeconds());
+        }
+        return probeService.test(config, runtime);
     }
 
     private String sanitizeFailure(String message) {

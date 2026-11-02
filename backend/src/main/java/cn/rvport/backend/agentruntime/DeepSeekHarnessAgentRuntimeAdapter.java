@@ -36,6 +36,10 @@ public class DeepSeekHarnessAgentRuntimeAdapter extends ConfigurableAgentRuntime
         String provider = "rvport-openai-compatible";
         String model = yaml(request.model().model());
         return """
+                - id: hmr
+                  disabled: false
+                  config:
+                    root: []
                 - id: llm-pi-ai
                   name: '@deepseek-ai/dsh-llm-pi-ai'
                   config:

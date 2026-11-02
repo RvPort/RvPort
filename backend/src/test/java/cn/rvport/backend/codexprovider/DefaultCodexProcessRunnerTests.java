@@ -1,6 +1,7 @@
 package cn.rvport.backend.codexprovider;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -55,6 +56,14 @@ class DefaultCodexProcessRunnerTests {
     }
 
     @Test
+    void preservesSurrogatePairSplitAcrossReaderBuffers() throws Exception {
+        var result = new DefaultCodexProcessRunner().run(command("surrogate"), Map.of(), null,
+                Files.createTempDirectory("runner-surrogate-"), Duration.ofSeconds(5));
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.stdout()).isEqualTo("a".repeat(1023) + "🚀");
+    }
+
+    @Test
     void reportsTimeoutAndStdinFailureWithoutEchoingInput() throws Exception {
         DefaultCodexProcessRunner runner = new DefaultCodexProcessRunner();
         Path workDir = Files.createTempDirectory("rvport-process-runner-failure-");
@@ -83,6 +92,59 @@ class DefaultCodexProcessRunnerTests {
         } finally {
             process.destroyForcibly();
         }
+    }
+
+    @Test
+    void terminatesOwnedDescendantsOnTimeoutAndPreservesOtherTasks() throws Exception {
+        Path workspace = Files.createTempDirectory("runner-tree-");
+        Process unrelated = new ProcessBuilder(command("sleep")).start();
+        try {
+            var result = new DefaultCodexProcessRunner().run(command("tree"), Map.of(), "", workspace, Duration.ofSeconds(2));
+            assertThat(result.timedOut()).isTrue();
+            assertThat(result.diagnostics().budgetMs()).isEqualTo(2000);
+            assertThat(result.diagnostics().totalMs()).isLessThan(5000);
+            assertThat(Files.exists(workspace.resolve("child.pid"))).isTrue();
+            long pid = Long.parseLong(Files.readString(workspace.resolve("child.pid")));
+            assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)).isFalse();
+            assertThat(unrelated.isAlive()).isTrue();
+        } finally { unrelated.destroyForcibly().waitFor(); }
+    }
+
+    @Test
+    void interruptsWithoutLeavingTheLaunchedProcessAndReportsStartupFailure() throws Exception {
+        Path workspace = Files.createTempDirectory("runner-interrupt-");
+        var interrupted = new java.util.concurrent.atomic.AtomicBoolean();
+        Thread thread = Thread.ofVirtual().start(() -> {
+            try {
+                new DefaultCodexProcessRunner().run(command("pid-sleep"), Map.of(), null, workspace, Duration.ofSeconds(30));
+            } catch (InterruptedException expected) { interrupted.set(Thread.currentThread().isInterrupted()); }
+            catch (java.io.IOException ex) { throw new java.io.UncheckedIOException(ex); }
+        });
+        Path pidFile = workspace.resolve("root.pid");
+        long limit = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (!Files.exists(pidFile) && System.nanoTime() < limit) { Thread.sleep(10); }
+        assertThat(pidFile).exists();
+        long pid = Long.parseLong(Files.readString(pidFile));
+        thread.interrupt();
+        thread.join(Duration.ofSeconds(4));
+        assertThat(thread.isAlive()).isFalse();
+        assertThat(interrupted).isTrue();
+        assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)).isFalse();
+        var failed = new DefaultCodexProcessRunner().run(List.of("/nonexistent-rvport-cli"), Map.of(), null,
+                workspace, Duration.ofSeconds(1));
+        assertThat(failed.exitCode()).isEqualTo(127);
+        assertThat(failed.stderr()).contains("AGENT_SUPERVISOR_START_FAILED").doesNotContain("nonexistent-rvport-cli");
+    }
+
+    @Test
+    void reapsChildrenEvenWhenWrapperExitsBeforeTheFirstPoll() throws Exception {
+        Path workspace = Files.createTempDirectory("runner-orphan-");
+        var result = new DefaultCodexProcessRunner().run(command("orphan"), Map.of(), null, workspace, Duration.ofSeconds(5));
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.timedOut()).isFalse();
+        assertThat(result.diagnostics().cleanupComplete()).isTrue();
+        long pid = Long.parseLong(Files.readString(workspace.resolve("child.pid")));
+        assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)).isFalse();
     }
 
     private static List<String> command(String mode) {
@@ -119,7 +181,22 @@ class DefaultCodexProcessRunnerTests {
                     System.out.write("a".repeat(65_535).getBytes(StandardCharsets.UTF_8));
                     System.out.write("中".getBytes(StandardCharsets.UTF_8));
                 }
+                case "surrogate" -> System.out.write(("a".repeat(1023) + "🚀").getBytes(StandardCharsets.UTF_8));
                 case "sleep" -> Thread.sleep(5_000);
+                case "tree" -> {
+                    Process child = new ProcessBuilder(command("sleep")).inheritIO().start();
+                    Files.writeString(Path.of("child.pid"), Long.toString(child.pid()));
+                    child.waitFor();
+                }
+                case "orphan" -> {
+                    Process child = new ProcessBuilder(command("sleep")).inheritIO().start();
+                    Files.writeString(Path.of("child.pid"), Long.toString(child.pid()));
+                    System.exit(0);
+                }
+                case "pid-sleep" -> {
+                    Files.writeString(Path.of("root.pid"), Long.toString(ProcessHandle.current().pid()));
+                    Thread.sleep(30_000);
+                }
                 case "small-pool" -> {
                     var result = new DefaultCodexProcessRunner().run(command("echo"), Map.of(), "管道输入",
                             Path.of(System.getProperty("java.io.tmpdir")), Duration.ofSeconds(5));

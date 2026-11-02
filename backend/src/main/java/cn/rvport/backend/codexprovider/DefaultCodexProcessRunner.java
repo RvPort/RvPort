@@ -33,32 +33,86 @@ public class DefaultCodexProcessRunner implements CodexProcessRunner {
             Path workingDirectory,
             Duration timeout
     ) throws IOException, InterruptedException {
+        ExecutionBudget execution = new ExecutionBudget(timeout);
+        Path supervisor = java.nio.file.Files.createTempFile("rvport-agent-supervisor-", ".py");
+        try {
+            try (var resource = DefaultCodexProcessRunner.class.getResourceAsStream("/agentruntime/agent_process_supervisor.py")) {
+                if (resource == null) { throw new IOException("Agent supervisor resource unavailable"); }
+                java.nio.file.Files.copy(resource, supervisor, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            List<String> supervised = new ArrayList<>(List.of("python3", supervisor.toString()));
+            supervised.addAll(command);
+            return runSupervised(supervised, environment, standardInput, workingDirectory, timeout, execution);
+        } finally { java.nio.file.Files.deleteIfExists(supervisor); }
+    }
+
+    private CodexProcessResult runSupervised(List<String> command, Map<String, String> environment, String standardInput,
+            Path workingDirectory, Duration timeout, ExecutionBudget execution) throws IOException, InterruptedException {
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(workingDirectory.toFile());
         builder.environment().putAll(environment);
         Process process = builder.start();
+        OwnedProcessTree tree = new OwnedProcessTree(process.toHandle());
         OutputCollector collector = new OutputCollector(OUTPUT_LIMIT_BYTES);
         CompletableFuture<Void> stdoutFuture = readAsync(process.getInputStream(), "STDOUT", collector);
         CompletableFuture<Void> stderrFuture = readAsync(process.getErrorStream(), "STDERR", collector);
         AtomicReference<IOException> stdinFailure = new AtomicReference<>();
         CompletableFuture<Void> stdinFuture = writeAsync(process.getOutputStream(), standardInput, stdinFailure);
-        boolean finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        if (!finished) {
-            process.destroyForcibly();
-            process.waitFor(5, TimeUnit.SECONDS);
-            join(stdinFuture);
-            join(stdoutFuture);
-            join(stderrFuture);
-            return new CodexProcessResult(-1, true, collector.stdout(), collector.stderr(), collector.mergedOutput());
+        boolean finished = false;
+        long executionMs;
+        ExecutionBudget cleanup;
+        boolean interrupted = false;
+        try {
+            while (!execution.expired()) {
+                tree.capture();
+                if (process.waitFor(Math.min(execution.remaining().toNanos(), 20_000_000), TimeUnit.NANOSECONDS)) {
+                    finished = true;
+                    break;
+                }
+            }
+        } catch (InterruptedException ex) {
+            interrupted = true;
+            throw ex;
+        } finally {
+            executionMs = TimeUnit.NANOSECONDS.toMillis(execution.elapsedNanos());
+            cleanup = new ExecutionBudget(Duration.ofSeconds(2));
+            try {
+                if (process.isAlive()) { process.destroy(); }
+                while (tree.alive() && !cleanup.expired()) {
+                    tree.capture();
+                    TimeUnit.NANOSECONDS.sleep(Math.min(cleanup.remaining().toNanos(), 10_000_000));
+                }
+                join(stdinFuture, cleanup);
+                join(stdoutFuture, cleanup);
+                join(stderrFuture, cleanup);
+            } catch (InterruptedException ex) {
+                interrupted = true;
+                throw ex;
+            } finally {
+                if (tree.alive()) { tree.terminate(cleanup); }
+                process.getOutputStream().close();
+                process.getInputStream().close();
+                process.getErrorStream().close();
+                stdinFuture.cancel(true);
+                stdoutFuture.cancel(true);
+                stderrFuture.cancel(true);
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
         }
-        join(stdinFuture);
-        join(stdoutFuture);
-        join(stderrFuture);
+        ProcessExecutionDiagnostics diagnostics = new ProcessExecutionDiagnostics(timeout.toMillis(), executionMs,
+                TimeUnit.NANOSECONDS.toMillis(cleanup.elapsedNanos()),
+                TimeUnit.NANOSECONDS.toMillis(execution.elapsedNanos()), !tree.alive()
+                        && !(finished && process.exitValue() == 125));
+        if (!finished) {
+            return new CodexProcessResult(-1, true, collector.stdout(), collector.stderr(), collector.mergedOutput(), diagnostics);
+        }
         if (stdinFailure.get() != null) {
             collector.appendSystemError("Agent stdin write failed");
-            return new CodexProcessResult(-1, false, collector.stdout(), collector.stderr(), collector.mergedOutput());
+            return new CodexProcessResult(-1, false, collector.stdout(), collector.stderr(), collector.mergedOutput(), diagnostics);
         }
-        return new CodexProcessResult(process.exitValue(), false, collector.stdout(), collector.stderr(), collector.mergedOutput());
+        return new CodexProcessResult(process.exitValue(), false, collector.stdout(), collector.stderr(), collector.mergedOutput(), diagnostics);
     }
 
     private CompletableFuture<Void> writeAsync(OutputStream stream, String standardInput, AtomicReference<IOException> failure) {
@@ -102,9 +156,9 @@ public class DefaultCodexProcessRunner implements CodexProcessRunner {
         }, PROCESS_IO_EXECUTOR);
     }
 
-    private void join(CompletableFuture<Void> future) throws InterruptedException {
+    private void join(CompletableFuture<Void> future, ExecutionBudget cleanup) throws InterruptedException {
         try {
-            future.get(5, TimeUnit.SECONDS);
+            future.get(cleanup.remaining().toNanos(), TimeUnit.NANOSECONDS);
         } catch (ExecutionException | java.util.concurrent.TimeoutException ex) {
             // 超时或读取异常不阻断进程结果返回。
         }
@@ -157,15 +211,15 @@ public class DefaultCodexProcessRunner implements CodexProcessRunner {
             merged.add("[STDERR] " + message);
         }
 
-        private String stdout() {
+        private synchronized String stdout() {
             return stdout.toString();
         }
 
-        private String stderr() {
+        private synchronized String stderr() {
             return stderr.toString();
         }
 
-        private String mergedOutput() {
+        private synchronized String mergedOutput() {
             return String.join("", merged);
         }
     }

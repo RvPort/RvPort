@@ -58,7 +58,7 @@ class CodexProviderProbeServiceTests {
         );
         assertThat(runner.environment).containsEntry("OPENAI_API_KEY", "SecretKey123");
         assertThat(runner.environment).containsEntry("OPENAI_BASE_URL", "https://llm.example.com/v1");
-        assertThat(runner.timeout).isEqualTo(Duration.ofSeconds(15));
+        assertThat(runner.timeout).isPositive().isLessThanOrEqualTo(Duration.ofSeconds(15));
         assertThat(runner.standardInputs).allSatisfy(input -> assertThat(input).isNotBlank());
         assertThat(runner.standardInputs).allSatisfy(input -> assertThat(input).contains("UTF-8 中文传输校验"));
         assertThat(runner.commands).allSatisfy(command -> assertThat(command.getLast()).isEqualTo("-"));
@@ -230,7 +230,7 @@ class CodexProviderProbeServiceTests {
         CodexProviderProbeService service = new CodexProviderProbeService(
                 new AgentRuntimeAdapterRegistry(List.of()), client, mapper);
 
-        assertThat(service.testConnectivity(config("key")).message()).contains("cannot encode");
+        assertThat(service.testConnectivity(config("key")).message()).contains("无法完成").doesNotContain("cannot encode");
     }
 
     @Test
@@ -240,12 +240,15 @@ class CodexProviderProbeServiceTests {
         CodexProviderTestResult ioResult = service(io).test(config("SecretKey123"), runtime(AgentType.OPENCODE));
         assertThat(ioResult.checks().getFirst().errorCode()).isEqualTo("AGENT_PROBE_IO_FAILED");
         assertThat(ioResult.message()).contains("[REDACTED]");
+        assertThat(ioResult.checks().getFirst().details()).containsEntry("phase", "PROCESS_START_FAILED");
 
         SequencedAdapter interrupted = new SequencedAdapter(AgentType.DEEPSEEK_HARNESS,
                 request -> { throw new InterruptedException("stop"); });
         CodexProviderTestResult interruptedResult = service(interrupted)
                 .test(config("key"), runtime(AgentType.DEEPSEEK_HARNESS));
         assertThat(interruptedResult.checks().getFirst().errorCode()).isEqualTo("AGENT_PROBE_INTERRUPTED");
+        assertThat(interruptedResult.checks()).allSatisfy(check ->
+                assertThat(check.details()).containsEntry("cancelled", true).containsEntry("cleanup", "UNKNOWN"));
         assertThat(Thread.interrupted()).isTrue();
 
         SequencedAdapter invalidFile = successfulAdapter(AgentType.OPENCODE, request ->
@@ -257,6 +260,11 @@ class CodexProviderProbeServiceTests {
                 java.nio.file.Files.createDirectory(request.workspace().resolve("probe-output.json")));
         assertThat(service(unreadableFile).test(config("key"), runtime(AgentType.OPENCODE)).checks().getLast().errorCode())
                 .isEqualTo("AGENT_PROBE_OUTPUT_FILE_MISSING");
+        SequencedAdapter oversized = successfulAdapter(AgentType.OPENCODE, request ->
+                java.nio.file.Files.writeString(request.workspace().resolve("probe-output.json"), "x".repeat(65537)));
+        var check = service(oversized).test(config("key"), runtime(AgentType.OPENCODE)).checks().getLast();
+        assertThat(check.errorCode()).isEqualTo("AGENT_PROBE_OUTPUT_FILE_INVALID");
+        assertThat(check.details()).containsEntry("phase", "PROCESS_EXIT");
     }
 
     @Test
@@ -285,6 +293,20 @@ class CodexProviderProbeServiceTests {
         CodexProviderTestResult result = service(merged).test(config("key"), runtime(AgentType.OPENCODE));
         assertThat(result.basicAvailable()).isTrue();
         assertThat(result.success()).isTrue();
+    }
+
+    @Test
+    void codexPromptEchoCannotSatisfyAnyProbeWithoutAssistantOutput() {
+        for (String stdout : List.of("", "not-json", "{\"status\":\"wrong\"}")) {
+            SequencedAdapter adapter = new SequencedAdapter(AgentType.CODEX, request ->
+                    new CodexProcessResult(0, false, stdout, request.prompt(), "[STDERR] " + request.prompt()));
+            var result = service(adapter).test(config("key"), runtime(AgentType.CODEX));
+            assertThat(result.success()).isFalse();
+            assertThat(result.basicAvailable()).isFalse();
+            assertThat(result.agentCompatible()).isFalse();
+            assertThat(result.checks()).hasSize(3).allSatisfy(check ->
+                    assertThat(check.errorCode()).isEqualTo("AGENT_PROBE_OUTPUT_INVALID"));
+        }
     }
 
     @Test
@@ -391,14 +413,17 @@ class CodexProviderProbeServiceTests {
     }
 
     @Test
-    void sanitizesBlankLongAndCredentialShapedMessages() {
-        CodexProviderProbeService service = new CodexProviderProbeService(successfulRunner());
-        assertThat(service.sanitize(null, config("key"))).isEqualTo("Codex provider 测试失败");
-        assertThat(service.sanitize("   ", config("key"))).isEqualTo("Codex provider 测试失败");
-        String longText = "C:\\work\\" + "x".repeat(1_100) + " api key=secret";
-        assertThat(service.sanitize(longText, config("secret")))
-                .hasSize(1_000).doesNotContain("secret", "\\");
-        assertThat(service.sanitize("plain", config(" "))).isEqualTo("plain");
+    void neverExposesRawOutputEvenWhenSecretsCrossCollectorBoundaries() throws Exception {
+        String raw = "\u001b[31mAuthorization: Bearer SecretKey123 C:\\work\\private /home/private "
+                + "https://example.org/?token=other-secret\n at internal.Stack.trace:12\n完整提示词🚀" + "x".repeat(70_000);
+        CodexProviderProbeService service = new CodexProviderProbeService(new CapturingRunner(
+                new CodexProcessResult(-1, true, raw, raw, raw)));
+        var result = service.test(config("SecretKey123"));
+        String serialized = new ObjectMapper().findAndRegisterModules().writeValueAsString(result);
+        assertThat(serialized).doesNotContain("SecretKey123", "other-secret", "private", "Stack.trace", "完整提示词", "\u001b");
+        assertThat(result.checks().getFirst().details()).containsEntry("observedSignal", "UNKNOWN");
+        assertThat(result.checks().getFirst().message()).hasSizeLessThan(1000);
+        assertThat(result.checks().getFirst().message_en()).contains("AGENT_PROBE_TIMEOUT");
     }
 
     private CodexProviderResolvedConfig config(String apiKey) {

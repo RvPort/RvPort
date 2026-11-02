@@ -2,6 +2,7 @@ package cn.rvport.backend.agentruntime;
 
 import cn.rvport.backend.codexprovider.CodexProcessResult;
 import cn.rvport.backend.codexprovider.CodexProcessRunner;
+import cn.rvport.backend.codexprovider.ExecutionBudget;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -26,6 +27,7 @@ abstract class ConfigurableAgentRuntimeAdapter implements AgentRuntimeAdapter {
 
     @Override
     public CodexProcessResult run(AgentRuntimeExecutionRequest request) throws IOException, InterruptedException {
+        ExecutionBudget budget = new ExecutionBudget(request.timeout());
         List<String> command = new ArrayList<>();
         command.add(request.runtime().getExecutablePath());
         List<String> args = configuredArgs(request.runtime().getDefaultArgs());
@@ -36,7 +38,8 @@ abstract class ConfigurableAgentRuntimeAdapter implements AgentRuntimeAdapter {
         command.add(request.prompt());
         Map<String, String> environment = environment(request);
         environment.putAll(additionalEnvironment(request));
-        return processRunner.run(command, environment, null, request.workspace(), request.timeout());
+        if (budget.expired()) { return new CodexProcessResult(-1, true, "", ""); }
+        return processRunner.run(command, environment, null, request.workspace(), budget.remaining());
     }
 
     protected abstract List<String> fallbackArgs(AgentRuntimeExecutionRequest request) throws IOException;

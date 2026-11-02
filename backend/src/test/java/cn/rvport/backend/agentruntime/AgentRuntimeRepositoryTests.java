@@ -40,6 +40,7 @@ class AgentRuntimeRepositoryTests {
             repository.updateProbeResult(ID, "COMPATIBLE", "ok", JSONB.valueOf("{\"tools\":true}"), NOW);
             assertThat(database.lastExecution().bindings()).contains("COMPATIBLE", "ok", ID)
                     .anySatisfy(value -> assertThat(String.valueOf(value)).contains("2026-09-11 10:00:00"));
+            assertThat(database.lastExecution().normalizedSql()).contains("last_probe_at is null", "last_probe_at <= cast(? as timestamp(6) with time zone)");
             database.enqueueFailure(new SQLException("database unavailable"));
             assertThatThrownBy(repository::list).isInstanceOf(org.jooq.exception.DataAccessException.class)
                     .hasMessageContaining("database unavailable");

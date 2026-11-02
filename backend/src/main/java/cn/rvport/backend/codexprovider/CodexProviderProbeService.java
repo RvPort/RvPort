@@ -78,7 +78,7 @@ public class CodexProviderProbeService {
                 ));
             }
             return new ModelProfileConnectivityTestResult(false, CodexProviderTestStatus.FAILED.name(),
-                    sanitize("模型连通性测试失败: HTTP " + response.statusCode() + " " + response.body(), config),
+                    "模型连通性测试失败: HTTP " + response.statusCode() + "；上游正文已隐藏 [REDACTED]",
                     testedAt, durationMs, Map.of(
                     "httpStatus", response.statusCode(),
                     "wireApi", config.wireApi().name()
@@ -91,7 +91,7 @@ public class CodexProviderProbeService {
             ));
         } catch (IOException | UncheckedIOException ex) {
             return new ModelProfileConnectivityTestResult(false, CodexProviderTestStatus.FAILED.name(),
-                    sanitize("模型连通性测试无法完成: " + ex.getMessage(), config), testedAt,
+                    "模型连通性测试无法完成；原始错误已隐藏 [REDACTED]", testedAt,
                     Duration.ofNanos(System.nanoTime() - started).toMillis(), Map.of(
                     "wireApi", config.wireApi().name()
             ));
@@ -143,7 +143,7 @@ public class CodexProviderProbeService {
             return CodexProviderTestResult.of(success, message, testedAt, agentType, runtime.getId(),
                     basicAvailable, agentCompatible, checks);
         } catch (IOException ex) {
-            return CodexProviderTestResult.failure(sanitize("Agent runtime 无法启动: " + ex.getMessage(), config),
+            return CodexProviderTestResult.failure("Agent runtime 无法启动；原始错误已隐藏 [REDACTED]",
                     testedAt, agentType, runtime.getId());
         } finally {
             deleteQuietly(tempDir);
@@ -161,6 +161,7 @@ public class CodexProviderProbeService {
     ) {
         long started = System.nanoTime();
         try {
+            if (Thread.currentThread().isInterrupted()) { throw new InterruptedException(); }
             CodexProcessResult result = adapter.run(new AgentRuntimeExecutionRequest(
                     runtime,
                     config,
@@ -169,28 +170,34 @@ public class CodexProviderProbeService {
                     Duration.ofSeconds(config.timeoutSeconds())
             ));
             long durationMs = Duration.ofNanos(System.nanoTime() - started).toMillis();
+            Map<String, Object> diagnostics = ProbeDiagnostics.describe(result, config,
+                    runtime.getAgentType(), runtime.getExecutablePath(), durationMs);
             if (result.timedOut()) {
-                return CodexProviderProbeCheckResult.failure(name, "AGENT_PROBE_TIMEOUT", "agent probe 超时", durationMs);
+                return CodexProviderProbeCheckResult.failure(name, "AGENT_PROBE_TIMEOUT", "agent probe 超时", durationMs)
+                        .withDetails(diagnostics);
             }
-            String diagnosticOutput = firstNonBlank(result.mergedOutput(), result.stderr(), result.stdout());
             if (result.exitCode() != 0) {
                 return CodexProviderProbeCheckResult.failure(name, "AGENT_PROBE_EXIT_NON_ZERO",
-                        sanitize("agent probe 执行失败: " + diagnosticOutput, config), durationMs);
+                        "agent probe 执行失败；原始输出已隐藏 [REDACTED]", durationMs).withDetails(diagnostics);
             }
-            JsonNode json = findExpectedJson(result, expectedFields);
+            // Codex stderr 包含输入提示词；其中的示例 JSON 不能充当模型回答。
+            JsonNode json = AgentType.CODEX.name().equals(runtime.getAgentType())
+                    ? findExpectedJson(result.stdout(), expectedFields) : findExpectedJson(result, expectedFields);
             if (json == null) {
                 return CodexProviderProbeCheckResult.failure(name, "AGENT_PROBE_OUTPUT_INVALID",
-                        sanitize("agent probe 输出格式不正确: " + diagnosticOutput, config), durationMs);
+                        "agent probe 输出格式不正确；原始输出已隐藏 [REDACTED]", durationMs).withDetails(diagnostics);
             }
-            return CodexProviderProbeCheckResult.success(name, "通过", durationMs);
+            return CodexProviderProbeCheckResult.success(name, "通过", durationMs).withDetails(diagnostics);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
+            long elapsed = Duration.ofNanos(System.nanoTime() - started).toMillis();
             return CodexProviderProbeCheckResult.failure(name, "AGENT_PROBE_INTERRUPTED", "agent probe 被中断",
-                    Duration.ofNanos(System.nanoTime() - started).toMillis());
+                    elapsed).withDetails(ProbeDiagnostics.failed(config, runtime.getAgentType(), runtime.getExecutablePath(), elapsed, true));
         } catch (IOException ex) {
+            long elapsed = Duration.ofNanos(System.nanoTime() - started).toMillis();
             return CodexProviderProbeCheckResult.failure(name, "AGENT_PROBE_IO_FAILED",
-                    sanitize("agent probe 无法启动: " + ex.getMessage(), config),
-                    Duration.ofNanos(System.nanoTime() - started).toMillis());
+                    "agent probe 无法启动；原始错误已隐藏 [REDACTED]",
+                    elapsed).withDetails(ProbeDiagnostics.failed(config, runtime.getAgentType(), runtime.getExecutablePath(), elapsed, false));
         }
     }
 
@@ -212,9 +219,17 @@ public class CodexProviderProbeService {
         try {
             if (!Files.exists(outputFile)) {
                 return CodexProviderProbeCheckResult.failure(name, "AGENT_PROBE_OUTPUT_FILE_MISSING",
-                        "agent probe 输出文件不存在", 0);
+                        "agent probe 输出文件不存在", execution.durationMs()).withDetails(execution.details());
             }
-            String output = Files.readString(outputFile, StandardCharsets.UTF_8);
+            String output;
+            try (var input = Files.newInputStream(outputFile)) {
+                byte[] bytes = input.readNBytes(65537);
+                if (bytes.length > 65536) {
+                    return CodexProviderProbeCheckResult.failure(name, "AGENT_PROBE_OUTPUT_FILE_INVALID",
+                            "agent probe 输出文件超过限制", execution.durationMs()).withDetails(execution.details());
+                }
+                output = new String(bytes, StandardCharsets.UTF_8);
+            }
             JsonNode json = findExpectedJson(output, Map.of("marker", expectedMarker));
             if (json != null) {
                 return execution;
@@ -222,13 +237,13 @@ public class CodexProviderProbeService {
             json = findExpectedJson(output, Map.of());
             if (json == null) {
                 return CodexProviderProbeCheckResult.failure(name, "AGENT_PROBE_OUTPUT_FILE_INVALID",
-                        sanitize("agent probe 输出文件格式不正确: " + output, config), 0);
+                        "agent probe 输出文件格式不正确；原始输出已隐藏 [REDACTED]", execution.durationMs()).withDetails(execution.details());
             }
             return CodexProviderProbeCheckResult.failure(name, "AGENT_PROBE_MARKER_MISMATCH",
-                    "agent probe 输出文件 marker 不匹配", 0);
+                    "agent probe 输出文件 marker 不匹配", execution.durationMs()).withDetails(execution.details());
         } catch (IOException ex) {
             return CodexProviderProbeCheckResult.failure(name, "AGENT_PROBE_OUTPUT_FILE_MISSING",
-                    sanitize("agent probe 输出文件读取失败: " + ex.getMessage(), config), 0);
+                    "agent probe 输出文件读取失败；原始错误已隐藏 [REDACTED]", execution.durationMs()).withDetails(execution.details());
         }
     }
 
@@ -422,32 +437,6 @@ public class CodexProviderProbeService {
                 .findFirst()
                 .map(check -> check.name() + " 失败: " + check.message())
                 .orElse("模型 profile agent 兼容性测试失败");
-    }
-
-    String sanitize(String text, CodexProviderResolvedConfig config) {
-        if (text == null || text.isBlank()) {
-            return "Codex provider 测试失败";
-        }
-        String sanitized = text;
-        if (!isBlank(config.apiKey())) {
-            sanitized = sanitized.replace(config.apiKey(), "[REDACTED]");
-        }
-        sanitized = sanitized.replaceAll("(?i)authorization:\\s*bearer\\s+[^\\s]+", "Authorization: Bearer [REDACTED]");
-        sanitized = sanitized.replaceAll("(?i)(api[-_ ]?key[=:]\\s*)[^\\s]+", "$1[REDACTED]");
-        sanitized = sanitized.replace('\\', '/');
-        if (sanitized.length() > 1000) {
-            sanitized = sanitized.substring(0, 1000);
-        }
-        return sanitized.trim();
-    }
-
-    private String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (!isBlank(value)) {
-                return value.trim();
-            }
-        }
-        return "";
     }
 
     private void deleteQuietly(Path root) {

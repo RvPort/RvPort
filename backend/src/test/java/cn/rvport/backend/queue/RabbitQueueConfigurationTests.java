@@ -40,6 +40,10 @@ class RabbitQueueConfigurationTests {
 
     @Test
     void declaresDurableQuorumQueue() {
+        Queue probe = configuration.codexProbeQueue();
+        assertThat(probe.getName()).isEqualTo("rvport.codex.profile-probe");
+        assertThat(probe.isDurable()).isTrue();
+        assertThat(probe.getArguments()).containsEntry("x-queue-type", "quorum");
         Queue queue = configuration.taskQueue(properties);
 
         assertThat(queue.getName()).isEqualTo("rvport.tasks.default");

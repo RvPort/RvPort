@@ -21,6 +21,89 @@ import org.jooq.JSONB;
 import org.junit.jupiter.api.Test;
 
 class AgentRuntimeAdapterUtf8Tests {
+    @Test
+    void applicationRoleAndWorkerLimitControlProxyAdmission() throws Exception {
+        Path workspace = Files.createTempDirectory("codex-worker-role-");
+        var original = request("CODEX", workspace, "prompt");
+        var config = new CodexProviderResolvedConfig(true,"codex",CodexProviderType.OPENAI_COMPATIBLE,
+                "http://model/v1","model",CodexProviderWireApi.CHAT,"key",1,60);
+        var request = new AgentRuntimeExecutionRequest(original.runtime(),config,workspace,"prompt",Duration.ofSeconds(1));
+        var runner = new CapturingRunner();
+        for (var properties : List.of(
+                new cn.rvport.backend.config.WorkerProperties(false,"api",cn.rvport.backend.config.RvPortAppMode.COMBINED,1,8,10,60),
+                new cn.rvport.backend.config.WorkerProperties(true,"api",cn.rvport.backend.config.RvPortAppMode.API,1,8,10,60))) {
+            assertThatThrownBy(() -> new CodexAgentRuntimeAdapter(runner,properties,"ocx",2).run(request))
+                    .hasMessage("OPENCODEX_WORKER_REQUIRED");
+        }
+        var properties = new cn.rvport.backend.config.WorkerProperties(true,"worker",cn.rvport.backend.config.RvPortAppMode.WORKER,1,8,10,60);
+        assertThat(new CodexAgentRuntimeAdapter(runner,properties,"fixed-ocx",2).run(request).exitCode()).isZero();
+        assertThat(runner.environment).containsEntry("RVPORT_OCX_EXECUTABLE","fixed-ocx");
+        Files.delete(workspace);
+    }
+    @org.junit.jupiter.api.Test
+    void configurableAdaptersDoNotResetBudgetAfterConfiguration() throws Exception {
+        var workspace = java.nio.file.Files.createTempDirectory("adapter-budget-");
+        var runtime = new cn.rvport.backend.jooq.tables.records.AgentRuntimesRecord();
+        runtime.setExecutablePath("dsh");
+        var config = new cn.rvport.backend.codexprovider.CodexProviderResolvedConfig(true, "dsh",
+                cn.rvport.backend.codexprovider.CodexProviderType.OPENAI_COMPATIBLE, "http://localhost", "m",
+                cn.rvport.backend.codexprovider.CodexProviderWireApi.CHAT, "key", 15, 60);
+        var adapter = new DeepSeekHarnessAgentRuntimeAdapter((command, environment, input, dir, timeout) -> {
+            throw new AssertionError("Expired setup must not launch a process");
+        }, new com.fasterxml.jackson.databind.ObjectMapper());
+        try {
+            var result = adapter.run(new AgentRuntimeExecutionRequest(runtime, config, workspace, "text", Duration.ofNanos(1)));
+            assertThat(result.timedOut()).isTrue();
+        } finally {
+            java.nio.file.Files.deleteIfExists(workspace.resolve("dsh-rvport-provider.patch.yml"));
+            java.nio.file.Files.delete(workspace);
+        }
+    }
+
+
+    @Test
+    void chatUsesOwnedProxySupervisorAndRemovesSecretDirectory() throws Exception {
+        Path workspace = Files.createTempDirectory("codex-chat-route-");
+        var nativeRequest = request("CODEX", workspace, "prompt");
+        var source = nativeRequest.model();
+        var chat = new CodexProviderResolvedConfig(true, "codex", source.modelProviderType(), source.baseUrl(), source.model(),
+                CodexProviderWireApi.CHAT, "upstream-secret", 15, 60);
+        var request = new AgentRuntimeExecutionRequest(nativeRequest.runtime(), chat, workspace, "prompt", Duration.ofSeconds(5));
+        CapturingRunner runner = new CapturingRunner();
+        new CodexAgentRuntimeAdapter(runner).run(request);
+        assertThat(runner.command.getFirst()).isEqualTo("python3");
+        assertThat(runner.command).doesNotContain("upstream-secret");
+        assertThat(runner.command).contains("model_providers.rvport-openai-compatible.wire_api=\"responses\"",
+                "features.multi_agent=false", "web_search=\"disabled\"", "model_reasoning_effort=\"none\"");
+        assertThat(Path.of(runner.environment.get("RVPORT_OCX_HOME"))).doesNotExist();
+        assertThat(request.model().wireApi()).isEqualTo(CodexProviderWireApi.CHAT);
+        var owned = new java.util.concurrent.atomic.AtomicReference<Path>();
+        CodexProcessRunner failed = (command, environment, standardInput, directory, timeout) -> {
+            owned.set(Path.of(environment.get("RVPORT_OCX_HOME")));
+            assertThat(owned.get().resolve("opencodex_guard.py")).exists();
+            throw new java.io.IOException("controlled failure");
+        };
+        assertThatThrownBy(() -> new CodexAgentRuntimeAdapter(failed).run(request)).hasMessage("controlled failure");
+        assertThat(owned.get()).doesNotExist();
+        assertThatThrownBy(() -> new CodexAgentRuntimeAdapter(runner, false, "ocx", 2).run(request))
+                .hasMessage("OPENCODEX_WORKER_REQUIRED");
+        var brief = new AgentRuntimeExecutionRequest(request.runtime(), chat, workspace, "prompt", Duration.ofMillis(1));
+        assertThat(new CodexAgentRuntimeAdapter(runner, true, "ocx", 0).run(brief).timedOut()).isTrue();
+        var timed = new CodexAgentRuntimeAdapter((a,b,c,d,e) -> new CodexProcessResult(124,false,"","deadline"));
+        assertThat(timed.run(request).timedOut()).isTrue();
+        Files.delete(workspace);
+    }
+    @Test
+    void elapsedSetupCannotExtendExecutionBudget() throws Exception {
+        CapturingRunner runner = new CapturingRunner();
+        var request = request("CODEX", Files.createTempDirectory("codex-budget-"), "prompt");
+        var result = new CodexAgentRuntimeAdapter(runner).run(new AgentRuntimeExecutionRequest(request.runtime(), request.model(),
+                request.workspace(), request.prompt(), Duration.ofNanos(1)));
+        assertThat(result.timedOut()).isTrue();
+        assertThat(runner.command).isNull();
+        assertThat(CodexAgentCommandFactory.command("codex", request.model(), request.workspace()))
+                .doesNotContain("features.multi_agent=false", "model_reasoning_effort=\"none\"");
+    }
 
     @Test
     void codexUsesUtf8StdinInsteadOfPromptArgument() throws Exception {
@@ -46,7 +129,7 @@ class AgentRuntimeAdapterUtf8Tests {
         assertThat(runner.command.getLast()).isEqualTo(request.prompt());
         assertThat(runner.standardInput).isNull();
         assertThat(Files.readString(workspace.resolve("dsh-rvport-provider.patch.yml"), StandardCharsets.UTF_8))
-                .contains("RvPort OpenAI Compatible");
+                .contains("RvPort OpenAI Compatible", "- id: hmr", "disabled: false", "root: []");
     }
 
     @Test

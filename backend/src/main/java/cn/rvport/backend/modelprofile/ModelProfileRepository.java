@@ -179,6 +179,7 @@ public class ModelProfileRepository {
                 .set(MODEL_PROFILES.UPDATED_BY, actorUserId)
                 .set(MODEL_PROFILES.UPDATED_AT, OffsetDateTime.now())
                 .where(MODEL_PROFILES.ID.eq(profileId))
+                .and(MODEL_PROFILES.LAST_TESTED_AT.isNull().or(MODEL_PROFILES.LAST_TESTED_AT.le(testedAt)))
                 .returning()
                 .fetchOne();
     }
@@ -257,7 +258,8 @@ public class ModelProfileRepository {
         if (finishedAt != null) {
             update.set(MODEL_PROFILE_AGENT_PROBE_RUNS.FINISHED_AT, finishedAt);
         }
-        return update.where(MODEL_PROFILE_AGENT_PROBE_RUNS.ID.eq(runId))
+        return update.where(MODEL_PROFILE_AGENT_PROBE_RUNS.ID.eq(runId)
+                        .and(MODEL_PROFILE_AGENT_PROBE_RUNS.STATUS.in("PENDING", "RUNNING")))
                 .returning()
                 .fetchOne();
     }
@@ -295,6 +297,7 @@ public class ModelProfileRepository {
                 .set(MODEL_PROFILE_AGENT_PROBE_RESULTS.STARTED_AT, startedAt)
                 .set(MODEL_PROFILE_AGENT_PROBE_RESULTS.FINISHED_AT, finishedAt)
                 .set(MODEL_PROFILE_AGENT_PROBE_RESULTS.DURATION_MS, durationMs)
+                .onConflict(MODEL_PROFILE_AGENT_PROBE_RESULTS.ID).doNothing()
                 .returning()
                 .fetchOne();
     }

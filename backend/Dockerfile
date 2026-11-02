@@ -11,6 +11,7 @@ RUN apt-get update \
 FROM build-base AS build
 COPY backend/pom.xml ./pom.xml
 COPY backend/src ./src
+COPY backend/agent-cli ./agent-cli
 ENV MAVEN_OPTS=-Xmx1536m
 
 # 可通过构建参数切换 Maven 下载入口，默认使用官方仓库。
@@ -89,7 +90,7 @@ COPY tools/floating-point-precision-scanner /workspace/floating-point-precision-
 COPY tools/memory-order-analyzer /workspace/memory-order-analyzer
 
 RUN python3 -m venv /opt/specialized-analysis-venv \
-    && /opt/specialized-analysis-venv/bin/pip install --no-cache-dir \
+    && /opt/specialized-analysis-venv/bin/pip install --no-cache-dir --timeout 120 --retries 10 \
        setuptools==75.8.0 wheel==0.45.1 jsonschema==4.23.0 \
     && /opt/specialized-analysis-venv/bin/pip install --no-cache-dir --no-deps --no-build-isolation \
        /workspace/floating-point-precision-scanner \
@@ -119,13 +120,9 @@ RUN python3 -m venv /opt/specialized-analysis-venv \
 FROM ${JAVA_IMAGE}
 ARG NODE_VERSION=22.23.2
 ARG NODE_DISTRO=linux-x64
-ARG CODEX_CLI_VERSION=0.147.0
-ARG DEEPSEEK_HARNESS_VERSION=0.1.0-rc.7
-ARG OPENCODE_VERSION=1.18.18
+ARG NPM_VERSION=10.9.8
 ARG LLVM_PACKAGE_VERSION=1:18.1.3-1ubuntu1
 ARG LLVM21_DEB_VERSION=1:21.1.8~++20251221032922+2078da43e25a-1~exp1~20251221153059.70
-ARG NPM_REGISTRY=https://registry.npmmirror.com
-ARG CODEX_NPM_REGISTRY=https://registry.npmjs.org
 ARG NODEJS_MIRROR=https://npmmirror.com/mirrors/node
 ARG RVPORT_AGENT_CODEX_EXECUTABLE=codex
 ARG RVPORT_AGENT_DEEPSEEK_HARNESS_EXECUTABLE=dsh
@@ -133,6 +130,7 @@ ARG RVPORT_AGENT_OPENCODE_EXECUTABLE=opencode
 ENV KB_SCANNER_VENV=/opt/kb-scanner-venv
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
+ENV OPENCODE_DISABLE_AUTOUPDATE=true
 WORKDIR /app/backend
 
 RUN --mount=type=cache,target=/root/.npm \
@@ -178,27 +176,30 @@ RUN --mount=type=cache,target=/root/.npm \
             if [ "$attempts" -ge 3 ]; then exit 1; fi; \
         done \
     && tar -xJf "$node_archive" -C /usr/local --strip-components=1 \
-    && node --version \
-    && npm --version \
-    && download_with_resume \
-        "${CODEX_NPM_REGISTRY}/@openai/codex/-/codex-${CODEX_CLI_VERSION}.tgz" \
-        /root/.npm/codex.tgz \
-    && download_with_resume \
-        "${CODEX_NPM_REGISTRY}/@openai/codex/-/codex-${CODEX_CLI_VERSION}-linux-x64.tgz" \
-        /root/.npm/codex-linux-x64.tgz \
-    # Codex 包无安装脚本或必选 JS 依赖；直接展开已下载的官方包，避免 npm 再解析六个平台包。
-    && mkdir -p /usr/local/lib/node_modules/@openai/codex /usr/local/lib/node_modules/@openai/codex-linux-x64 \
-    && tar -xzf /root/.npm/codex.tgz -C /usr/local/lib/node_modules/@openai/codex --strip-components=1 \
-    && chmod 0755 /usr/local/lib/node_modules/@openai/codex/bin/codex.js \
-    && ln -s /usr/local/lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex \
-    && tar -xzf /root/.npm/codex-linux-x64.tgz \
-        -C /usr/local/lib/node_modules/@openai/codex-linux-x64 --strip-components=1 \
-    && npm install -g --registry=${NPM_REGISTRY} --fetch-timeout=300000 --fetch-retries=5 \
-        @deepseek-ai/dsh@${DEEPSEEK_HARNESS_VERSION} opencode-ai@${OPENCODE_VERSION} \
-    && codex --version \
-    && dsh --version \
-    && opencode --version
+    && test "$(node --version)" = "v${NODE_VERSION}" \
+    && test "$(npm --version)" = "${NPM_VERSION}"
 
+COPY backend/agent-cli /opt/rvport/agent-cli
+RUN --mount=type=cache,target=/root/.npm \
+    cd /opt/rvport/agent-cli \
+    && NODE_OPTIONS=--max-old-space-size=4096 npm ci --engine-strict --no-audit --no-fund \
+       --registry=https://registry.npmjs.org --fetch-timeout=300000 --fetch-retries=3 \
+    && python3 verify_lock.py /opt/rvport/agent-cli > installed-manifest.json \
+    && ln -s /opt/rvport/agent-cli/node_modules/.bin/codex /usr/local/bin/codex \
+    && ln -s /opt/rvport/agent-cli/node_modules/.bin/dsh /usr/local/bin/dsh \
+    && ln -s /opt/rvport/agent-cli/node_modules/.bin/opencode /usr/local/bin/opencode \
+    && codex --version && dsh --version && opencode --version
+
+# 单独冻结代理依赖，避免改变 DSH 的依赖解析；只由 worker 按执行启动。
+COPY backend/agent-cli/opencodex /opt/rvport/opencodex
+RUN --mount=type=cache,target=/root/.npm \
+    cd /opt/rvport/opencodex \
+    && npm ci --engine-strict --no-audit --no-fund --registry=https://registry.npmjs.org \
+       --fetch-timeout=300000 --fetch-retries=3 \
+    && python3 /opt/rvport/agent-cli/verify_lock.py /opt/rvport/opencodex > installed-manifest.json \
+    && python3 patch_eof.py /opt/rvport/opencodex > applied-patch.json \
+    && test "$(node_modules/.bin/ocx --version)" = "opencodex 2.94.0" \
+    && test "$(node_modules/.bin/bun --version)" = "1.4.4"
 # LLVM 21 仅作为上传到远端 source/x86 环境的受管 bundle；KB Scanner 仍使用系统 Clang 18。
 COPY --from=bitcode-toolchain /opt/rvport/toolchains /opt/rvport/toolchains
 COPY --from=specialized-analysis-tools /opt/specialized-analysis-venv /opt/specialized-analysis-venv
@@ -212,8 +213,9 @@ RUN apt-get update \
 COPY --from=build /workspace/backend/target/rvport-backend-0.1.0-SNAPSHOT.jar /app/backend/rvport-backend.jar
 COPY tools/kb-scanner /app/tools/kb-scanner
 
+ARG KB_SCANNER_PIP_INDEX_URL=https://pypi.org/simple
 RUN python3 -m venv --system-site-packages "${KB_SCANNER_VENV}" \
-    && CC=clang-18 "${KB_SCANNER_VENV}/bin/python" -m pip install \
+    && CC=clang-18 PIP_INDEX_URL="${KB_SCANNER_PIP_INDEX_URL}" PIP_DEFAULT_TIMEOUT=120 PIP_RETRIES=10 "${KB_SCANNER_VENV}/bin/python" -m pip install \
         --no-cache-dir \
         --timeout 120 --retries 10 \
         --requirement /app/tools/kb-scanner/requirements/runtime.lock

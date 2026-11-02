@@ -13,6 +13,10 @@ final class CodexAgentCommandFactory {
     }
 
     static List<String> command(String executablePath, CodexProviderResolvedConfig config, Path workspace) {
+        return command(executablePath, config, workspace, false);
+    }
+
+    static List<String> command(String executablePath, CodexProviderResolvedConfig config, Path workspace, boolean bridge) {
         List<String> command = new ArrayList<>();
         command.add(executablePath);
         command.add("exec");
@@ -32,7 +36,29 @@ final class CodexAgentCommandFactory {
         command.add("-c");
         command.add("model_providers.rvport-openai-compatible.env_key=\"OPENAI_API_KEY\"");
         command.add("-c");
-        command.add("model_providers.rvport-openai-compatible.wire_api=" + tomlQuote(config.wireApi().codexValue()));
+        command.add("model_providers.rvport-openai-compatible.wire_api=\"responses\"");
+        command.add("-c");
+        command.add("model_providers.rvport-openai-compatible.request_max_retries=0");
+        command.add("-c");
+        command.add("model_providers.rvport-openai-compatible.stream_max_retries=0");
+        command.add("-c");
+        command.add("analytics.enabled=false");
+        if (bridge) {
+        command.add("-c");
+        command.add("web_search=\"disabled\"");
+        command.add("-c");
+        command.add("features.multi_agent=false");
+        command.add("-c");
+        command.add("features.goals=false");
+        command.add("-c");
+        command.add("model_reasoning_summary=\"none\"");
+        command.add("-c");
+        command.add("model_reasoning_effort=\"none\"");
+        command.add("-c");
+        command.add("model_providers.rvport-openai-compatible.supports_websockets=false");
+        command.add("-c");
+        command.add("model_providers.rvport-openai-compatible.capabilities.remote_compaction=\"unsupported\"");
+        }
         command.add("-m");
         command.add(config.model());
         command.add("-");

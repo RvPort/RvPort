@@ -155,3 +155,6 @@ databaseChangeLog:
   - include:
       file: changes/0128-kb-scan-execution-context.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/0129-codex-probe-jobs.sql
+      relativeToChangelogFile: true
