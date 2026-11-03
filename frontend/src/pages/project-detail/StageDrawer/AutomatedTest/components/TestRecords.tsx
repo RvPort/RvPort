@@ -7,6 +7,8 @@ import type { ProjectAutomatedTest, ProjectTestComparison } from '@/types/projec
 import { renderComparisonStatusTag, renderTestStatusTag } from '../presentation'
 import TestHistory from './TestHistory'
 
+import tableButtons from '@/styles/tableButtons.module.scss'
+
 export default function TestRecords({
   tests,
   comparisons,
@@ -70,6 +72,7 @@ export default function TestRecords({
         render: (_, row) => (
           <Flex wrap gap={4}>
             <Button
+              className={tableButtons.textButton}
               type="link"
               size="small"
               disabled={!row.tests[0]}
@@ -87,7 +90,7 @@ export default function TestRecords({
                   title="确认取消测试？"
                   onConfirm={() => onCancel(test.id)}
                 >
-                  <Button type="link" size="small">
+                  <Button className={tableButtons.textButton} type="link" size="small">
                     取消 {test.testBatchRole === 'SOURCE' ? 'x86' : 'RISC-V'}
                   </Button>
                 </Popconfirm>

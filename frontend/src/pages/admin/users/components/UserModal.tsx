@@ -1,4 +1,4 @@
-import { Fragment, useEffect } from 'react'
+import { Fragment, useEffect, useMemo } from 'react'
 import { Button, Form, Input, Radio } from 'antd'
 
 import BaseModal from '@/components/BaseModal'
@@ -25,16 +25,19 @@ export default function UserModal({ loading, user, visible, onCancel, onSubmit }
   const [form] = Form.useForm<UserFormValues>()
   const isEditing = Boolean(user)
 
+  const initialValues = useMemo(
+    () => ({
+      displayName: user?.displayName ?? undefined,
+      email: user?.email ?? '',
+      status: user?.status ?? 'ACTIVE',
+      username: user?.username ?? ''
+    }),
+    [user]
+  )
+
   useEffect(() => {
-    if (visible) {
-      form.setFieldsValue({
-        displayName: user?.displayName ?? undefined,
-        email: user?.email ?? '',
-        status: user?.status ?? 'ACTIVE',
-        username: user?.username ?? ''
-      })
-    }
-  }, [form, user, visible])
+    if (visible) form.setFieldsValue(initialValues)
+  }, [form, initialValues, visible])
 
   return (
     <BaseModal
@@ -64,6 +67,7 @@ export default function UserModal({ loading, user, visible, onCancel, onSubmit }
         disabled={loading}
         form={form}
         id={formId}
+        initialValues={initialValues}
         layout="vertical"
         preserve={false}
         onFinish={(values) => {

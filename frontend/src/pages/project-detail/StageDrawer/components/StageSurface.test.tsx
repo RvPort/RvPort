@@ -1,10 +1,92 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
+import type { ComponentProps } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { StagePresentationContext } from './StagePresentationContext'
 import StageSurface from './StageSurface'
 
 describe('StageSurface', () => {
+  it('updates panel actions, content, slots and visibility independently', () => {
+    const history = vi.fn(),
+      visibility = vi.fn()
+    let props: ComponentProps<typeof StageSurface> = {
+      visible: true,
+      title: '阶段',
+      children: <p>业务内容</p>,
+      onHistory: history,
+      afterOpenChange: visibility
+    }
+    const tree = () => (
+      <StagePresentationContext.Provider value="panel">
+        <StageSurface {...props} />
+      </StagePresentationContext.Provider>
+    )
+    const view = render(tree())
+    fireEvent.click(screen.getByRole('button', { name: '查看历史记录' }))
+    expect(history).toHaveBeenCalledOnce()
+    props = { ...props, extra: <button>自定义操作</button> }
+    view.rerender(tree())
+    expect(screen.getByRole('button', { name: '自定义操作' })).toBeInTheDocument()
+    props = { ...props, footer: <button>下一步</button> }
+    view.rerender(tree())
+    expect(screen.getByRole('button', { name: '下一步' })).toBeInTheDocument()
+    props = { ...props, styles: { body: { padding: 7 }, footer: { padding: 9 } } }
+    view.rerender(tree())
+    expect(screen.getByText('业务内容').parentElement).toHaveStyle({ padding: '7px' })
+    expect(screen.getByRole('button', { name: '下一步' }).closest('footer')).toHaveStyle({
+      padding: '9px'
+    })
+    props = { ...props, loading: true }
+    view.rerender(tree())
+    expect(screen.getByRole('status', { name: '正在加载阶段内容' })).toBeInTheDocument()
+    props = {
+      ...props,
+      loading: false,
+      listStateScope: 'external',
+      panelTitleVisible: true,
+      children: <p>详情内容</p>
+    }
+    view.rerender(tree())
+    expect(screen.getByText('详情内容')).toBeInTheDocument()
+    expect(screen.getByText('阶段').closest('header')).not.toBeNull()
+    const nextHistory = vi.fn()
+    props = { ...props, onHistory: nextHistory }
+    view.rerender(tree())
+    fireEvent.click(screen.getByRole('button', { name: '查看历史记录' }))
+    expect(nextHistory).toHaveBeenCalledOnce()
+    props = { ...props, visible: false }
+    view.rerender(tree())
+    expect(visibility).toHaveBeenLastCalledWith(false)
+    expect(screen.queryByText('详情内容')).not.toBeInTheDocument()
+  })
+
+  it('merges callback-defined drawer styles with the scroll contract and forwards the current history action', () => {
+    const slots = vi.fn(() => ({ body: { padding: 11 }, header: { padding: 13 } }))
+    const history = vi.fn()
+    const { rerender } = render(
+      <StageSurface visible title="函数样式" styles={slots} onHistory={history}>
+        <p>抽屉正文</p>
+      </StageSurface>
+    )
+    expect(screen.getByText('抽屉正文').parentElement).toHaveStyle({
+      padding: '11px',
+      overflowY: 'auto',
+      minHeight: '0'
+    })
+    expect(slots).toHaveBeenCalledWith(expect.objectContaining({ props: expect.anything() }))
+    fireEvent.click(screen.getByRole('button', { name: '查看历史记录' }))
+    expect(history).toHaveBeenCalledOnce()
+    rerender(
+      <StageSurface visible title="函数样式" styles={() => ({})} listStateScope="external">
+        <p>替换内容</p>
+      </StageSurface>
+    )
+    expect(screen.getByText('替换内容').parentElement).toHaveStyle({
+      padding: '16px 24px',
+      overflowY: 'auto'
+    })
+    expect(screen.queryByRole('button', { name: '查看历史记录' })).not.toBeInTheDocument()
+  })
   it.each(['panel', 'drawer'] as const)(
     'uses the same scroll ownership contract in %s presentation',
     (presentation) => {

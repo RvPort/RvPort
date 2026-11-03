@@ -1,8 +1,9 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { renderWithQueryClient } from '@/test/test-utils'
+import { renderWithStrictQueryClient as renderWithQueryClient } from '@/test/strict-mode-utils'
+import type { ProjectDomainLatest } from '@/types/project'
 import type {
   ProjectKnowledgeBaseFinding,
   ProjectKnowledgeBaseScan
@@ -1032,5 +1033,154 @@ describe('Knowledge base stage drawer', () => {
     expect(screen.getByRole('button', { name: '重新加载' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^返\s*回$/ })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '证据工作区' })).not.toBeInTheDocument()
+  })
+
+  async function openHistory(actor: ReturnType<typeof userEvent.setup>) {
+    const view = renderKnowledgeBase()
+    const historical = {
+      ...scan,
+      id: 'historical-scan',
+      sourceRevisionId: 'source-old',
+      currentSourceRevision: false
+    }
+    getProjectKnowledgeBaseScans.mockResolvedValue({
+      hasMore: false,
+      items: [historical],
+      page: 1,
+      pageSize: 20,
+      total: 1
+    })
+    getProjectKnowledgeBaseScan.mockResolvedValue(historical)
+    await actor.click(await screen.findByRole('button', { name: '查看历史记录' }))
+    await screen.findByRole('button', { name: '查看' })
+    return { ...view, historical }
+  }
+
+  it('retries the selected historical scan without loading the latest scan and restores the current view on return', async () => {
+    const actor = userEvent.setup()
+    const { historical } = await openHistory(actor)
+    getProjectKnowledgeBaseScan
+      .mockRejectedValueOnce(new Error('historical unavailable'))
+      .mockResolvedValue(historical)
+    const latestCalls = getProjectKnowledgeBaseScanLatest.mock.calls.length
+    await actor.click(screen.getByRole('button', { name: '查看' }))
+    expect(await screen.findByText('扫描记录加载失败')).toBeInTheDocument()
+    expect(screen.queryByText('只读记录')).not.toBeInTheDocument()
+    await actor.click(screen.getByRole('button', { name: '重新加载' }))
+    expect(await screen.findByText('只读记录')).toBeInTheDocument()
+    expect(getProjectKnowledgeBaseScan.mock.calls).toEqual([
+      ['historical-scan'],
+      ['historical-scan']
+    ])
+    expect(getProjectKnowledgeBaseScanLatest).toHaveBeenCalledTimes(latestCalls)
+    expect(screen.queryByRole('button', { name: '重新扫描' })).not.toBeInTheDocument()
+    await actor.click(screen.getByRole('button', { name: '返回扫描记录' }))
+    await actor.click(screen.getByRole('button', { name: '返回最新结果' }))
+    expect(await screen.findByRole('button', { name: '重新扫描' })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(getProjectKnowledgeBaseScanLatest.mock.calls.length).toBeGreaterThan(latestCalls)
+    )
+  })
+
+  it('retries historical artifact information and returns to the same read-only scan', async () => {
+    const actor = userEvent.setup()
+    await openHistory(actor)
+    await actor.click(screen.getByRole('button', { name: '查看' }))
+    await screen.findByText('只读记录')
+    getProjectKnowledgeBaseScanArtifacts.mockRejectedValueOnce(new Error('artifacts unavailable'))
+    const latestCalls = getProjectKnowledgeBaseScanLatest.mock.calls.length
+    await actor.click(screen.getByRole('button', { name: '查看扫描信息' }))
+    expect(await screen.findByText('扫描信息加载失败')).toBeInTheDocument()
+    await actor.click(screen.getByRole('button', { name: '重新加载' }))
+    expect(await screen.findByText('source-old')).toBeInTheDocument()
+    expect(getProjectKnowledgeBaseScanArtifacts).toHaveBeenLastCalledWith('historical-scan', {
+      page: 1,
+      pageSize: 200
+    })
+    await actor.click(screen.getByRole('button', { name: '返回扫描记录概览' }))
+    expect(await screen.findByText('只读记录')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '生成 AI 建议' })).not.toBeInTheDocument()
+    expect(getProjectKnowledgeBaseScanLatest).toHaveBeenCalledTimes(latestCalls)
+  })
+
+  it('keeps historical findings read-only after a failed detail request is retried', async () => {
+    const actor = userEvent.setup()
+    await openHistory(actor)
+    await actor.click(screen.getByRole('button', { name: '查看' }))
+    await screen.findByText('只读记录')
+    getProjectKnowledgeBaseFinding
+      .mockRejectedValueOnce(new Error('finding unavailable'))
+      .mockResolvedValue({ ...findingSummary, evidence: {} })
+    getProjectKnowledgeBaseFindingCodeContext.mockResolvedValue({
+      startLine: 42,
+      endLine: 42,
+      highlightStartLine: 42,
+      highlightEndLine: 42,
+      lines: []
+    })
+    await actor.click(screen.getByRole('button', { name: 'src/simd.cpp' }))
+    expect(await screen.findByText('扫描结果详情加载失败')).toBeInTheDocument()
+    await actor.click(screen.getByRole('button', { name: '重新加载' }))
+    expect(await screen.findByText('历史记录 · 只读')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '纳入报告' })).not.toBeInTheDocument()
+    expect(getProjectKnowledgeBaseFinding.mock.calls).toEqual([['finding-1'], ['finding-1']])
+    await actor.click(screen.getByRole('button', { name: '返回扫描记录概览' }))
+    expect(await screen.findByText('只读记录')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重新扫描' })).not.toBeInTheDocument()
+  })
+
+  it('clears the previous project results while loading the new project and binds prerequisite navigation to the new parent', async () => {
+    const actor = userEvent.setup()
+    const { rerender } = renderKnowledgeBase()
+    await screen.findByText('src/simd.cpp')
+    let finish!: (value: ProjectDomainLatest<ProjectKnowledgeBaseScan>) => void
+    getProjectKnowledgeBaseScanLatest.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    getProjectStageReadiness.mockResolvedValue({
+      context: { runtimeEnvironmentVersion: null, sourceRevisionId: null },
+      prerequisites: [
+        {
+          key: 'ACTIVE_SOURCE',
+          status: 'MISSING',
+          reasonCode: 'ACTIVE_SOURCE_MISSING',
+          referenceId: null,
+          details: {}
+        }
+      ],
+      stageId: 'kb'
+    })
+    const onStageChange = vi.fn()
+    rerender(
+      <StagePresentationContext.Provider value="drawer">
+        <KnowledgeBase
+          projectId="project-2"
+          visible
+          stage={{ ...stage, title: '新项目扫描' }}
+          onClose={vi.fn()}
+          onStageChange={onStageChange}
+        />
+      </StagePresentationContext.Provider>
+    )
+    await waitFor(() =>
+      expect(getProjectKnowledgeBaseScanLatest).toHaveBeenLastCalledWith('project-2')
+    )
+    expect(screen.queryByText('src/simd.cpp')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重新扫描' })).not.toBeInTheDocument()
+    await act(async () => {
+      finish({
+        context: { sourceRevisionId: null, runtimeEnvironmentVersion: null },
+        freshness: 'EMPTY',
+        execution: null,
+        result: null
+      })
+    })
+    expect(await screen.findByText('暂不能执行知识库扫描')).toBeInTheDocument()
+    await actor.click(screen.getByRole('button', { name: '前往源码管理' }))
+    expect(onStageChange).toHaveBeenCalledExactlyOnceWith('assets')
+    expect(createProjectKnowledgeBaseScan).not.toHaveBeenCalled()
   })
 })

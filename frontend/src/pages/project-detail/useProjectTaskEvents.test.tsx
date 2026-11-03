@@ -28,6 +28,92 @@ class MockEventSource {
 }
 
 describe('useProjectTaskEvents', () => {
+  it.each([
+    ['task.failed', 'error', '任务执行失败', '请查看任务详情和执行日志'],
+    ['task.timeout', 'error', '任务执行超时', '任务执行超时，请检查环境或重新执行'],
+    ['task.cancelled', 'warning', '任务已取消', '任务已停止执行'],
+    ['task.succeeded', 'success', '任务已完成', '执行结果已更新']
+  ] as const)(
+    'provides the correct fallback notification for %s without an event identifier',
+    (name, kind, title, description) => {
+      const notify = vi.spyOn(appNotification, kind).mockImplementation(() => undefined)
+      renderHook(() => useProjectTaskEvents('project-1', 0), { wrapper: createWrapper() })
+      const handler = MockEventSource.instances[0].addEventListener.mock.calls.find(
+        ([event]) => event === name
+      )?.[1] as EventListener
+      act(() => handler(new MessageEvent(name, { data: JSON.stringify({ stageId: 'archive' }) })))
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({ title, description, key: undefined })
+      )
+    }
+  )
+
+  it('ignores malformed payloads, accepts invalid cursors without poisoning reconnection and prefers the SSE cursor', async () => {
+    vi.useFakeTimers()
+    const client = createTestQueryClient(),
+      invalidate = vi.spyOn(client, 'invalidateQueries')
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    renderHook(() => useProjectTaskEvents('project-1', 10), { wrapper })
+    const source = MockEventSource.instances[0]
+    const handler = source.addEventListener.mock.calls.find(
+      ([event]) => event === 'task.log'
+    )?.[1] as EventListener
+    handler(new MessageEvent('task.log', { data: '{invalid' }))
+    for (const id of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, 'invalid'])
+      handler(new MessageEvent('task.log', { data: JSON.stringify({ id }) }))
+    handler(new MessageEvent('task.log', { data: JSON.stringify({ id: 99 }), lastEventId: '12' }))
+    expect(invalidate).not.toHaveBeenCalled()
+    source.onerror?.(new Event('error'))
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+    expect(MockEventSource.instances[1].url).toContain('afterEventId=12')
+  })
+
+  it.each([
+    { changedFields: ['environment.config'] },
+    { changedFields: ['runtimeEnvironment.target'] },
+    { resource: { type: 'project_runtime_environment' } },
+    {}
+  ])('refreshes context for a supported field signal or legacy fallback %j', (payload) => {
+    const client = createTestQueryClient(),
+      invalidate = vi.spyOn(client, 'invalidateQueries')
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    renderHook(() => useProjectTaskEvents('project-1', 0), { wrapper })
+    const handler = MockEventSource.instances[0].addEventListener.mock.calls.find(
+      ([event]) => event === 'project.context.changed'
+    )?.[1] as EventListener
+    act(() =>
+      handler(
+        new MessageEvent('project.context.changed', { data: JSON.stringify({ id: 1, ...payload }) })
+      )
+    )
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['project-environments', 'project-1'] })
+    const keys = invalidate.mock.calls.map(([options]) => JSON.stringify(options?.queryKey))
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('resets reconnect backoff after open and ignores callbacks from an already detached connection', async () => {
+    vi.useFakeTimers()
+    renderHook(() => useProjectTaskEvents('project-1', 0), { wrapper: createWrapper() })
+    const first = MockEventSource.instances[0],
+      staleOpen = first.onopen!,
+      staleError = first.onerror!
+    first.onerror?.(new Event('error'))
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+    const second = MockEventSource.instances[1]
+    staleError(new Event('error'))
+    staleOpen(new Event('open'))
+    expect(second.close).not.toHaveBeenCalled()
+    second.onopen?.(new Event('open'))
+    second.onerror?.(new Event('error'))
+    await act(() => vi.advanceTimersByTimeAsync(999))
+    expect(MockEventSource.instances).toHaveLength(2)
+    await act(() => vi.advanceTimersByTimeAsync(1))
+    expect(MockEventSource.instances).toHaveLength(3)
+  })
   beforeEach(() => {
     MockEventSource.instances = []
     vi.stubGlobal('EventSource', MockEventSource)
@@ -1115,5 +1201,107 @@ describe('useProjectTaskEvents', () => {
     expect(notification).not.toHaveBeenCalled()
     expect(MockEventSource.instances).toHaveLength(2)
     expect(old.removeEventListener).toHaveBeenCalled()
+  })
+  it.each([
+    { stageId: 'source', resource: undefined, expected: undefined },
+    {
+      stageId: 'environment',
+      resource: { mode: 'CUSTOM_BASH' },
+      expected: ['project-environments', 'project-1']
+    },
+    {
+      stageId: 'dependency-analysis',
+      resource: undefined,
+      expected: ['project-dependency-analyses', 'project-1']
+    },
+    { stageId: 'evaluation-report', resource: undefined, expected: undefined },
+    { stageId: 'future-stage', resource: undefined, expected: undefined }
+  ])(
+    'handles incomplete or future stage resources without invalidating unrelated domains: $stageId',
+    ({ stageId, resource, expected }) => {
+      const client = createTestQueryClient(),
+        invalidate = vi.spyOn(client, 'invalidateQueries')
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      )
+      renderHook(() => useProjectTaskEvents('project-1', 0), { wrapper })
+      const handler = MockEventSource.instances[0].addEventListener.mock.calls.find(
+        ([name]) => name === 'task.failed'
+      )![1] as EventListener
+      act(() =>
+        handler(
+          new MessageEvent('task.failed', { data: JSON.stringify({ id: 1, stageId, resource }) })
+        )
+      )
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['project-overview', 'project-1'] })
+      if (expected) expect(invalidate).toHaveBeenCalledWith({ queryKey: expected })
+      else expect(invalidate).toHaveBeenCalledTimes(1)
+      expect(invalidate).not.toHaveBeenCalledWith({
+        queryKey: ['project-evaluation-reports', 'project-1']
+      })
+    }
+  )
+  it('refreshes AI run progress without refreshing finding results before completion', async () => {
+    vi.useFakeTimers()
+    const client = createTestQueryClient(),
+      invalidate = vi.spyOn(client, 'invalidateQueries')
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    renderHook(() => useProjectTaskEvents('project-1', 0), { wrapper })
+    const handler = MockEventSource.instances[0].addEventListener.mock.calls.find(
+      ([name]) => name === 'task.started'
+    )![1] as EventListener
+    act(() =>
+      handler(
+        new MessageEvent('task.started', {
+          data: JSON.stringify({
+            id: 1,
+            stageId: 'kb-scan',
+            resource: { type: 'kb_ai_extension_run' }
+          })
+        })
+      )
+    )
+    await act(async () => vi.advanceTimersByTimeAsync(250))
+    expect(invalidate).toHaveBeenCalledWith(
+      { queryKey: ['project-knowledge-base-ai-extensions', 'project-1'] },
+      { cancelRefetch: false }
+    )
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['project-knowledge-base-findings'] })
+  })
+  it('refreshes once on foreground return and coalesces lifecycle events while context refresh is pending', async () => {
+    vi.useFakeTimers()
+    const client = createTestQueryClient(),
+      invalidate = vi.spyOn(client, 'invalidateQueries')
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    renderHook(() => useProjectTaskEvents('project-1', 0), { wrapper })
+    const source = MockEventSource.instances[0]
+    const emit = (type: string, payload: object) => {
+      const handler = source.addEventListener.mock.calls.find(
+        ([name]) => name === type
+      )![1] as EventListener
+      handler(new MessageEvent(type, { data: JSON.stringify(payload) }))
+    }
+    act(() => {
+      emit('project.context.changed', { id: 1 })
+      emit('task.started', { id: 2, stageId: 'source' })
+      emit('task.queued', { id: 3, stageId: 'source' })
+    })
+    invalidate.mockClear()
+    await act(async () => vi.advanceTimersByTimeAsync(250))
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['project-overview', 'project-1'] })
+    invalidate.mockClear()
+    await act(async () => vi.advanceTimersByTimeAsync(5000))
+    expect(invalidate).not.toHaveBeenCalled()
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+    expect(invalidate).not.toHaveBeenCalled()
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+    expect(invalidate).toHaveBeenCalledTimes(1)
   })
 })

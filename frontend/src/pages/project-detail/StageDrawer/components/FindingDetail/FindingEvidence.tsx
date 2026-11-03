@@ -222,9 +222,15 @@ export function EvidencePath({
         </div>
         {completionTag(evidenceChain.status)}
       </div>
+      {evidencePath.warnings?.map((warning) => (
+        <Alert key={warning} type="warning" showIcon title={warning} />
+      ))}
+      {evidencePath.budgetTruncated ? (
+        <Alert type="warning" title="证据链已按分析预算截断" />
+      ) : null}
       {evidencePath.steps.length ? (
         <ol className={styles.evidencePath}>
-          {evidencePath.steps.map((step, index) => (
+          {evidencePath.steps.slice(0, evidencePath.primaryStepCount).map((step, index) => (
             <li key={step.id ?? `${step.kind}-${index}`}>
               <span className={styles.evidenceStepMarker} aria-hidden="true" />
               <button
@@ -260,6 +266,32 @@ export function EvidencePath({
           <span>仍可根据代码位置、扫描事实和原始扫描数据核对该结论。</span>
         </div>
       )}
+      {evidencePath.primaryStepCount !== undefined &&
+      evidencePath.steps.length > evidencePath.primaryStepCount ? (
+        <details>
+          <summary>分支与断点</summary>
+          {evidencePath.steps.slice(evidencePath.primaryStepCount).map((step, offset) => (
+            <div key={step.id}>
+              <Button type="link" onClick={() => onSelect(evidencePath.primaryStepCount! + offset)}>
+                {step.title || step.id}
+              </Button>
+              <p>{step.reason || '未提供说明'}</p>
+            </div>
+          ))}
+        </details>
+      ) : null}
+      {evidencePath.branches?.length ? (
+        <details>
+          <summary>证据关系分支</summary>
+          <ul>
+            {evidencePath.branches.map((edge, i) => (
+              <li key={`${edge.from}:${edge.to}:${i}`}>
+                {edge.from} → {edge.to}（{edge.kind}）
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </section>
   )
 }

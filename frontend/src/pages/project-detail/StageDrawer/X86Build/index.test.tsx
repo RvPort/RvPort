@@ -1,8 +1,9 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { renderWithQueryClient } from '@/test/test-utils'
+import { createBuild } from '@/test/build-fixtures'
+import { renderWithStrictQueryClient as renderWithQueryClient } from '@/test/strict-mode-utils'
 import type { ProjectBuildValidation } from '@/types/project'
 
 import { composeTaskLogContent, getTaskLogLineNumberOffset } from '../utils/taskLog'
@@ -47,6 +48,9 @@ const {
   tableFilters: { status: undefined as string | undefined }
 }))
 
+const contextState = vi.hoisted(() => ({ hasData: true, isError: false, isLoading: false }))
+let activeBuildContext = buildContext
+
 vi.mock('@/api/project/build-validation', () => ({
   cancelProjectBuildValidation: vi.fn(),
   createProjectBuildValidations,
@@ -63,9 +67,8 @@ vi.mock('../buildReadinessContext', () => ({
   isCurrentBuildReadinessRecord: vi.fn(() => true),
   isTerminalBuildReadinessStatus: vi.fn(() => true),
   useBuildReadinessContext: () => ({
-    context: buildContext,
-    isError: false,
-    isLoading: false,
+    context: activeBuildContext,
+    ...contextState,
     refetch
   })
 }))
@@ -74,16 +77,19 @@ vi.mock('@/components/BaseDrawer', () => ({
   default: ({
     children,
     extra,
-    title
+    title,
+    afterOpenChange
   }: {
     children: React.ReactNode
     extra?: React.ReactNode
     title: React.ReactNode
+    afterOpenChange?: (open: boolean) => void
   }) => (
     <div>
       <h2>{title}</h2>
       {extra}
       {children}
+      <button onClick={() => afterOpenChange?.(false)}>结束关闭构建</button>
     </div>
   )
 }))
@@ -173,8 +179,82 @@ vi.mock('@/components/CodeMirrorEditor', () => ({
 vi.mock('@/utils/feedback', () => ({ feedback: { success: vi.fn() } }))
 
 describe('X86Build', () => {
+  it('refreshes context fields independently, preserves an edited command and restores the latest command after close', async () => {
+    const close = vi.fn()
+    const view = renderWithQueryClient(<X86Build projectId="project-1" visible onClose={close} />)
+    await screen.findByText('可以开始构建')
+    for (const [patch, expected] of [
+      [{ activeSourceName: 'new-source' }, 'new-source'],
+      [{ activeSourceRepositoryUrl: 'https://next.invalid/repo.git' }, 'new-source'],
+      [
+        { sourceEnvironment: { architecture: 'x86_64', id: 'env-source', name: '新源环境' } },
+        '新源环境 / x86_64'
+      ],
+      [{ sourceEnvironment: null }, '-- / --'],
+      [{ activeSourceName: null }, '--']
+    ] as const) {
+      activeBuildContext = { ...activeBuildContext, ...patch }
+      view.rerender(<X86Build projectId="project-1" visible onClose={close} />)
+      expect(screen.getByText(expected)).toBeInTheDocument()
+    }
+    const latestKey = ['project-build-validations', 'project-1', 'SOURCE_ONLY', 'latest']
+    act(() =>
+      view.queryClient.setQueryData(latestKey, {
+        freshness: 'CURRENT',
+        result: createBuild({ command: 'make latest' }),
+        execution: null
+      })
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'x86 构建命令' })).toHaveValue('make latest')
+    )
+    fireEvent.change(screen.getByRole('textbox', { name: 'x86 构建命令' }), {
+      target: { value: 'make draft' }
+    })
+    act(() =>
+      view.queryClient.setQueryData(latestKey, {
+        freshness: 'CURRENT',
+        result: createBuild({ command: 'make newer' }),
+        execution: null
+      })
+    )
+    expect(screen.getByRole('textbox', { name: 'x86 构建命令' })).toHaveValue('make draft')
+    fireEvent.click(screen.getByRole('button', { name: '结束关闭构建' }))
+    expect(screen.getByRole('textbox', { name: 'x86 构建命令' })).toHaveValue('make newer')
+    view.rerender(
+      <X86Build
+        projectId="project-1"
+        visible
+        onClose={close}
+        stage={{ id: 'x86-build', title: '新 x86 标题', order: 3, subtitle: '', status: 'pending' }}
+      />
+    )
+    expect(screen.getByText('新 x86 标题')).toBeInTheDocument()
+  })
+
+  it('retains cached configuration after a context refresh failure and removes it when no context was read', async () => {
+    const view = renderWithQueryClient(<X86Build projectId="project-1" visible onClose={vi.fn()} />)
+    await screen.findByText('可以开始构建')
+    contextState.isLoading = true
+    view.rerender(<X86Build projectId="project-1" visible onClose={vi.fn()} />)
+    expect(screen.getByText('正在读取前置条件')).toBeInTheDocument()
+    Object.assign(contextState, { isLoading: false, isError: true })
+    view.rerender(<X86Build projectId="project-1" visible onClose={vi.fn()} />)
+    expect(
+      screen.getByText('前置条件刷新失败，保留已读取内容；暂不能开始构建。')
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '开始 x86 构建' })).toBeDisabled()
+    contextState.hasData = false
+    view.rerender(<X86Build projectId="project-1" visible onClose={vi.fn()} />)
+    expect(screen.getByText('x86 构建前置数据加载失败')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'x86 构建命令' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.assign(contextState, { hasData: true, isError: false, isLoading: false })
+    activeBuildContext = buildContext
     getProjectTaskLogIncrements.mockResolvedValue({
       taskId: 'task-1',
       fromEventId: null,

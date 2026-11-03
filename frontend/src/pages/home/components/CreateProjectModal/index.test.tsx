@@ -39,6 +39,35 @@ const project: ProjectListItem = {
 }
 
 describe('CreateProjectModal', () => {
+  it('keeps a failed creation retryable, reports non-Error failures and submits keyboard form actions with the latest callbacks', async () => {
+    createProject.mockRejectedValueOnce('unavailable').mockResolvedValue(project)
+    const created = vi.fn(),
+      cancel = vi.fn()
+    const view = renderWithQueryClient(
+      <CreateProjectModal visible onCancel={cancel} onCreated={created} />
+    )
+    fireEvent.change(screen.getByLabelText('项目名称'), { target: { value: 'retry-project' } })
+    fireEvent.change(screen.getByLabelText('项目描述'), { target: { value: '  项目描述  ' } })
+    fireEvent.submit(screen.getByLabelText('项目名称').closest('form')!)
+    await waitFor(() => expect(feedback.error).toHaveBeenCalledWith('项目创建失败'))
+    await waitFor(() => expect(screen.getByLabelText('项目名称')).toBeEnabled())
+    const nextCreated = vi.fn(),
+      nextCancel = vi.fn()
+    view.rerender(<CreateProjectModal visible onCancel={nextCancel} onCreated={nextCreated} />)
+    fireEvent.submit(screen.getByLabelText('项目名称').closest('form')!)
+    await waitFor(() => expect(nextCreated).toHaveBeenCalledWith(project, 'open-workbench'))
+    expect(createProject.mock.calls.at(-1)?.[0]).toEqual({
+      name: 'retry-project',
+      description: '项目描述',
+      sourceArch: 'x86_64',
+      targetArch: 'riscv64'
+    })
+    expect(created).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByRole('button', { name: /取\s*消/ })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: /取\s*消/ }))
+    expect(nextCancel).toHaveBeenCalledOnce()
+    expect(cancel).not.toHaveBeenCalled()
+  })
   it.each([
     ['创建并进入工作台', 'open-workbench'],
     ['创建并开始配置环境', 'configure-environment']

@@ -1,9 +1,28 @@
+import { StrictMode } from 'react'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import BaseModal from '.'
 
 describe('BaseModal', () => {
+  it('keeps editable content mounted while the parent changes the title and sizing in StrictMode', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event')
+    const content = <input aria-label="未提交草稿" />
+    const draw = (title: string, width: number) => (
+      <StrictMode>
+        <BaseModal visible title={title} width={width}>
+          {content}
+        </BaseModal>
+      </StrictMode>
+    )
+    const view = render(draw('编辑信息', 640))
+    const input = screen.getByRole('textbox', { name: '未提交草稿' })
+    await userEvent.type(input, '保留输入')
+    view.rerender(draw('编辑信息（更新）', 760))
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('编辑信息（更新）')
+    expect(screen.getByRole('textbox', { name: '未提交草稿' })).toBe(input)
+    expect(input).toHaveValue('保留输入')
+  })
   it('mounts form content while closed so form instances can connect', () => {
     render(
       <BaseModal forceRender visible={false}>

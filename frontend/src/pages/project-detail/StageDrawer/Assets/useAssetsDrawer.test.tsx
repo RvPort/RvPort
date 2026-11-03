@@ -2,7 +2,7 @@ import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { renderWithQueryClient } from '@/test/test-utils'
+import { renderWithStrictQueryClient as renderWithQueryClient } from '@/test/strict-mode-utils'
 import type { ProjectOverview } from '@/types/project'
 
 import { AssetsOverview } from './components/content'

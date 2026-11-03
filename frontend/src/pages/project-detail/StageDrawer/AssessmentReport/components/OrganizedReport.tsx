@@ -6,6 +6,7 @@ import { formatDateTime } from '@/utils/display'
 
 import { projectQueryKeys } from '../../../queryKeys'
 import { reportRiskText, reportRiskToken } from '../reportPresentation'
+import MemoryOrderReportNotice from './MemoryOrderReportNotice'
 import { ReportActions, SummaryFact } from './report-list-presentation'
 import ReportDependencyList from './ReportDependencyList'
 import ReportFileDetail from './ReportFileDetail'
@@ -91,6 +92,7 @@ export default function OrganizedReport({
           </div>
         </div>
       </section>
+      <MemoryOrderReportNotice summary={summary} />
       {(summary.codeModuleCount ?? 0) > 0 ? (
         <ReportModuleIndex reportId={report.id} onSelect={onSelectModule} />
       ) : null}

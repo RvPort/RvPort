@@ -1,10 +1,10 @@
 import { MemoryRouter, useLocation } from 'react-router'
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { resetAuthStoreForTests, useAuthStore } from '@/store/authStore'
-import { renderWithQueryClient } from '@/test/test-utils'
+import { renderWithStrictQueryClient as renderWithQueryClient } from '@/test/strict-mode-utils'
 import type { User } from '@/types'
 
 const { changePassword, logout, updateProfile } = vi.hoisted(() => ({
@@ -46,6 +46,36 @@ function renderProfilePage() {
 }
 
 describe('profile page', () => {
+  it('refreshes independent account facts and resets a cancelled nickname draft from the current account', async () => {
+    let current = user
+    renderProfilePage()
+    const patches: Array<[Partial<User>, string]> = [
+      [{ username: 'renamed-account' }, 'renamed-account'],
+      [{ email: 'next@example.com' }, 'next@example.com'],
+      [{ displayName: '新昵称' }, '新昵称'],
+      [{ status: 'DISABLED' }, '已禁用'],
+      [{ lastLoginAt: '2026-10-28T00:01:00Z' }, '2026-10-28 08:01'],
+      [{ createdAt: '2026-10-28T00:02:00Z' }, '2026-10-28 08:02']
+    ]
+    for (const [patch, expected] of patches) {
+      current = { ...current, ...patch }
+      act(() => useAuthStore.getState().setUser(current))
+      expect(screen.getByText(expected)).toBeInTheDocument()
+    }
+    await userEvent.click(screen.getByRole('button', { name: '编辑' }))
+    await userEvent.clear(screen.getByLabelText('昵称'))
+    await userEvent.type(screen.getByLabelText('昵称'), '未保存草稿')
+    await userEvent.click(screen.getByRole('button', { name: /取\s*消/ }))
+    expect(screen.getByText('新昵称')).toBeInTheDocument()
+    expect(updateProfile).not.toHaveBeenCalled()
+    act(() => useAuthStore.getState().setUser({ ...current, displayName: null, email: null }))
+    await userEvent.click(screen.getByRole('button', { name: '编辑' }))
+    expect(screen.getByLabelText('昵称')).toHaveValue('')
+    await userEvent.click(screen.getByRole('button', { name: /取\s*消/ }))
+    expect(screen.getAllByText('--')).toHaveLength(2)
+    act(() => useAuthStore.getState().setUser(null))
+    expect(screen.queryByText('个人中心')).not.toBeInTheDocument()
+  })
   beforeEach(() => {
     resetAuthStoreForTests()
     useAuthStore.getState().setUser(user)

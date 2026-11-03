@@ -1,15 +1,16 @@
 import { type ReactNode, useState } from 'react'
 import { SafetyCertificateOutlined } from '@ant-design/icons'
-import { Button, Select, Tag } from 'antd'
+import { Alert, Button, Select, Tag } from 'antd'
 
 import { formatFindingLocation } from '../../components/FindingDetail/findingDetailPresentation'
 import { FindingFacts, FindingRawData } from '../../components/FindingDetail/FindingDisclosures'
 import { EvidencePath } from '../../components/FindingDetail/FindingEvidence'
 import FindingNextSteps from '../../components/FindingDetail/FindingNextSteps'
-import { presentRiskEvidence } from '../evidencePresentation'
+import { presentRiskEvidence, type RiskSourceLocation } from '../evidencePresentation'
 import { severityColors, severityLabels } from '../presentation'
 import type { RiskFinding } from '../types'
 import FindingSource, { type FindingSourceState } from './FindingSource'
+import FindingSupplementarySource from './FindingSupplementarySource'
 
 import styles from '../../components/FindingDetail/index.module.scss'
 
@@ -22,17 +23,24 @@ function FindingWorkspace({
   source?: FindingSourceState
   reportActions?: ReactNode
 }) {
-  const evidence = presentRiskEvidence(finding.rawDetail)
+  const evidence = presentRiskEvidence(finding.rawDetail, finding.memoryOrder)
   const [occurrenceIndex, setOccurrenceIndex] = useState(evidence.defaultOccurrenceIndex)
   const [selectedStep, setSelectedStep] = useState<number | null>(null)
   const [sourceStep, setSourceStep] = useState<number | null>(null)
   const occurrence = evidence.occurrences[occurrenceIndex]
   const primaryLocation =
     occurrence?.location ??
-    (occurrenceIndex === evidence.defaultOccurrenceIndex ? evidence.primaryLocation : undefined)
+    (occurrenceIndex === evidence.defaultOccurrenceIndex && !(finding.memoryOrder && occurrence)
+      ? evidence.primaryLocation
+      : undefined)
   const step = sourceStep === null ? undefined : evidence.model.evidencePath.steps[sourceStep]
-  const location = step?.source ?? primaryLocation
-  const embedded = location?.context?.lines ?? []
+  const location = (
+    sourceStep !== null && finding.memoryOrder ? step?.source : (step?.source ?? primaryLocation)
+  ) as RiskSourceLocation | undefined
+  const embedded =
+    location?.unavailable || (finding.memoryOrder && !location?.sourceSha256)
+      ? []
+      : (location?.context?.lines ?? [])
   const highlightLines = new Set(location?.context?.highlights?.map((item) => item.line))
   const embeddedSource: FindingSourceState | undefined = embedded.length
     ? {
@@ -48,7 +56,9 @@ function FindingWorkspace({
       }
     : undefined
   const allowPrimaryContext =
-    sourceStep === null && occurrenceIndex === evidence.defaultOccurrenceIndex
+    sourceStep === null &&
+    occurrenceIndex === evidence.defaultOccurrenceIndex &&
+    !(finding.memoryOrder && occurrence && !occurrence.location)
   const startLine = location?.span?.start?.line
   const endLine = location?.span?.end?.line ?? startLine
   const cached = source?.data
@@ -57,6 +67,8 @@ function FindingWorkspace({
     (line) => startLine && endLine && line.lineNumber >= startLine && line.lineNumber <= endLine
   )
   const canReuse =
+    !finding.memoryOrder &&
+    !location?.unavailable &&
     cached?.findingId === finding.id &&
     cached?.filePath === location?.file &&
     startLine &&
@@ -75,29 +87,69 @@ function FindingWorkspace({
           }
         }
       : undefined
-  const displayedSource = allowPrimaryContext
-    ? (source ?? embeddedSource)
-    : (embeddedSource ?? reusedSource)
+  const selectedSource = finding.memoryOrder
+    ? embeddedSource
+    : allowPrimaryContext
+      ? (source ?? embeddedSource)
+      : (embeddedSource ?? reusedSource)
+  const displayedSource: FindingSourceState | undefined =
+    selectedSource ??
+    (allowPrimaryContext && source?.unavailableReason
+      ? { unavailableReason: source.unavailableReason }
+      : undefined) ??
+    (finding.memoryOrder && location && (cached || !location.sourceSha256)
+      ? {
+          unavailableReason: 'SOURCE_EVIDENCE_IDENTITY_UNVERIFIED'
+        }
+      : undefined)
   const context = displayedSource?.data?.findingId === finding.id ? displayedSource.data : undefined
   const displayedFinding = {
     id: finding.id,
     location:
       context?.filePath ?? location?.file ?? (allowPrimaryContext ? finding.location : '未提供位置')
   }
-  const contextLine = context?.lines.find((line) => line.highlighted)?.lineNumber
+  const contextLine =
+    context?.lines.find((line) => line.highlighted)?.lineNumber ??
+    location?.span?.start?.line ??
+    (allowPrimaryContext && context?.filePath === finding.location ? finding.line : undefined)
   const locationText = context
     ? `${context.filePath}${contextLine ? `:${contextLine}` : ''}`
     : location
-      ? formatFindingLocation(location)
+      ? formatFindingLocation(location) +
+        (!location.span?.start?.line &&
+        allowPrimaryContext &&
+        location.file === finding.location &&
+        finding.line
+          ? `:${finding.line}`
+          : '')
       : `${displayedFinding.location}${allowPrimaryContext && finding.line ? `:${finding.line}` : ''}`
   function selectStep(index: number) {
     setSelectedStep(index)
-    // 无源码的判断步骤不清空当前有效源码，与知识库工作区保持一致。
-    if (evidence.model.evidencePath.steps[index]?.source?.context?.lines?.length)
+    // 内存序步骤必须展示自己的证据；断点不能借用上一位置的代码。
+    if (
+      finding.memoryOrder ||
+      evidence.model.evidencePath.steps[index]?.source?.context?.lines?.length
+    )
       setSourceStep(index)
   }
   return (
     <article className={styles.findingWorkspace}>
+      {finding.protocolWarning ? <Alert type="warning" title={finding.protocolWarning} /> : null}
+      {finding.memoryOrder && finding.findingKind !== 'FINDING' ? (
+        <Alert
+          type="warning"
+          title={
+            (
+              {
+                SOURCE_CANDIDATE: '源码候选 · 待核实',
+                INCONCLUSIVE: '证据不足 · 待核实',
+                DISCHARGED: '受限模型内已消解 · 不代表迁移安全'
+              } as Record<string, string>
+            )[finding.findingKind] || '结论待核实'
+          }
+          description="人工纳入报告只改变报告输入选择，不代表分析已证实，也不计入正式风险。"
+        />
+      ) : null}
       <section
         className={styles.findingConclusionV2}
         data-severity={finding.severity}
@@ -155,7 +207,11 @@ function FindingWorkspace({
                 </strong>
                 {selectedStep !== null &&
                 !evidence.model.evidencePath.steps[selectedStep]?.source?.context?.lines?.length ? (
-                  <small>所选判断没有直接源码，继续保留当前代码。</small>
+                  <small>
+                    {finding.memoryOrder
+                      ? '所选步骤或断点没有可用源码，不借用其他位置片段。'
+                      : '所选判断没有直接源码，继续保留当前代码。'}
+                  </small>
                 ) : null}
               </div>
               {sourceStep !== null ? (
@@ -172,6 +228,14 @@ function FindingWorkspace({
               ) : null}
             </div>
             <FindingSource finding={displayedFinding} source={displayedSource} />
+            {finding.memoryOrder && allowPrimaryContext ? (
+              <FindingSupplementarySource
+                key={`${finding.id}:${occurrence?.id ?? 'primary'}`}
+                finding={finding}
+                location={location}
+                source={source}
+              />
+            ) : null}
           </div>
         </div>
       </section>
@@ -198,6 +262,12 @@ function FindingWorkspace({
             <dt>判断可信度</dt>
             <dd>{finding.confidence}</dd>
           </div>
+          {finding.evidenceLevel ? (
+            <div>
+              <dt>证据级别</dt>
+              <dd>{finding.evidenceLevel}</dd>
+            </div>
+          ) : null}
           {finding.evidenceOrigin ? (
             <div>
               <dt>分析依据</dt>

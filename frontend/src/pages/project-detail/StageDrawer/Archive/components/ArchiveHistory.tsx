@@ -12,6 +12,7 @@ import { archiveStatusOptions, formatBytes, getSourceRevisionLabel } from '../pr
 import { ArchiveStatusTag } from './ArchiveStatusTag'
 
 import styles from '../index.module.scss'
+import tableButtons from '@/styles/tableButtons.module.scss'
 
 interface ArchiveFilters {
   status?: ProjectArchiveStatus
@@ -74,7 +75,12 @@ export function ArchiveHistory({
       key: 'action',
       width: 96,
       render: (_value, record) => (
-        <Button size="small" type="link" onClick={() => onOpen(record.id)}>
+        <Button
+          className={tableButtons.textButton}
+          size="small"
+          type="link"
+          onClick={() => onOpen(record.id)}
+        >
           查看详情
         </Button>
       )

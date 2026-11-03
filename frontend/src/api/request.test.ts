@@ -2,7 +2,7 @@ import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { AxiosError, AxiosHeaders, CanceledError } from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { advanceAuthSession } from '@/store/authSession'
+import { advanceAuthSession, SessionChangedError } from '@/store/authSession'
 import { resetAuthStoreForTests, useAuthStore } from '@/store/authStore'
 import { registerFeedbackMessage } from '@/utils/feedback'
 
@@ -291,4 +291,105 @@ describe('request client', () => {
     await Promise.all([next, duplicate])
     expect(writes).toEqual(['new', 'new'])
   })
+  it.each([
+    [401, '登录已失效，请重新登录'],
+    [403, '没有权限执行此操作'],
+    [502, '网络异常，请稍后重试']
+  ])('uses a useful fallback for empty %s error messages', async (status, message) => {
+    const error = vi.fn()
+    registerFeedbackMessage({ error } as never)
+    window.history.replaceState({}, '', '/login')
+    requestClient.defaults.adapter = async (config) => {
+      throw new AxiosError(
+        '',
+        undefined,
+        config,
+        undefined,
+        response(config, { message: '' }, Number(status))
+      )
+    }
+    await expect(request.get('/private')).rejects.toBeInstanceOf(AxiosError)
+    expect(error).toHaveBeenCalledWith(message)
+  })
+  it.each([403, 500])(
+    'suppresses optional error feedback for %s without clearing auth',
+    async (status) => {
+      const error = vi.fn()
+      registerFeedbackMessage({ error } as never)
+      const logout = vi.spyOn(useAuthStore.getState(), 'logout')
+      requestClient.defaults.adapter = async (config) => {
+        throw new AxiosError(
+          'denied',
+          undefined,
+          config,
+          undefined,
+          response(config, { error: { code: 'DENIED', message: 'denied' } }, status)
+        )
+      }
+      await expect(request.get('/optional', { suppressErrorToast: true })).rejects.toThrow('denied')
+      expect(error).not.toHaveBeenCalled()
+      expect(logout).not.toHaveBeenCalled()
+    }
+  )
+  it('reuses a resolved CSRF token across write methods and permits explicitly exempt writes', async () => {
+    const calls: InternalAxiosRequestConfig[] = []
+    requestClient.defaults.adapter = async (config) => {
+      calls.push(config)
+      return response(config, {
+        data:
+          config.url === '/auth/csrf'
+            ? { headerName: 'X-CSRF', parameterName: '_csrf', token: 'shared' }
+            : 'saved'
+      })
+    }
+    await request.put('/one', {})
+    await request.patch('/two', {})
+    await request.delete('/three')
+    await request.post('/exempt', {}, { skipCsrf: true })
+    expect(calls.filter((call) => call.url === '/auth/csrf')).toHaveLength(1)
+    expect(
+      calls
+        .filter((call) => ['/one', '/two', '/three'].includes(call.url!))
+        .map((call) => call.headers.get('X-CSRF'))
+    ).toEqual(['shared', 'shared', 'shared'])
+    expect(calls.find((call) => call.url === '/exempt')!.headers.has('X-CSRF')).toBe(false)
+  })
+  it('rejects a queued request before transport if authentication changes before its interceptor runs', async () => {
+    const transport = vi.fn(async (config) => response(config, { data: 'should not be read' }))
+    requestClient.defaults.adapter = transport
+    const pending = request.get('/queued')
+    const rejection = expect(pending).rejects.toBeInstanceOf(SessionChangedError)
+    advanceAuthSession()
+    await rejection
+    expect(transport).not.toHaveBeenCalled()
+  })
+  it.each([
+    [401, { error: { message: '需要登录' } }, '/login'],
+    [
+      403,
+      { error: { code: 'PASSWORD_CHANGE_REQUIRED', message: '必须修改密码' } },
+      '/force-change-password'
+    ]
+  ] as const)(
+    'redirects an active %s response to the required session recovery route',
+    async (status, payload, target) => {
+      const location = { pathname: '/projects/project-1', href: '/projects/project-1' }
+      vi.stubGlobal('window', { location })
+      try {
+        requestClient.defaults.adapter = async (config) => {
+          throw new AxiosError(
+            'denied',
+            undefined,
+            config,
+            undefined,
+            response(config, payload, status)
+          )
+        }
+        await expect(request.get('/protected')).rejects.toBeInstanceOf(AxiosError)
+        expect(location.href).toBe(target)
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    }
+  )
 })

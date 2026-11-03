@@ -8,10 +8,13 @@ import type {
   SpecializedAnalysis,
   SpecializedAnalysisStageId
 } from '@/types/project/specialized-analysis'
+import { analysisDiagnostics, isPartialAnalysis } from '@/utils/analysisResult'
 import { formatDateTime } from '@/utils/display'
 
 import { projectQueryKeys } from '../../../queryKeys'
 import { statusLabels } from '../presentation'
+
+import tableButtons from '@/styles/tableButtons.module.scss'
 
 export default function AnalysisHistory({
   projectId,
@@ -37,7 +40,9 @@ export default function AnalysisHistory({
       title: '状态',
       dataIndex: 'status',
       width: 140,
-      render: (status: SpecializedAnalysis['status']) => <Tag>{statusLabels[status]}</Tag>
+      render: (status: SpecializedAnalysis['status'], run) => (
+        <Tag>{isPartialAnalysis(run) ? '部分分析完成' : statusLabels[status]}</Tag>
+      )
     },
     {
       title: '源码上下文',
@@ -50,7 +55,8 @@ export default function AnalysisHistory({
     {
       title: '结果概览',
       width: 180,
-      render: (_, run) => `${run.findingCount} 项结果，${run.diagnosticCount} 项诊断`
+      render: (_, run) =>
+        `${run.findingCount} 项结果，${analysisDiagnostics(run).count ?? '未知'} 项诊断`
     },
     { title: '创建时间', dataIndex: 'createdAt', width: 170, render: formatDateTime },
     { title: '完成时间', dataIndex: 'finishedAt', width: 170, render: formatDateTime },
@@ -59,7 +65,12 @@ export default function AnalysisHistory({
       fixed: 'right',
       width: 84,
       render: (_, run) => (
-        <Button size="small" type="link" onClick={() => onSelect(run.id)}>
+        <Button
+          className={tableButtons.textButton}
+          size="small"
+          type="link"
+          onClick={() => onSelect(run.id)}
+        >
           查看
         </Button>
       )

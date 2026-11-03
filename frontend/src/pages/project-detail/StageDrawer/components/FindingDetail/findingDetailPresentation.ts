@@ -33,6 +33,10 @@ export interface FindingDetailModel {
   evidenceChain: KnowledgeBaseEvidenceChain
   evidencePath: {
     steps: KnowledgeBaseEvidenceStep[]
+    primaryStepCount?: number
+    branches?: { from: string; to: string; kind: string }[]
+    warnings?: string[]
+    budgetTruncated?: boolean
   }
   fact: KnowledgeBaseFact
   occurrences: KnowledgeBaseOccurrence[]
@@ -132,6 +136,25 @@ export function getReasonCodeLabel(value?: string) {
 }
 
 const evidenceKindLabels: Record<string, string> = {
+  'source-fact': '源码事实',
+  'thread-creation': '线程创建',
+  'callback-binding': '回调绑定',
+  'execution-root': '执行入口',
+  'call-path': '调用路径',
+  'thread-instance': '线程实例',
+  mhp: '潜在并行执行',
+  'memory-access': '内存访问',
+  'object-provenance': '对象来源',
+  'byte-range-overlap': '字节范围重叠',
+  'mutex-region': '互斥保护区域',
+  'raii-region': 'RAII 保护区域',
+  'atomic-event': '原子事件',
+  'reads-from': '读取来源',
+  'modification-order': '修改顺序',
+  'release-sequence': '释放序列',
+  'synchronization-proof': '同步证据',
+  'synchronization-gap': '同步缺口',
+  break: '证据断点',
   sourceObservation: '源码观察',
   irObservation: '中间表示观察',
   conclusion: '分析结论',

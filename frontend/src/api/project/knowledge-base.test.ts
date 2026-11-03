@@ -11,6 +11,7 @@ vi.mock('../request', () => ({ default: request }))
 
 import {
   createProjectKnowledgeBaseAiExtension,
+  createProjectKnowledgeBaseScan,
   getProjectKnowledgeBaseAiExtensionReadiness,
   getProjectKnowledgeBaseAiExtensions
 } from './knowledge-base'
@@ -61,5 +62,19 @@ describe('knowledge base AI extension API contract', () => {
       '/projects/project-1/kb-scans/scan-1/ai-extensions',
       { note: '重点检查构建条件' }
     )
+  })
+})
+
+it('maps a scoped C scan and removes blank exclusion entries without changing path meaning', async () => {
+  await createProjectKnowledgeBaseScan('project', {
+    language: 'c',
+    scope: ' src/core ',
+    excludedDirectoryNames: ' build, ,vendor ',
+    excludedPaths: '\n third_party/x86 \n\n generated/config \n'
+  })
+  expect(request.post).toHaveBeenCalledExactlyOnceWith('/projects/project/kb-scans', {
+    language: 'c',
+    scanScope: { mode: 'PATHS', paths: ['src/core'] },
+    excludePaths: ['build', 'vendor', 'third_party/x86', 'generated/config']
   })
 })

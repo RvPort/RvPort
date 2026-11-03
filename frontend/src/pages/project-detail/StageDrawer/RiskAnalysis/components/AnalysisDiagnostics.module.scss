@@ -1,0 +1,105 @@
+@use '../../../../../styles/mixins' as type;
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 12px;
+  @include type.body-text;
+  overflow-wrap: anywhere;
+
+  p {
+    margin: 0;
+  }
+}
+
+.conclusion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  h4 {
+    margin: 0;
+    @include type.section-title;
+  }
+
+  p > span {
+    margin-right: 12px;
+    color: var(--ant-color-text-secondary);
+  }
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0;
+  @include type.helper-text;
+
+  > div {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  dt {
+    color: var(--ant-color-text-secondary);
+  }
+
+  dd {
+    margin: 0;
+    font-weight: 500;
+    color: var(--ant-color-text);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.notice {
+  @include type.helper-text;
+  color: var(--ant-color-text-secondary);
+}
+
+.recordsTitle {
+  margin: 0;
+  @include type.section-title;
+}
+
+.records {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 12px 0 0;
+  padding: 0 8px 0 0;
+  list-style: none;
+
+  &:focus-visible {
+    outline: 2px solid var(--ant-color-primary-border);
+    outline-offset: 2px;
+  }
+
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+}
+
+.recordMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  @include type.helper-text;
+  color: var(--ant-color-text-secondary);
+
+  code {
+    font-size: inherit;
+  }
+}
+
+.suggestion,
+.references {
+  @include type.helper-text;
+  color: var(--ant-color-text-secondary);
+}

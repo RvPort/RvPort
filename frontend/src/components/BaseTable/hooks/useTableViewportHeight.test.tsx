@@ -81,4 +81,42 @@ describe('table viewport measurement', () => {
     act(() => window.dispatchEvent(new Event('resize')))
     expect(result.current).toBe(358)
   })
+
+  it('falls back to resize events without ResizeObserver and releases the listener on unmount', () => {
+    // Older browsers still need a usable table, including a viewport that becomes too small.
+    window.ResizeObserver = undefined as unknown as typeof ResizeObserver
+    const root = document.createElement('div'),
+      toolbar = document.createElement('div'),
+      footer = document.createElement('div'),
+      viewport = document.createElement('div')
+    viewport.innerHTML = '<div class="ant-table-thead"></div><div class="ant-table-summary"></div>'
+    let rootHeight = 400
+    const measure = vi
+      .spyOn(root, 'getBoundingClientRect')
+      .mockImplementation(() => ({ height: rootHeight }) as DOMRect)
+    vi.spyOn(toolbar, 'getBoundingClientRect').mockReturnValue({ height: 50 } as DOMRect)
+    const { result, unmount } = renderHook(() =>
+      useTableViewportHeight({
+        rootRef: { current: root },
+        toolbarRef: { current: toolbar },
+        footerRef: { current: footer },
+        viewportRef: { current: viewport }
+      })
+    )
+    expect(result.current).toBe(350)
+    act(() => {
+      rootHeight = 40
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(result.current).toBeUndefined()
+    act(() => {
+      rootHeight = 500
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(result.current).toBe(450)
+    unmount()
+    const count = measure.mock.calls.length
+    act(() => window.dispatchEvent(new Event('resize')))
+    expect(measure).toHaveBeenCalledTimes(count)
+  })
 })

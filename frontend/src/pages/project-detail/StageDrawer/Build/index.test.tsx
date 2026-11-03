@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { renderWithProjectOverview } from '@/test/project-overview-utils'
+import { renderWithStrictProjectOverview as renderWithProjectOverview } from '@/test/strict-project-overview-utils'
 
 import Build from '.'
 
@@ -532,7 +532,7 @@ describe('Build stage drawer', () => {
 
   it('opens build logs in a secondary drawer view', async () => {
     mockBaseRequests({ ready: true })
-    getProjectTaskLogIncrements.mockResolvedValueOnce({
+    getProjectTaskLogIncrements.mockResolvedValue({
       taskId: 'task-latest',
       fromEventId: 1,
       latestEventId: 1,

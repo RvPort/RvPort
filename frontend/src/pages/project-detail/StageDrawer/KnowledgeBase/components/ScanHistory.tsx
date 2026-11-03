@@ -9,6 +9,8 @@ import { formatDateTime, getTaskStatusPresentation } from '@/utils/display'
 
 import { projectQueryKeys } from '../../../queryKeys'
 
+import tableButtons from '@/styles/tableButtons.module.scss'
+
 function statusTag(status: ProjectKnowledgeBaseScan['status']) {
   const { color, label } = getTaskStatusPresentation(status, { labels: { SUCCEEDED: '完成' } })
   return <Tag color={color}>{label}</Tag>
@@ -58,7 +60,11 @@ export function ScanHistory({
       fixed: 'right',
       width: 110,
       render: (_, record) => (
-        <Button type="link" onClick={() => onOpenScan(record.id)}>
+        <Button
+          className={tableButtons.textButton}
+          type="link"
+          onClick={() => onOpenScan(record.id)}
+        >
           查看
         </Button>
       )

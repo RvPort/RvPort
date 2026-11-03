@@ -46,6 +46,7 @@ docker rm rvport-frontend-coverage
 - `src/pages/`、`src/components/`：页面与公共组件。
 - `src/types/`、`src/store/`、`src/utils/`：类型、状态与通用辅助逻辑。
 - `deploy/`：Docker 和 Nginx 部署配置。
+- `docs/`：前端详细规范，当前包含样式指南。
 - `openspec/`：独立的前端规范、进行中变更与历史归档。
 
-界面规范见 [AGENTS.md](AGENTS.md) 和 [STYLE_GUIDE.md](STYLE_GUIDE.zh-CN.md)。测试随领域源码放置；API 变更同步更新契约测试和后端说明。
+界面规范见 [AGENTS.md](AGENTS.md) 和 [样式规范](docs/STYLE_GUIDE.zh-CN.md)。测试随领域源码放置；API 变更同步更新契约测试和后端说明。

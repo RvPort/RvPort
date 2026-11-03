@@ -21,7 +21,7 @@ When adding or changing a page, check that it helps users continue their task ra
 
 ## Code structure
 
-- Follow [STYLE_GUIDE.md](STYLE_GUIDE.md) for typography and spacing. Theme values live only in `src/theme.ts`. Page and section headings use semantic mixins in `src/styles/mixins.scss`, retaining secondary internal hierarchy.
+- Follow [style guide](docs/STYLE_GUIDE.md) for typography and spacing. Theme values live only in `src/theme.ts`. Page and section headings use semantic mixins in `src/styles/mixins.scss`, retaining secondary internal hierarchy.
 - Page entry points compose views. Put data requests, state transitions, and complex presentation into `use*.ts`, `queryKeys.ts`/`queries.ts`, `presentation.ts(x)`, and `components/` respectively.
 - Do not import another business stage's internal components, utilities, or CSS Modules. Promote cross-stage reuse to the nearest shared `components/` or `utils/` first.
 - Import concrete API modules directly rather than whole-domain aggregation barrels.

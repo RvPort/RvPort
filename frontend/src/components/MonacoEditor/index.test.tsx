@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
+import type { ComponentProps } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 const implementation = vi.hoisted(() => {
@@ -101,6 +102,58 @@ describe('MonacoEditor lazy boundary', () => {
 
     const implementationElement = await screen.findByTestId('monaco-implementation')
     expect(implementationElement.parentElement).toHaveStyle({ height: '100%' })
+  })
+
+  it('updates independent editor options and normalizes empty edits using the current callback', async () => {
+    let props: ComponentProps<typeof MonacoEditor> = {
+      value: 'initial',
+      onChange: vi.fn(),
+      lineNumbers: [120],
+      lineNumberOffset: 100
+    }
+    const view = render(<MonacoEditor {...props} />)
+    await screen.findByTestId('monaco-implementation')
+    for (const patch of [
+      { ariaLabel: '更新源码' },
+      { value: 'updated' },
+      { language: 'json' },
+      { readOnly: true },
+      { wordWrap: 'off' as const },
+      { theme: 'vs-dark' },
+      { totalLines: 10000 },
+      { className: 'custom-monaco' },
+      { height: 400 },
+      { onChange: vi.fn() }
+    ]) {
+      props = { ...props, ...patch }
+      view.rerender(<MonacoEditor {...props} />)
+      expect(implementation.render).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          value: props.value,
+          language: props.language ?? 'shell',
+          theme: props.theme ?? 'rvport-light',
+          options: expect.objectContaining({
+            ariaLabel: props.ariaLabel,
+            readOnly: props.readOnly ?? false,
+            wordWrap: props.wordWrap ?? 'on'
+          })
+        })
+      )
+    }
+    const current = implementation.render.mock.calls.at(-1)?.[0] as {
+      onChange: (value?: string) => void
+      options: { lineNumbers: (line: number) => string; lineNumbersMinChars: number }
+    }
+    expect(current.options.lineNumbers(1)).toBe('120')
+    expect(current.options.lineNumbers(2)).toBe('101')
+    expect(current.options.lineNumbersMinChars).toBe(5)
+    current.onChange(undefined)
+    expect(props.onChange).toHaveBeenCalledWith('')
+    view.rerender(<MonacoEditor value="read only" readOnly />)
+    const readOnly = implementation.render.mock.calls.at(-1)?.[0] as {
+      onChange: (value?: string) => void
+    }
+    expect(() => readOnly.onChange('ignored')).not.toThrow()
   })
 
   it('keeps Monaco current-line feedback for editable editors', async () => {
@@ -381,4 +434,102 @@ describe('MonacoEditor lazy boundary', () => {
     await waitFor(() => expect(removeZone).toHaveBeenCalledWith('zone-1'))
     expect(editor.removeOverlayWidget).toHaveBeenCalledWith(overlayWidget)
   })
+})
+
+it('restores the viewport after prepending old logs and then follows new output when requested', async () => {
+  let height = 1000
+  let scroll!: (event: { scrollTopChanged: boolean }) => void
+  const load = vi.fn(async () => {})
+  const view = render(
+    <MonacoEditor value="current" hasEarlierContent onLoadEarlierContent={load} />
+  )
+  await screen.findByTestId('monaco-implementation')
+  const props = implementation.render.mock.calls.at(-1)![0] as {
+    onMount: (editor: Record<string, unknown>, monaco: Record<string, unknown>) => void
+  }
+  const editor = {
+    deltaDecorations: vi.fn(() => []),
+    getScrollHeight: () => height,
+    getScrollTop: () => 10,
+    setScrollTop: vi.fn(),
+    onDidScrollChange: (listener: typeof scroll) => {
+      scroll = listener
+      return { dispose: vi.fn() }
+    },
+    revealLineInCenter: vi.fn()
+  }
+  props.onMount(editor, { Range: vi.fn() })
+  await act(async () => scroll({ scrollTopChanged: true }))
+  expect(load).toHaveBeenCalledOnce()
+  height = 1600
+  view.rerender(
+    <MonacoEditor value={'older\ncurrent'} hasEarlierContent onLoadEarlierContent={load} />
+  )
+  expect(editor.setScrollTop).toHaveBeenLastCalledWith(610)
+  view.rerender(<MonacoEditor value={'older\ncurrent\nnew'} scrollToBottomOnValueChange />)
+  expect(editor.setScrollTop).toHaveBeenLastCalledWith(1600)
+})
+
+it('updates gap retry/loading controls, hides offscreen zones and removes zones on unmount', async () => {
+  const load = vi.fn()
+  const gap = {
+    id: 'gap',
+    afterLineNumber: 1,
+    startLine: 2,
+    endLine: 10,
+    lineCount: 9,
+    loadable: true,
+    onLoad: load
+  }
+  const view = render(<MonacoEditor value="line" sourceGaps={[{ ...gap, loading: true }]} />)
+  await screen.findByTestId('monaco-implementation')
+  const props = implementation.render.mock.calls.at(-1)![0] as {
+    onMount: (editor: Record<string, unknown>, monaco: Record<string, unknown>) => void
+  }
+  const host = document.createElement('div')
+  document.body.append(host)
+  let position!: (top: number) => void
+  const removeZone = vi.fn()
+  const editor = {
+    deltaDecorations: vi.fn(() => []),
+    getScrollHeight: () => 100,
+    getScrollTop: () => 0,
+    setScrollTop: vi.fn(),
+    onDidScrollChange: () => ({ dispose: vi.fn() }),
+    revealLineInCenter: vi.fn(),
+    getLayoutInfo: () => ({ contentLeft: 10 }),
+    addOverlayWidget: (widget: { getDomNode: () => HTMLElement }) =>
+      host.append(widget.getDomNode()),
+    removeOverlayWidget: (widget: { getDomNode: () => HTMLElement }) =>
+      widget.getDomNode().remove(),
+    layoutOverlayWidget: vi.fn(),
+    changeViewZones: (change: (accessor: object) => void) =>
+      change({
+        removeZone,
+        addZone: (zone: { onDomNodeTop: (top: number) => void }) => {
+          position = zone.onDomNodeTop
+          return 'zone'
+        }
+      })
+  }
+  props.onMount(editor, { Range: vi.fn() })
+  expect(screen.getByRole('button', { name: '加载第 2–10 行' })).toBeDisabled()
+  expect(screen.getByText('加载中…')).toBeInTheDocument()
+  view.rerender(<MonacoEditor value="line" sourceGaps={[{ ...gap, error: true }]} />)
+  expect(screen.getByText('重新加载')).toBeInTheDocument()
+  const button = screen.getByRole('button', { name: '加载第 2–10 行' })
+  button.click()
+  expect(load).toHaveBeenCalledOnce()
+  position(-20000)
+  expect(host.firstElementChild).toHaveStyle({ visibility: 'hidden' })
+  position(10)
+  expect(host.firstElementChild).toHaveStyle({ visibility: 'visible' })
+  view.rerender(<MonacoEditor value="line" sourceGaps={[{ ...gap, onLoad: undefined }]} />)
+  expect(screen.queryByRole('button', { name: '加载第 2–10 行' })).not.toBeInTheDocument()
+  expect(host).toHaveTextContent('已省略 9 行')
+  const before = removeZone.mock.calls.length
+  view.unmount()
+  expect(removeZone.mock.calls.length).toBe(before + 1)
+  expect(host).toBeEmptyDOMElement()
+  host.remove()
 })

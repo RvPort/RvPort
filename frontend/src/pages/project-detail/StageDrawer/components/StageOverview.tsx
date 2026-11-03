@@ -30,7 +30,7 @@ export interface StageOverviewProps {
       startedAt?: string | null
       finishedAt?: string | null
       summary?: object
-      diagnosticCount?: number
+      diagnosticCount?: number | null
     } | null
   }
   operation?: {

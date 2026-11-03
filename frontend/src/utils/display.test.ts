@@ -63,3 +63,22 @@ describe('display utilities', () => {
     expect(formatFileSize(-1)).toBe('--')
   })
 })
+
+it('keeps cross-day task ranges and unknown statuses unambiguous', () => {
+  expect(formatDateTimeRange({ startedAt: null, finishedAt: '2026-07-14T01:00:00+08:00' })).toBe(
+    '2026-07-14 01:00'
+  )
+  expect(
+    formatDateTimeRange({
+      startedAt: '2026-07-13T23:30:00+08:00',
+      finishedAt: '2026-07-14T01:00:00+08:00'
+    })
+  ).toBe('2026-07-13 23:30 至 2026-07-14 01:00')
+  expect(getTaskStatusPresentation('FUTURE_STATUS')).toEqual({
+    color: 'processing',
+    label: 'FUTURE_STATUS'
+  })
+  expect(formatFileSize(Number.NaN)).toBe('--')
+  expect(formatFileSize(Number.POSITIVE_INFINITY)).toBe('--')
+  expect(formatFileSize(2 ** 30)).toBe('1 GB')
+})

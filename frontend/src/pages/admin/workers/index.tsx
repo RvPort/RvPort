@@ -22,6 +22,7 @@ import ConcurrencyModal from './components/ConcurrencyModal'
 import WorkerDetailDrawer from './components/WorkerDetailDrawer'
 
 import styles from './index.module.scss'
+import tableButtons from '@/styles/tableButtons.module.scss'
 
 interface WorkerFilters {
   hasRunningTasks?: 'true' | 'false'
@@ -69,7 +70,7 @@ export default function AdminWorkersPage() {
       sorter: true,
       render: (value: string) => (
         <Button
-          className={styles.instanceButton}
+          className={`${tableButtons.textButton} ${styles.instanceButton}`}
           type="link"
           onClick={() => setDetailWorkerId(value)}
         >

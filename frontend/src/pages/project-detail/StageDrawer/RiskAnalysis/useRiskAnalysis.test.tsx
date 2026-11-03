@@ -7,6 +7,7 @@ import * as api from '@/api/project/specialized-analysis'
 import { getProjectStageReadiness } from '@/api/project/workflow'
 import { createTestQueryClient } from '@/test/test-utils'
 
+import { projectQueryKeys } from '../../queryKeys'
 import { latest, readiness, run } from './fixtures.test-support'
 import { useRiskAnalysis } from './useRiskAnalysis'
 
@@ -44,6 +45,41 @@ async function advance(ms: number) {
 }
 
 describe('specialized analysis authoritative event refresh', () => {
+  it.each([false, true])('诊断绑定原执行，返回保留筛选与历史选择：历史=%s', async (historical) => {
+    vi.mocked(api.getSpecializedAnalysis).mockImplementation(async (_project, _stage, id) => ({
+      ...run,
+      id
+    }))
+    const hook = setup()
+    await advance(1)
+    const originalId = historical ? 'historical-run' : run.id
+    if (historical) {
+      act(() => hook.result.current.selectRun(originalId))
+      await advance(1)
+    }
+    act(() => hook.result.current.setSearch('publication'))
+    act(() => hook.result.current.openDiagnostics())
+    await advance(1)
+    expect(hook.result.current.diagnosticRunId).toBe(originalId)
+    expect(hook.result.current.canStart).toBe(false)
+    const next = { ...run, id: 'next-run' }
+    act(() =>
+      hook.client.setQueryData(
+        projectQueryKeys.specializedLatest('project', 'memory-order-analysis'),
+        latest(next)
+      )
+    )
+    await advance(1)
+    expect(hook.result.current.run?.id).toBe(originalId)
+    vi.mocked(api.getSpecializedAnalysisLatest).mockResolvedValue(latest(next))
+    act(() => hook.result.current.closeDiagnostics())
+    await advance(1)
+    expect(hook.result.current.runId).toBe(historical ? originalId : undefined)
+    expect(hook.result.current.run?.id).toBe(historical ? originalId : next.id)
+    expect(hook.result.current.search).toBe('publication')
+    expect(hook.result.current.diagnosticRunId).toBeUndefined()
+    hook.dispose()
+  })
   it('updates history through domain invalidation without polling current observers', async () => {
     vi.mocked(api.getSpecializedAnalysis)
       .mockResolvedValueOnce({ ...run, status: 'RUNNING' })

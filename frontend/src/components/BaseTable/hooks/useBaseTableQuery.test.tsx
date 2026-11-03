@@ -33,3 +33,44 @@ it('retains rows for pagination but never reuses rows from another resource', as
   rerender({ resource: 'second' })
   expect(result.current.displayedData).toBeUndefined()
 })
+
+it('clears an empty multi-sort result while retaining the selected page size', async () => {
+  const client = createTestQueryClient()
+  const request = vi.fn(async () => ({
+    items: [{ id: 'row' }],
+    total: 100,
+    page: 1,
+    pageSize: 50,
+    hasMore: true
+  }))
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  )
+  const { result } = renderHook(
+    () => useBaseTableQuery({ queryKey: ['sort-reset'], initialPageSize: 50, request }),
+    { wrapper }
+  )
+  act(() =>
+    result.current.updateFromTable({ current: 2, pageSize: 50 }, [
+      { field: 'name', order: 'ascend' }
+    ])
+  )
+  await waitFor(() =>
+    expect(result.current.requestParams).toMatchObject({
+      page: 2,
+      sortBy: 'name',
+      sortOrder: 'ascend'
+    })
+  )
+  act(() => result.current.updateFromTable({}, []))
+  await waitFor(() =>
+    expect(result.current.requestParams).toMatchObject({
+      page: 1,
+      pageSize: 50,
+      sortBy: undefined,
+      sortOrder: undefined
+    })
+  )
+  act(() => result.current.resetFilters({}))
+  expect(result.current.searchResetVersion).toBe(1)
+})

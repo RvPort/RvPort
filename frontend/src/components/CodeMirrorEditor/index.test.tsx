@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
+import type { ComponentProps } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 const implementation = vi.hoisted(() => {
@@ -76,5 +77,41 @@ describe('CodeMirrorEditor lazy boundary', () => {
     expect(implementation.render).toHaveBeenLastCalledWith(
       expect.objectContaining({ height: '100%' })
     )
+  })
+
+  it('forwards independent prop changes after lazy loading without retaining an older editor callback', async () => {
+    let props: ComponentProps<typeof CodeMirrorEditor> = {
+      value: 'initial',
+      ariaLabel: '源码',
+      onChange: vi.fn()
+    }
+    const view = render(<CodeMirrorEditor {...props} />)
+    await screen.findByTestId('codemirror-implementation')
+    for (const patch of [
+      { value: 'updated' },
+      { ariaLabel: '更新源码' },
+      { language: 'json' as const },
+      { readOnly: true },
+      { height: '60vh' },
+      { className: 'custom-editor' },
+      { highlightedLineNumbers: [2] },
+      { onChange: vi.fn() }
+    ]) {
+      props = { ...props, ...patch }
+      view.rerender(<CodeMirrorEditor {...props} />)
+      expect(implementation.render).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          ...props,
+          height: props.height ?? '100%',
+          language: props.language ?? 'shell',
+          readOnly: props.readOnly ?? false
+        })
+      )
+    }
+    const current = implementation.render.mock.calls.at(-1)?.[0] as ComponentProps<
+      typeof CodeMirrorEditor
+    >
+    current.onChange?.('new content')
+    expect(props.onChange).toHaveBeenCalledWith('new content')
   })
 })

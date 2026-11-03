@@ -167,9 +167,13 @@ export function createWorkflowNodes(
     const nextStatus = normalizeProjectPipelineStageStatus(presentation?.status)
     const nextFlowBlocked = presentation?.flowBlocked ?? false
     const nextFocused = workflowStatus.currentStageId === node.id && nextStatus !== 'done'
-    const nextHint = presentation
-      ? getWorkflowNodeHint(node.id, presentation, reasonCodeByStageId.get(node.id))
-      : ''
+    const analysis = workflowStatus.stages.find((stage) => stage.id === node.id)
+    const partial = analysis?.analysisStatus === 'PARTIAL' || analysis?.analysisComplete === false
+    const nextHint = partial
+      ? `部分分析完成 · ${analysis?.message || analysis?.messageEn || '零正式风险不代表迁移安全'}`
+      : presentation
+        ? getWorkflowNodeHint(node.id, presentation, reasonCodeByStageId.get(node.id))
+        : ''
     const previousNode = previousStageNodes.get(node.id)
 
     if (

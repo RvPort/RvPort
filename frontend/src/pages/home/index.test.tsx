@@ -3,7 +3,7 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { renderWithQueryClient } from '@/test/test-utils'
+import { renderWithStrictQueryClient as renderWithQueryClient } from '@/test/strict-mode-utils'
 import type { ProjectListItem } from '@/types/project'
 
 const { fetchNextPage, useProjectList } = vi.hoisted(() => ({
@@ -96,6 +96,51 @@ describe('HomePage', () => {
     })
   })
 
+  it('shows initial loading, allows retry after an initial failure, and preserves loaded cards during a background failure', async () => {
+    const refetch = vi.fn()
+    const state = { ...useProjectList(), refetch }
+    useProjectList.mockReturnValue({ ...state, projects: [], total: 0, isLoading: true })
+    const view = renderPage()
+    expect(screen.getByLabelText('项目列表加载中')).toBeInTheDocument()
+    expect(screen.queryByText('暂无项目，点击新建项目开始创建迁移项目')).not.toBeInTheDocument()
+    useProjectList.mockReturnValue({ ...state, projects: [], total: 0, isError: true })
+    view.rerender(
+      <MemoryRouter>
+        <LocationProbe />
+        <HomePage />
+      </MemoryRouter>
+    )
+    await userEvent.click(screen.getByRole('button', { name: /重\s*试/ }))
+    expect(refetch).toHaveBeenCalledOnce()
+    useProjectList.mockReturnValue({ ...state, isError: true })
+    view.rerender(
+      <MemoryRouter>
+        <LocationProbe />
+        <HomePage />
+      </MemoryRouter>
+    )
+    expect(screen.getByRole('article', { name: '迁移项目 卡片' })).toBeInTheDocument()
+    expect(screen.queryByText('项目列表加载失败，请稍后重试')).not.toBeInTheDocument()
+  })
+
+  it('does not enqueue another page while loading and maps all project status tabs to their filters', async () => {
+    useProjectList.mockReturnValue({ ...useProjectList(), isFetchingNextPage: true })
+    renderPage()
+    const actor = userEvent.setup()
+    const load = screen.getByRole('button', { name: '正在加载' })
+    expect(load).toBeDisabled()
+    await actor.click(load)
+    expect(fetchNextPage).not.toHaveBeenCalled()
+    for (const [name, status] of [
+      ['进行中', 'ACTIVE'],
+      ['已归档', 'ARCHIVED'],
+      ['全部', undefined]
+    ] as const) {
+      await actor.click(screen.getByText(name, { selector: '.ant-segmented-item-label' }))
+      expect(useProjectList).toHaveBeenLastCalledWith({ status })
+    }
+  })
+
   it('shows loaded and total counts with an explicit load-more action', async () => {
     const user = userEvent.setup()
     renderPage()
@@ -107,7 +152,7 @@ describe('HomePage', () => {
   })
 
   it('keeps loaded projects visible and provides retry when a later page fails', async () => {
-    useProjectList.mockReturnValueOnce({
+    useProjectList.mockReturnValue({
       ...useProjectList(),
       isFetchNextPageError: true
     })
@@ -122,7 +167,7 @@ describe('HomePage', () => {
   })
 
   it('shows a concise terminal state when all projects are loaded', () => {
-    useProjectList.mockReturnValueOnce({
+    useProjectList.mockReturnValue({
       ...useProjectList(),
       hasNextPage: false
     })
@@ -132,7 +177,7 @@ describe('HomePage', () => {
   })
 
   it('shows a directed empty state when no projects exist', () => {
-    useProjectList.mockReturnValueOnce({
+    useProjectList.mockReturnValue({
       ...useProjectList(),
       hasNextPage: false,
       projects: [],

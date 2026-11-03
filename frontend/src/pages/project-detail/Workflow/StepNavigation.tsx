@@ -53,6 +53,9 @@ export default function StepNavigation({
                       <span aria-hidden="true" className={styles.node} />
                       <span className={styles.copy}>
                         <strong>{stage.title}</strong>
+                        {stage.analysisWarning ? (
+                          <small role="status">{stage.analysisWarning}</small>
+                        ) : null}
                         {stage.assistText ? <small>{stage.assistText}</small> : null}
                       </span>
                       <span className={styles.status}>{getStageStatusText(stage.status)}</span>

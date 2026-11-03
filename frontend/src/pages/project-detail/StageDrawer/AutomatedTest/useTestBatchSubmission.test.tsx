@@ -132,4 +132,118 @@ describe('test batch submission', () => {
       testBatchRole: 'TARGET'
     })
   })
+
+  it('retries the original configuration after draft and build inputs change, then starts a fresh batch explicitly', async () => {
+    const request = vi.mocked(createProjectAutomatedTest)
+    request.mockImplementation(async (_, input) => {
+      if (input.testBatchRole === 'TARGET') throw new Error('offline')
+      return { id: 'source' } as Awaited<ReturnType<typeof createProjectAutomatedTest>>
+    })
+    const complete = vi.fn()
+    const { result, rerender } = renderHook(
+      ({ inputs }) => useTestBatchSubmission('A', true, inputs),
+      { initialProps: { inputs: contexts } }
+    )
+    const variables = { MODE: 'original' }
+    await act(async () => {
+      await result.current.submit(
+        { command: 'original-command', environmentVariables: variables },
+        complete
+      )
+    })
+    const originalBatch = result.current.batch!.id
+    variables.MODE = 'edited'
+    const changedContexts = contexts.map((context) => ({
+      ...context,
+      build: {
+        ...context.build!,
+        id: `${context.role}-new-build`,
+        workingDirectory: '/new-workspace'
+      }
+    }))
+    rerender({ inputs: changedContexts })
+    request.mockResolvedValue({ id: 'recovered' } as Awaited<
+      ReturnType<typeof createProjectAutomatedTest>
+    >)
+    await act(async () => {
+      await result.current.retry()
+    })
+    expect(request.mock.calls[2][1]).toMatchObject({
+      testBatchId: originalBatch,
+      testBatchRole: 'TARGET',
+      command: 'original-command',
+      environmentVariables: { MODE: 'original' },
+      buildRunId: 'TARGET-build',
+      workingDirectory: '/TARGET'
+    })
+    expect(complete).toHaveBeenCalledOnce()
+    act(() => result.current.startNewBatch())
+    expect(result.current.batch).toBeUndefined()
+    await act(async () => {
+      await result.current.submit({ command: 'new-command' })
+    })
+    expect(request.mock.calls[3][1]).toMatchObject({
+      command: 'new-command',
+      buildRunId: 'SOURCE-new-build',
+      workingDirectory: '/new-workspace'
+    })
+    expect(request.mock.calls[3][1].testBatchId).not.toBe(originalBatch)
+    expect(request.mock.calls[3][1].environmentVariables).toBeUndefined()
+    expect(request.mock.calls[4][1].testBatchId).toBe(request.mock.calls[3][1].testBatchId)
+  })
+
+  it('locks the batch identity during a pending retry and ignores duplicate retry requests', async () => {
+    const request = vi.mocked(createProjectAutomatedTest)
+    request.mockRejectedValue(new Error('offline'))
+    const { result } = renderHook(() => useTestBatchSubmission('A', true, contexts))
+    await act(async () => {
+      await result.current.submit({ command: 'test' })
+    })
+    const batchId = result.current.batch!.id
+    let finish!: (value: Awaited<ReturnType<typeof createProjectAutomatedTest>>) => void
+    const pendingTask = new Promise<Awaited<ReturnType<typeof createProjectAutomatedTest>>>(
+      (resolve) => {
+        finish = resolve
+      }
+    )
+    request.mockReturnValue(pendingTask)
+    let pending!: Promise<unknown>
+    act(() => {
+      pending = result.current.retry()
+      void result.current.retry()
+      result.current.startNewBatch()
+    })
+    expect(result.current.isPending).toBe(true)
+    expect(result.current.batch?.id).toBe(batchId)
+    expect(request).toHaveBeenCalledTimes(4)
+    await act(async () => {
+      finish({ id: 'recovered' } as Awaited<ReturnType<typeof createProjectAutomatedTest>>)
+      await pending
+    })
+    expect(result.current.isPending).toBe(false)
+    expect(result.current.batch?.failed).toEqual([])
+    expect(result.current.batch?.id).toBe(batchId)
+    await act(async () => {
+      await result.current.retry()
+    })
+    expect(request).toHaveBeenCalledTimes(4)
+  })
+
+  it.each([
+    { project: undefined, inputs: contexts, active: true },
+    { project: 'A', inputs: [], active: true },
+    { project: 'A', inputs: [contexts[0]], active: true },
+    { project: 'A', inputs: contexts, active: false }
+  ])(
+    'does not create a partial pair before project, inputs and submission scope are ready ($project, $active)',
+    async ({ project, inputs, active }) => {
+      const { result } = renderHook(() => useTestBatchSubmission(project, active, inputs))
+      await act(async () => {
+        await result.current.retry()
+        await result.current.submit({ command: 'test' })
+      })
+      expect(createProjectAutomatedTest).not.toHaveBeenCalled()
+      expect(result.current.batch).toBeUndefined()
+    }
+  )
 })

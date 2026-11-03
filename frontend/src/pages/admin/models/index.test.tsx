@@ -8,7 +8,7 @@ import {
   getModelProfiles,
   getModelStageAssignments
 } from '@/api/admin/models'
-import { renderWithQueryClient } from '@/test/test-utils'
+import { renderWithStrictQueryClient as renderWithQueryClient } from '@/test/strict-mode-utils'
 import type { ModelProfile } from '@/types/admin/models'
 
 import AdminModelsPage from './index'

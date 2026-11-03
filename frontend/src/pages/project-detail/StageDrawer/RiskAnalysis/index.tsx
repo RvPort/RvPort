@@ -11,6 +11,7 @@ import RecordViewTitle from '../components/RecordViewTitle'
 import StageSurface from '../components/StageSurface'
 import { getStageDrawerWidth } from '../drawerWidth'
 import type { StageDrawerProps } from '../types'
+import AnalysisDiagnostics from './components/AnalysisDiagnostics'
 import AnalysisHistory from './components/AnalysisHistory'
 import AnalysisOverview from './components/AnalysisOverview'
 import FindingDetail from './components/FindingDetail'
@@ -29,14 +30,17 @@ function AnalysisContent({ stage, projectId, visible, onClose, onStageChange }: 
     run.sourceRevisionId === readiness.data?.context.sourceRevisionId &&
     !readiness.isFetching &&
     !readiness.isError &&
-    !finding.isError
+    !finding.isError &&
+    finding.data?.runId === run?.id
   return (
     <StageSurface
       onHistory={
-        !state.runId && !state.findingId && !state.showHistory ? state.openHistory : undefined
+        !state.runId && !state.findingId && !state.showHistory && !state.diagnosticRunId
+          ? state.openHistory
+          : undefined
       }
       extra={
-        !state.findingId ? (
+        !state.findingId && !state.diagnosticRunId ? (
           <Tooltip title="刷新分析信息">
             <Button
               aria-label="刷新分析信息"
@@ -51,10 +55,24 @@ function AnalysisContent({ stage, projectId, visible, onClose, onStageChange }: 
       visible={visible}
       size={getStageDrawerWidth(stageId)}
       onClose={onClose}
-      panelTitleVisible={Boolean(state.findingId || state.showHistory || state.runId)}
-      panelScrollKey={state.showHistory ? 'history' : (state.findingId ?? run?.id ?? 'latest')}
+      panelTitleVisible={Boolean(
+        state.diagnosticRunId || state.findingId || state.showHistory || state.runId
+      )}
+      panelScrollKey={
+        state.diagnosticRunId
+          ? `diagnostics:${state.diagnosticRunId}`
+          : state.showHistory
+            ? 'history'
+            : (state.findingId ?? run?.id ?? 'latest')
+      }
       title={
-        state.findingId ? (
+        state.diagnosticRunId ? (
+          <RecordViewTitle
+            backLabel="返回分析概览"
+            title="分析诊断明细"
+            onBack={state.closeDiagnostics}
+          />
+        ) : state.findingId ? (
           <RecordViewTitle
             backLabel="返回风险列表"
             title={detail?.title ?? '风险详情'}
@@ -79,7 +97,17 @@ function AnalysisContent({ stage, projectId, visible, onClose, onStageChange }: 
         )
       }
     >
-      {state.showHistory && projectId ? (
+      {state.diagnosticRunId ? (
+        state.selectedRun.isLoading ? (
+          <ContentState kind="loading" description="正在加载分析诊断" />
+        ) : state.selectedRun.isError || !run ? (
+          <ContentState kind="error" description="分析诊断加载失败">
+            <Button onClick={() => void state.selectedRun.refetch()}>重新加载</Button>
+          </ContentState>
+        ) : (
+          <AnalysisDiagnostics run={run} projectId={projectId} stageId={stageId} />
+        )
+      ) : state.showHistory && projectId ? (
         <AnalysisHistory projectId={projectId} stageId={stageId} onSelect={state.selectRun} />
       ) : state.findingId ? (
         <Fragment>
@@ -96,6 +124,8 @@ function AnalysisContent({ stage, projectId, visible, onClose, onStageChange }: 
                 finding.data?.codeContext || finding.data?.codeContextUnavailableReason
                   ? {
                       data: finding.data.codeContext ?? undefined,
+                      expectedSourceRevisionId:
+                        run && finding.data.runId === run.id ? run.sourceRevisionId : undefined,
                       unavailableReason: finding.data.codeContextUnavailableReason ?? undefined
                     }
                   : undefined
@@ -119,6 +149,7 @@ function AnalysisContent({ stage, projectId, visible, onClose, onStageChange }: 
                     }
                     migrationInputRefId={finding.data.reportInclusion.migrationInputRefId}
                     status={finding.data.reportInclusion.migrationInputStatus}
+                    pendingVerification={detail.memoryOrder && detail.findingKind !== 'FINDING'}
                     invalidateQueryKeys={[
                       projectQueryKeys.specializedAnalyses(projectId, stageId),
                       projectQueryKeys.evaluationReports(projectId)

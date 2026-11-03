@@ -3,6 +3,7 @@ import { Alert, Button, Progress, Space } from 'antd'
 
 import ContentState from '@/components/ContentState'
 import type { SpecializedAnalysisStageId } from '@/types/project/specialized-analysis'
+import { analysisDiagnostics, isPartialAnalysis } from '@/utils/analysisResult'
 import { formatDateTime } from '@/utils/display'
 
 import StageOverview from '../../components/StageOverview'
@@ -40,17 +41,21 @@ export default function AnalysisOverview({
     run && (!run.currentSourceRevision || (!state.runId && latest.data?.freshness === 'STALE'))
   const failed = run && ['FAILED', 'CANCELLED', 'TIMEOUT'].includes(run.status)
   const summary =
-    run?.status === 'PARTIAL'
-      ? '部分范围未完成，请结合诊断和原始结果判断；不能据此认定没有风险。'
+    run && isPartialAnalysis(run)
+      ? run.analyzerType === 'MEMORY_ORDER'
+        ? '部分范围未完成，零正式风险不代表迁移安全。'
+        : '部分分析完成：部分范围未完成，请结合诊断和原始结果判断；零正式风险不代表迁移安全。'
       : failed
         ? (typeof run?.summary.error === 'string'
             ? run.summary.error
             : !state.runId
               ? latest.data?.execution?.errorMessage
               : null) || '本次执行未完成，请查看任务日志后重试。'
-        : run
-          ? `${run.findingCount === 0 && run.candidateCount === 0 ? '本次分析范围内未发现支持的风险。' : `${run.findingCount} 项分析结果，${run.candidateCount} 项源码候选，${run.diagnosticCount} 项诊断。`}结果仍需结合源码与业务条件确认。`
-          : ''
+        : run?.analyzerType === 'MEMORY_ORDER'
+          ? '结论限于本次分析的证据和模型范围，零正式风险不代表迁移安全。'
+          : run
+            ? `${run.findingCount === 0 && run.candidateCount === 0 ? '本次分析范围内未发现支持的风险。' : `${run.findingCount} 项分析结果，${run.candidateCount} 项源码候选，${analysisDiagnostics(run).count ?? '未知'} 项诊断。`}结果仍需结合源码与业务条件确认，零正式风险不代表迁移安全。`
+            : ''
   const loading = readiness.isLoading || latest.isLoading
   const requestError = readiness.isError || latest.isError
   const prerequisiteItems = presentPrerequisites(prerequisites, onStageChange)
@@ -161,7 +166,7 @@ export default function AnalysisOverview({
               details={
                 <Fragment>
                   <span>完成时间：{formatDateTime(run.finishedAt)}</span>
-                  {run.diagnosticCount > 0 ? (
+                  {(run.diagnosticCount ?? 0) > 0 ? (
                     <p>{run.diagnosticCount} 项分析诊断，请查看日志。</p>
                   ) : null}
                 </Fragment>
@@ -188,6 +193,7 @@ export default function AnalysisOverview({
               summary={summary}
               showLogs={state.showLogs}
               onToggleLogs={() => state.setShowLogs(!state.showLogs)}
+              onOpenDiagnostics={state.openDiagnostics}
             />
           )
         ) : null}

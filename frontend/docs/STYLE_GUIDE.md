@@ -8,13 +8,13 @@ Applies to the project home, administration, personal settings, Workflow/Step co
 
 Define values only in `src/theme.ts`. Components use official Ant Design CSS variables, with semantic mixins from `src/styles/mixins.scss`. Do not introduce a parallel theme-variable system.
 
-| Purpose | Size / weight / line height | Usage |
-|---|---|---|
-| Main page title | 20px / 500 / 28px | `type.page-title` |
-| Modal, drawer, and Step detail title | 18px / 500 / 24px | `type.panel-title` |
-| Content section title | 16px / 500 / 24px | `type.section-title` |
-| Body, forms, and ordinary actions | 14px / 400 / 22px | `type.body-text` |
-| Hints, labels, times, and status metadata | 12px / 400 / 20px | `type.helper-text` |
+| Purpose                                   | Size / weight / line height | Usage                |
+| ----------------------------------------- | --------------------------- | -------------------- |
+| Main page title                           | 20px / 500 / 28px           | `type.page-title`    |
+| Modal, drawer, and Step detail title      | 18px / 500 / 24px           | `type.panel-title`   |
+| Content section title                     | 16px / 500 / 24px           | `type.section-title` |
+| Body, forms, and ordinary actions         | 14px / 400 / 22px           | `type.body-text`     |
+| Hints, labels, times, and status metadata | 12px / 400 / 20px           | `type.helper-text`   |
 
 - Use weights 400, 500, and 600. Reserve 600 for conclusions or values that need emphasis rather than every heading.
 - Dense lists, paths, and logs may use 13px / 20px. Secondary source-workspace headings remain 15px / 500 / 22px, and file paths 13px / 400 / 20px. Do not promote internal details to page-title scale.
@@ -36,15 +36,15 @@ Define values only in `src/theme.ts`. Components use official Ant Design CSS var
 
 Use the same spacing for equivalent content instead of near-duplicates such as 20 / 22 / 28px across neighboring pages.
 
-| Relationship | Default spacing |
-|---|---|
-| Independent major sections | 24px |
-| Groups within a section; adjacent content columns | 16px |
-| Heading and immediate description | 4px |
-| Compact list heading to list; list items | 12px |
-| Related action buttons or filter controls | 8px |
-| Execution rows and compact summary/list card padding | 12px 16px |
-| Standalone conclusion/suggestion container padding | 16px |
+| Relationship                                         | Default spacing |
+| ---------------------------------------------------- | --------------- |
+| Independent major sections                           | 24px            |
+| Groups within a section; adjacent content columns    | 16px            |
+| Heading and immediate description                    | 4px             |
+| Compact list heading to list; list items             | 12px            |
+| Related action buttons or filter controls            | 8px             |
+| Execution rows and compact summary/list card padding | 12px 16px       |
+| Standalone conclusion/suggestion container padding   | 16px            |
 
 - Page titles normally have 16px before body content. Administration pages with a divider keep 24px in both heading and body areas. Real source/list container boundaries may have padding on both sides.
 - Large whitespace may use 32 / 48px; two compact metadata lines may use 2 / 4px. Do not use these compact values between an independent section heading and its body.
@@ -55,15 +55,15 @@ Use the same spacing for equivalent content instead of near-duplicates such as 2
 
 ## Recorded audit and corrections
 
-| Issue | Correction |
-|---|---|
-| Administration titles at 28px, home/settings at 20px, management center at 24px | Standardize page titles to 20px / 500 / 28px |
-| BaseDrawer object titles at 20px, BaseModal at 18px / 600, StepPanel at 16px; string titles relied on defaults | Shared containers use 18px / 500 / 24px for both title forms |
-| Peer stage headings used 600 or browser bold with inconsistent line heights | Shared mixins for 16px section headings, retaining secondary workspace levels |
-| Many status descriptions, versions, and analysis metadata at 10–11px | Raise ordinary text to 12px; retain small icons and canvas labels |
-| Weights 550 / 620 / 650 and near-duplicate numeric sizes | Standard weights and 20 / 24px numeric summaries |
-| Repeated hardcoded neutral colors, monospace fonts, and standard font sizes | Existing official Ant Design variables |
-| Inconsistent equivalent spacing on home, administration, and overlays | Align headings, lists, and overlays while retaining required layout dimensions |
+| Issue                                                                                                          | Correction                                                                     |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Administration titles at 28px, home/settings at 20px, management center at 24px                                | Standardize page titles to 20px / 500 / 28px                                   |
+| BaseDrawer object titles at 20px, BaseModal at 18px / 600, StepPanel at 16px; string titles relied on defaults | Shared containers use 18px / 500 / 24px for both title forms                   |
+| Peer stage headings used 600 or browser bold with inconsistent line heights                                    | Shared mixins for 16px section headings, retaining secondary workspace levels  |
+| Many status descriptions, versions, and analysis metadata at 10–11px                                           | Raise ordinary text to 12px; retain small icons and canvas labels              |
+| Weights 550 / 620 / 650 and near-duplicate numeric sizes                                                       | Standard weights and 20 / 24px numeric summaries                               |
+| Repeated hardcoded neutral colors, monospace fonts, and standard font sizes                                    | Existing official Ant Design variables                                         |
+| Inconsistent equivalent spacing on home, administration, and overlays                                          | Align headings, lists, and overlays while retaining required layout dimensions |
 
 Additional corrections: assessment report sections changed from 28 / 20px to 24px; optimization stages from 22 / 28px to 24px. Equivalent knowledge-base, dependency-analysis, and report rows changed vertical padding from 13 / 14px to 12px. Build, test, and archive headings use 4px before descriptions; project-creation and stage-action buttons use 8px gaps.
 
