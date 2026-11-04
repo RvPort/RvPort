@@ -1610,6 +1610,269 @@
       "case_id": "reduction-reassociation-mixed-unknown",
       "rule": "reduction-reassociation",
       "source": "double compute(double *a,int n) {\n  double s=0;\n  for(int i=0;i<n;++i) s+=a[i];\n  for(int j=0;j<n;++j) a[j]+=s;\n  return s;\n}\n"
+    },
+    {
+      "case_id": "granularity-api-two-functions",
+      "rule": "architecture-specific-fp-api",
+      "source": "#include <xmmintrin.h>\n__m128 first(__m128 a,__m128 b) { return _mm_add_ss(a,b); }\n__m128 second(__m128 a,__m128 b) { return _mm_sub_ss(a,b); }\n"
+    },
+    {
+      "case_id": "granularity-api-same-line",
+      "rule": "architecture-specific-fp-api",
+      "source": "#include <xmmintrin.h>\n__m128 both(__m128 a,__m128 b) { __m128 x=_mm_add_ss(a,b); return _mm_sub_ss(x,b); }\n",
+      "standard": "c11"
+    },
+    {
+      "case_id": "granularity-libm-two-functions",
+      "rule": "math-library-variance",
+      "source": "#include <math.h>\ndouble first(double a) { return sin(a); }\ndouble second(double a) { return cos(a); }\n",
+      "standard": "c++20",
+      "libm": {
+        "source": {
+          "implementation": "fixture-libm",
+          "version": "test-only",
+          "errno": true,
+          "exceptions": true,
+          "special_values": "iec60559"
+        },
+        "target": {
+          "implementation": "fixture-libm",
+          "version": "test-only",
+          "errno": false,
+          "exceptions": true,
+          "special_values": "iec60559"
+        }
+      },
+      "budgets": {
+        "max_frontend_output_bytes": 268435456
+      }
+    },
+    {
+      "case_id": "granularity-comparison-mixed",
+      "rule": "fragile-fp-comparison",
+      "source": "#include <math.h>\nint compute(double a,double b) { return (a==NAN)+(a==b)+(a==0); }\n"
+    },
+    {
+      "case_id": "granularity-conversions-two-functions",
+      "rule": "mixed-precision-conversion",
+      "source": "float first(double a) { return a; }\nfloat second(double b) { return b; }\n"
+    },
+    {
+      "case_id": "granularity-abi-two-declarations",
+      "rule": "long-double-abi",
+      "source": "long double first;\nlong double second;\n"
+    },
+    {
+      "case_id": "granularity-reduction-two-functions",
+      "rule": "reduction-reassociation",
+      "source": "double first(double *a,int n) { double s=0; for(int i=0;i<n;i++) s+=a[i]; return s; }\ndouble second(double *a,int n) { double s=0; for(int i=0;i<n;i++) s+=a[i]; return s; }\n"
+    },
+    {
+      "case_id": "granularity-fenv-two-functions",
+      "rule": "floating-environment",
+      "source": "#include <fenv.h>\nvoid first(void) { fesetround(FE_DOWNWARD); }\nvoid second(void) { fesetround(FE_UPWARD); }\n"
+    },
+    {
+      "case_id": "granularity-fenv-two-regions",
+      "rule": "floating-environment",
+      "source": "#include <fenv.h>\nvoid compute(void) { fenv_t a,b;\nfegetenv(&a); fesetround(FE_DOWNWARD); fesetenv(&a);\nfegetenv(&b); fesetround(FE_UPWARD); fesetenv(&b);\n}\n"
+    },
+    {
+      "case_id": "granularity-fenv-local-unknown",
+      "rule": "floating-environment",
+      "source": "#include <fenv.h>\nextern void opaque(void);\nvoid first(void) { fesetround(FE_DOWNWARD); }\nvoid second(void) { fesetround(FE_UPWARD); opaque(); }\n"
+    },
+    {
+      "case_id": "granularity-fma-two-functions",
+      "rule": "fma-contraction",
+      "source": "double first(double a,double b,double c) { return a*b+c; }\ndouble second(double a,double b,double c) { return a*b-c; }\n",
+      "flags": [
+        "-O1",
+        "-g",
+        "-ffp-contract=fast"
+      ],
+      "bitcode": true
+    },
+    {
+      "case_id": "granularity-x87-two-functions",
+      "rule": "x87-excess-precision",
+      "source": "double first(double a,double b,double c) { return a*b+c; }\ndouble second(double a,double b,double c) { return a*b-c; }\n",
+      "flags": [
+        "-m32",
+        "-mno-sse",
+        "-mfpmath=387",
+        "-fexcess-precision=fast",
+        "-g"
+      ],
+      "bitcode": true
+    },
+    {
+      "case_id": "granularity-fma-one-chain",
+      "rule": "fma-contraction",
+      "source": "double compute(double a,double b,double c,double d) { return (a*b+c)+d; }\n",
+      "flags": [
+        "-O1",
+        "-g",
+        "-ffp-contract=fast"
+      ],
+      "bitcode": true
+    },
+    {
+      "case_id": "granularity-fma-missing-debug",
+      "rule": "fma-contraction",
+      "source": "double first(double a,double b,double c) { return a*b+c; }\ndouble second(double a,double b,double c) { return a*b-c; }\n",
+      "flags": [
+        "-O1",
+        "-ffp-contract=fast"
+      ],
+      "bitcode": true
+    },
+    {
+      "case_id": "granularity-comparison-zero-evidence-1",
+      "rule": "fragile-fp-comparison",
+      "source": "int compute(double a,double b) { return a==b; }\n",
+      "budgets": {
+        "max_rule_evidence_refs": 0
+      }
+    },
+    {
+      "case_id": "granularity-comparison-zero-evidence-2",
+      "rule": "fragile-fp-comparison",
+      "source": "int compute(double a,double b) { return a==b; }\n",
+      "budgets": {
+        "max_rule_evidence_refs": 0
+      }
+    },
+    {
+      "case_id": "granularity-comparison-zero-evidence-3",
+      "rule": "fragile-fp-comparison",
+      "source": "int compute(double a,double b) { return a==b; }\n",
+      "budgets": {
+        "max_rule_evidence_refs": 0
+      }
+    },
+    {
+      "case_id": "granularity-config-equal",
+      "rule": "unsafe-fp-optimization",
+      "source": "",
+      "files": {
+        "a.c": "double first(double a,double b) { return a+b; }\n",
+        "b.c": "double second(double a,double b) { return a+b; }\n"
+      },
+      "translation_units": [
+        {
+          "file": "a.c",
+          "flags": [
+            "-ffast-math"
+          ]
+        },
+        {
+          "file": "b.c",
+          "flags": [
+            "-ffast-math"
+          ]
+        }
+      ],
+      "suppressions": []
+    },
+    {
+      "case_id": "granularity-config-different",
+      "rule": "unsafe-fp-optimization",
+      "source": "",
+      "files": {
+        "a.c": "double first(double a,double b) { return a+b; }\n",
+        "b.c": "double second(double a,double b) { return a+b; }\n"
+      },
+      "translation_units": [
+        {
+          "file": "a.c",
+          "flags": [
+            "-ffast-math"
+          ]
+        },
+        {
+          "file": "b.c",
+          "flags": [
+            "-ffast-math",
+            "-ffp-contract=off"
+          ]
+        }
+      ],
+      "suppressions": []
+    },
+    {
+      "case_id": "granularity-config-suppressed",
+      "rule": "unsafe-fp-optimization",
+      "source": "",
+      "files": {
+        "a.c": "double first(double a,double b) { return a+b; }\n",
+        "b.c": "double second(double a,double b) { return a+b; }\n"
+      },
+      "translation_units": [
+        {
+          "file": "a.c",
+          "flags": [
+            "-ffast-math"
+          ]
+        },
+        {
+          "file": "b.c",
+          "flags": [
+            "-ffast-math"
+          ]
+        }
+      ],
+      "suppressions": [
+        {
+          "code": "unsafe-fp-optimization",
+          "path": "b.c",
+          "start_line": 1,
+          "end_line": 1,
+          "reason": "仅抑制第二配置成员"
+        }
+      ]
+    },
+    {
+      "case_id": "granularity-api-macro-calls",
+      "rule": "architecture-specific-fp-api",
+      "source": "#include <xmmintrin.h>\n#define ADD(a,b) _mm_add_ss(a,b)\n__m128 compute(__m128 a,__m128 b) { __m128 x=ADD(a,b); return ADD(x,b); }\n",
+      "standard": "c17",
+      "flags": [],
+      "budgets": {
+        "max_frontend_output_bytes": 536870912
+      }
+    },
+    {
+      "case_id": "granularity-api-template-instances",
+      "rule": "architecture-specific-fp-api",
+      "source": "#include <xmmintrin.h>\ntemplate<int N> __m128 compute(__m128 a,__m128 b) { return _mm_add_ss(a,b); }\n__m128 first(__m128 a,__m128 b) { return compute<1>(a,b); }\n__m128 second(__m128 a,__m128 b) { return compute<2>(a,b); }\n",
+      "standard": "c++17",
+      "flags": [],
+      "budgets": {
+        "max_frontend_output_bytes": 536870912
+      }
+    },
+    {
+      "case_id": "granularity-api-vectorcalc-project",
+      "rule": "architecture-specific-fp-api",
+      "source": "#include <immintrin.h>\nvoid add_vectors(const float *a,const float *b,float *out,int n) {\n for(int i=0;i+8<=n;i+=8) {\n  __m256 x=_mm256_loadu_ps(a+i);\n  __m256 y=_mm256_loadu_ps(b+i);\n  _mm256_storeu_ps(out+i,_mm256_add_ps(x,y));\n }\n}\nfloat dot_product(const float *a,const float *b,int n) {\n __m256 s=_mm256_setzero_ps();\n for(int i=0;i+8<=n;i+=8) {\n  s=_mm256_add_ps(s,_mm256_mul_ps(_mm256_loadu_ps(a+i),_mm256_loadu_ps(b+i)));\n }\n float lanes[8]; _mm256_storeu_ps(lanes,s);\n float result=0; for(float x:lanes) result+=x; return result;\n}\n",
+      "standard": "c++20",
+      "flags": [
+        "-mavx"
+      ],
+      "budgets": {
+        "max_frontend_output_bytes": 536870912
+      }
+    },
+    {
+      "case_id": "granularity-fma-same-function-missing-debug",
+      "rule": "fma-contraction",
+      "source": "double compute(double a,double b,double c,double d) { double first=a*b+c; double second=a*c-d; return first+second; }\n",
+      "flags": [
+        "-O1",
+        "-ffp-contract=fast"
+      ],
+      "bitcode": true
     }
   ]
 }

@@ -191,7 +191,7 @@ def test_python_module_entrypoint(
     with pytest.raises(SystemExit) as error:
         runpy.run_module("floating_point_precision_scanner.__main__", run_name="__main__")
     assert error.value.code == 0
-    assert json.loads(capsys.readouterr().out)["tool_version"] == "0.5.1"
+    assert json.loads(capsys.readouterr().out)["tool_version"] == "0.6.0"
 
 
 def test_cli_validate_and_usage_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

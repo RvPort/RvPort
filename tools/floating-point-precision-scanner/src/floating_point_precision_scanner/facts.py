@@ -147,11 +147,15 @@ def _walk_with_function(
                 "kind": node.get("kind"),
                 "name": node.get("name"),
                 "mangled_name": node.get("mangledName"),
+                "type": _qual_type(node),
                 "location": source_location(node, root),
             },
         )
         qual_type = _qual_type(node) or ""
         current_metadata = {
+            "template_pattern": (
+                parent_kind == "FunctionTemplateDecl" and not node.get("mangledName")
+            ),
             "external": node.get("storageClass") != "static",
             "language_linkage": node.get("languageLinkage", "C++"),
             "variadic": "..." in qual_type,
@@ -387,7 +391,10 @@ def _call_payload(node: Mapping[str, Any]) -> dict[str, Any]:
         "callee": callee,
         "callee_symbol": declaration.get("mangledName") or callee,
         "resolved": bool(declaration),
-        "declaration_id": declaration.get("id"),
+        "declaration_id": stable_id("callee", {
+            "symbol": declaration.get("mangledName") or callee,
+            "type": _qual_type(declaration), "namespace": declaration.get("namespace"),
+        }) if declaration else None,
         "namespace": declaration.get("namespace"),
         "definition_header": header,
         "builtin_id": intrinsic,
@@ -630,6 +637,12 @@ def map_ast(
     max_function_summary_depth: int = 3,
 ) -> dict[str, Any]:
     SourceLocations(project_root, context.directory, context.absolute_file).normalize(ast)
+    from .ast_relations import relations
+    walked = list(_walk_with_function(
+        ast, None, None, None, context.translation_unit_id, project_root,
+    ))
+    node_relations = relations(ast, project_root, context.context_id,
+                               {id(item[0]) for item in walked if item[6]})
     # Clang 的声明指针仅用于本次查找，不能进入稳定身份。
     declarations = {
         str(node["id"]): stable_id("reduction_accumulator", {
@@ -651,7 +664,7 @@ def map_ast(
         enclosing_loop_kind,
         project_member,
         enclosing_loop,
-    ) in _walk_with_function(ast, None, None, None, context.translation_unit_id, project_root):
+    ) in walked:
         if project_member is None:
             if _has_source_location_shape(node):
                 unknowns.append(
@@ -672,6 +685,8 @@ def map_ast(
             continue
         if not project_member:
             continue
+        if function_metadata and function_metadata.get("template_pattern"):
+            continue
         qual_type = _qual_type(node)
         fact_kind, payload = _classification(
             node,
@@ -690,6 +705,7 @@ def map_ast(
             declaration = lhs.get("referencedDecl", {}) if lhs.get("kind") == "DeclRefExpr" else {}
             payload["accumulator_id"] = declarations.get(str(declaration.get("id")))
         if fact_kind:
+            payload.update(node_relations.get(id(node), {}))
             identity = {
                 "translation_unit_id": context.translation_unit_id,
                 "fact_kind": fact_kind,

@@ -260,4 +260,44 @@ def test_failed_corpus_keeps_previous_complete_report(tmp_path, monkeypatch):
     with pytest.raises(subprocess.TimeoutExpired):
         runner.run_corpus({"cases": [{"case_id": "broken"}]}, output, Path("clang"), Path("worker"))
     assert output.read_text() == "previous report"
+
+
+def test_multifile_recipe_preserves_each_compile_context(tmp_path, monkeypatch):
+    captured = []
+    result = runner.Scanner(runner.ClangFrontend(Path("clang"))).scan({})
+    monkeypatch.setattr(runner.Scanner, "scan", lambda self, req: captured.append(req) or result)
+    recipe = {"case_id": "multi", "rule": "unsafe-fp-optimization",
+              "files": {"a.c": "double a;", "b.cpp": "double b;", "include/x.h": "// header"},
+              "translation_units": [{"file": "a.c", "flags": ["-ffast-math"]},
+                                    {"file": "b.cpp", "standard": "c++20", "flags": []}]}
+    runner.run_case(recipe, tmp_path, Path("clang"), Path("worker"))
+    assert (tmp_path / "include/x.h").read_text() == "// header"
+    units = captured[0]["input"]["translation_units"]
+    assert units[0]["arguments"] == ["clang", "-std=c17", "-ffast-math", "-c", "a.c"]
+    assert units[1]["arguments"] == ["clang", "-std=c++20", "-c", "b.cpp"]
+    compiled = []
+
+    def compile_fixture(arguments, **kwargs):
+        compiled.append(arguments)
+        Path(arguments[-1]).write_bytes(str(arguments).encode())
+
+    monkeypatch.setattr(runner.subprocess, "run", compile_fixture)
+    runner._bitcode(captured[0], Path("clang"), [])
+    manifest = json.loads((tmp_path / "bitcode/manifest.json").read_text())
+    assert manifest["counts"] == {"planned": 2, "completed": 2, "failed": 0}
+    assert len({m["context_id"] for m in manifest["members"]}) == 2
+    assert any("-ffast-math" in args for args in compiled)
+    assert any("-std=c++20" in args for args in compiled)
+
+
+@pytest.mark.parametrize("extra", [
+    {"files": {}}, {"files": []}, {"files": {"../outside.c": "text"}},
+    {"files": {"/tmp/outside.c": "text"}}, {"files": {"C:\\outside.c": "text"}},
+    {"files": {"main.c": None}}, {"translation_units": []},
+    {"translation_units": [None]}, {"translation_units": [{"file": "missing.c"}]},
+])
+def test_invalid_multifile_recipe_is_rejected(tmp_path, extra):
+    with pytest.raises(ValueError, match="invalid_corpus"):
+        runner.run_case({"source": "void f() {}", "case_id": "bad", "rule": "long-double-abi",
+                         **extra}, tmp_path, Path("clang"), Path("worker"))
     assert not (tmp_path / "cases/broken.json").exists()

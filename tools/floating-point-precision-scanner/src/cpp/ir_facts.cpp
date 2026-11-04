@@ -278,9 +278,13 @@ llvm::Expected<llvm::json::Object> extractFactsFromModule(
           std::string instruction_text;
           llvm::raw_string_ostream instruction_stream(instruction_text);
           instruction.print(instruction_stream);
+          // 元数据编号和整个 BC 摘要不属于当前指令的语义身份。
+          const auto metadata_start = instruction_text.find(", !");
+          if (metadata_start != std::string::npos) instruction_text.erase(metadata_start);
           fact_ids.emplace(
               &instruction,
-              digest(identity.artifact_key + "\n" + function.getName().str() +
+              digest(identity.context_id + "\n" + identity.profile + "\n" +
+                     function.getName().str() +
                      "\n" + block_name + "\n" +
                      std::to_string(instruction_index) + "\n" +
                      std::string(instruction.getOpcodeName()) + "\n" +

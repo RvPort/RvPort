@@ -22,6 +22,13 @@ build context，不直接依赖 Clang/LLVM 内部对象。
 `{"enabled": []}` 则保留 `factsOnly` 模式。unknown、skipped 与 failed assessment 会保留在
 分母中，不能把空 findings 解释为工程没有浮点风险。
 
+工具 0.6.0 将十条规则统一为候选独立评估：API/数学调用、比较/转换表达式、ABI 边界、
+循环累加器、完整 FMA、x87 求值链及 fenv 状态区间分别生成 Finding，证据、置信度和
+unknown/failed 仅作用于当前候选。普通 Finding 的 affectedCount 为 1；同问题的多处证据
+仍可保留。仅语义完全等价的危险编译配置允许跨 TU 聚合，且逐成员抑制先于聚合。
+旧结果不回填，升级后重新扫描生成新粒度结果。协议继续为结果 v2，展示字段保持中英文。
+完整矩阵、真实语料和覆盖率命令见 [验证说明](docs/validation.zh-CN.md)。
+
 ## 安装与环境
 
 在仓库根目录的 PowerShell 中构建独立开发镜像。依赖安装、编译和验证均在 Docker 内执行，不创建宿主机虚拟环境：

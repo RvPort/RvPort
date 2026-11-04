@@ -6,15 +6,15 @@ import math
 import struct
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any, Literal
 
 from . import RULE_REGISTRY_VERSION
+from .candidates import construct, local_evidence
 from .canonical import semantic_digest, stable_id
 from .diagnostics import Diagnostic, diagnostic
 from .reduction_candidates import ReductionCandidate, bound_evidence
-from .reduction_candidates import candidates as reduction_candidates
 
 if TYPE_CHECKING:
     from .build_contexts import BuildContext
@@ -64,77 +64,77 @@ class RuleDescriptor:
 RULES: tuple[RuleDescriptor, ...] = (
     RuleDescriptor(
         "fma-contraction",
-        "1.0",
+        "1.2",
         "rounding-semantics",
         ("arithmetic",),
         ("call", "arithmetic"),
         ("fma",),
         (),
         "build-faithful",
-        "translation-unit",
+        "expression",
         "deterministic",
         True,
         "max_rule_candidates",
     ),
     RuleDescriptor(
         "long-double-abi",
-        "1.1",
+        "1.2",
         "abi",
         ("type",),
         (),
         ("floating_types",),
         (),
         "none",
-        "translation-unit",
+        "declaration",
         "deterministic",
         True,
         "max_rule_candidates",
     ),
     RuleDescriptor(
         "unsafe-fp-optimization",
-        "1.0",
+        "1.2",
         "optimization-semantics",
         (),
         ("arithmetic",),
         (),
         (),
         "either",
-        "translation-unit",
+        "configuration-member",
         "deterministic",
         True,
         "max_rule_candidates",
     ),
     RuleDescriptor(
         "x87-excess-precision",
-        "1.0",
+        "1.2",
         "evaluation-semantics",
         ("arithmetic", "conversion"),
         ("conversion",),
         ("evaluation",),
         (),
         "build-faithful",
-        "translation-unit",
+        "evaluation-chain",
         "deterministic",
         True,
         "max_rule_candidates",
     ),
     RuleDescriptor(
         "floating-environment",
-        "1.0",
+        "1.2",
         "environment-semantics",
         ("environment", "function_summary"),
         ("call", "constrained"),
         ("environment",),
         (),
         "either",
-        "function",
+        "state-region",
         "deterministic",
         True,
         "max_rule_candidates",
     ),
     RuleDescriptor(
         "mixed-precision-conversion",
-        "1.1",
+        "1.2",
         "precision-conversion",
         ("conversion",),
         ("conversion",),
@@ -148,7 +148,7 @@ RULES: tuple[RuleDescriptor, ...] = (
     ),
     RuleDescriptor(
         "fragile-fp-comparison",
-        "1.0",
+        "1.2",
         "comparison-semantics",
         ("comparison",),
         ("comparison",),
@@ -162,7 +162,7 @@ RULES: tuple[RuleDescriptor, ...] = (
     ),
     RuleDescriptor(
         "reduction-reassociation",
-        "1.1",
+        "1.2",
         "reduction-semantics",
         ("reduction",),
         ("reduction", "arithmetic"),
@@ -176,7 +176,7 @@ RULES: tuple[RuleDescriptor, ...] = (
     ),
     RuleDescriptor(
         "math-library-variance",
-        "1.0",
+        "1.2",
         "library-semantics",
         ("call",),
         ("call",),
@@ -190,7 +190,7 @@ RULES: tuple[RuleDescriptor, ...] = (
     ),
     RuleDescriptor(
         "architecture-specific-fp-api",
-        "1.0",
+        "1.2",
         "portability",
         ("api", "call"),
         ("call",),
@@ -234,10 +234,11 @@ class RuleContext:
     evidence_bundles: tuple[Mapping[str, Any], ...]
     source_build_context: BuildContext | None = None
     target_build_context: BuildContext | None = None
+    candidate_scope: str | None = None
 
     @property
     def scope(self) -> str:
-        return str(self.source_bundle.get("translation_unit_id", "unknown"))
+        return self.candidate_scope or str(self.source_bundle.get("translation_unit_id", "unknown"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,6 +270,7 @@ class RuleRun:
     assessments: tuple[RuleAssessment, ...]
     findings: tuple[Mapping[str, Any], ...]
     diagnostics: tuple[Diagnostic, ...]
+    candidate_findings: tuple[Mapping[str, Any], ...] = ()
 
     @property
     def counts(self) -> dict[str, int]:
@@ -378,7 +380,9 @@ def _assessment(
     )
 
 
-def _location_sort_key(value: Mapping[str, Any]) -> tuple[str, int, int]:
+def _location_sort_key(value: Any) -> tuple[str, int, int]:
+    if not isinstance(value, Mapping):
+        return ("", 0, 0)
     point = value.get("expansion") or value.get("spelling") or value
     if not isinstance(point, Mapping):
         return ("", 0, 0)
@@ -684,7 +688,7 @@ def _finding(
         "related_locations": [dict(item["location"]) for item in facts
                               if isinstance(item.get("location"), Mapping)
                               and item["location"] != location],
-        "affected_count": max(1, len(facts)),
+        "affected_count": 1,
         "evidence": [item.to_dict() for item in assessment.evidence],
         "source_profile_fingerprint": context.source_profile.fingerprint,
         "target_profile_fingerprint": context.target_profile.fingerprint,
@@ -760,7 +764,6 @@ def _long_double_evaluations(
             )
             and payload.get("origin", "project-physical") == "project-physical"
             and str(payload.get("boundary_kind")) in boundary_kinds
-            and isinstance(location, Mapping)
         ):
             key = semantic_digest(
                 {
@@ -866,13 +869,14 @@ def _x87(context: RuleContext) -> tuple[RuleAssessment, dict[str, Any] | None]:
         for fact in _facts(context)
         if fact.get("fact_kind") == "arithmetic"
         and int(fact.get("payload", {}).get("operation_chain_length", 1)) >= 2
+        and fact["fact_id"] in context.source_bundle.get("candidate_fact_ids", [fact["fact_id"]])
     ]
     if not candidates:
         return _assessment(descriptor, context.scope, "not_matched", "no_operation_chain"), None
     source_eval = _profile_value(context.source_profile, "evaluation")
     target_eval = _profile_value(context.target_profile, "evaluation")
     refs: list[EvidenceRef] = [
-        EvidenceRef("source_fact", str(item["fact_id"])) for item in candidates
+        EvidenceRef("source_fact", str(item["fact_id"])) for item in _facts(context)
     ]
     refs.extend(
         (
@@ -896,12 +900,16 @@ def _x87(context: RuleContext) -> tuple[RuleAssessment, dict[str, Any] | None]:
         ), None
     if target_extended:
         return _assessment(descriptor, context.scope, "not_matched", "evaluation_equal", refs), None
-    if not _has_ir_evidence(context):
+    if any(bundle.get("ambiguities") for bundle in context.evidence_bundles):
+        return _assessment(descriptor, context.scope, "unknown", "binding_ambiguous", refs), None
+    if not _has_ir_evidence(context) or not _ir_facts(context):
         return _assessment(descriptor, context.scope, "unknown", "ir_evidence_missing", refs), None
     for bundle in context.ir_bundles:
         for fact in bundle.get("facts", []):
-            if isinstance(fact, Mapping) and fact.get("opcode") in {"fpext", "fptrunc"}:
+            if isinstance(fact, Mapping):
                 refs.append(EvidenceRef("ir_fact", str(fact.get("fact_id", ""))))
+    refs.extend(EvidenceRef("binding", str(binding["binding_id"]))
+                for bundle in context.evidence_bundles for binding in bundle.get("bindings", []))
     assessment = _assessment(
         descriptor, context.scope, "matched", "excess_precision_difference", refs
     )
@@ -931,13 +939,14 @@ def _fma(context: RuleContext) -> tuple[RuleAssessment, dict[str, Any] | None]:
         for fact in _facts(context)
         if bool(fact.get("payload", {}).get("fma_candidate"))
         and not bool(fact.get("payload", {}).get("explicit_fma"))
+        and fact["fact_id"] in context.source_bundle.get("candidate_fact_ids", [fact["fact_id"]])
     ]
     if not candidates:
         return _assessment(
             descriptor, context.scope, "not_matched", "no_implicit_fma_candidate"
         ), None
     refs: list[EvidenceRef] = [
-        EvidenceRef("source_fact", str(item["fact_id"])) for item in candidates
+        EvidenceRef("source_fact", str(item["fact_id"])) for item in _facts(context)
     ]
     ambiguous_source_ids = {
         str(source_id)
@@ -958,6 +967,8 @@ def _fma(context: RuleContext) -> tuple[RuleAssessment, dict[str, Any] | None]:
             descriptor, context.scope, "unknown", "build_faithful_ir_missing", refs
         ), None
     ir_facts = _ir_facts(context)
+    if not ir_facts:
+        return _assessment(descriptor, context.scope, "unknown", "ir_evidence_missing", refs), None
     for fact in ir_facts:
         refs.append(EvidenceRef("ir_fact", str(fact.get("fact_id", ""))))
     for bundle in context.evidence_bundles:
@@ -995,7 +1006,10 @@ def _fma(context: RuleContext) -> tuple[RuleAssessment, dict[str, Any] | None]:
         source_fma.get("default_contraction") != target_fma.get("default_contraction")
         or options.get("fp_contract") == "fast"
     )
-    has_contract_pair = bool(contract_multiply and contract_add)
+    multiply_ids = {str(item["fact_id"]) for item in contract_multiply}
+    has_contract_pair = any(
+        multiply_ids.intersection(item.get("operand_fact_ids", [])) for item in contract_add
+    )
     if not explicit_fused and not has_contract_pair or not policies_differ:
         return _assessment(
             descriptor, context.scope, "not_matched", "lowering_consistent", refs
@@ -1062,14 +1076,25 @@ def _unsafe(context: RuleContext) -> tuple[RuleAssessment, dict[str, Any] | None
     option_digest = semantic_digest({key: options.get(key) for key in sorted(options)})
     refs.append(EvidenceRef("compile_option", option_digest))
     assessment = _assessment(descriptor, context.scope, "matched", "unsafe_semantics_active", refs)
-    facts = _facts(context)
+    facts = sorted(_facts(context), key=lambda item: _location_sort_key(item.get("location")))[:1]
+    compile_context = context.source_bundle.get("compile_context", {})
+    configuration_identity = {
+        "rule_version": descriptor.version, "active": sorted(active), "options": dict(options),
+        "compile_context": {key: value for key, value in compile_context.items()
+                            if key not in {"translation_unit_id", "physical_tu_id", "context_id",
+                                           "file", "semantic_digest"}},
+        "source_profile": context.source_profile.fingerprint,
+        "target_profile": context.target_profile.fingerprint,
+        "build_contexts": [ref.ref for ref in _build_context_refs(context)],
+        "evidence_mode": descriptor.evidence_mode,
+    }
     return assessment, _finding(
         descriptor,
         assessment,
         facts,
         context,
         {"active_semantics": sorted(active)},
-        aggregation_key=f"unsafe:{semantic_digest(sorted(active))}",
+        aggregation_key=f"unsafe:{semantic_digest(configuration_identity)}",
     )
 
 
@@ -1110,7 +1135,11 @@ def _floating_environment(context: RuleContext) -> tuple[RuleAssessment, dict[st
         return _assessment(
             descriptor, context.scope, "unknown", "profile_field_unknown", refs
         ), None
-    if any(bool(_payload(item).get("unknown_effect")) for item in summaries):
+    calls = [fact for fact in _facts(context) if fact.get("fact_kind") == "call"]
+    known_symbols = {fact.get("function_symbol") for fact in summaries}
+    if (any(bool(_payload(item).get("unknown_effect")) for item in summaries)
+            or any(_payload(item).get("callee_symbol") not in known_symbols for item in calls)
+            or any(_payload(item).get("environment_region_unknown") for item in candidates)):
         return _assessment(
             descriptor, context.scope, "unknown", "call_boundary_unknown", refs
         ), None
@@ -1129,7 +1158,9 @@ def _floating_environment(context: RuleContext) -> tuple[RuleAssessment, dict[st
         bool({"tests_exceptions", "raises_exceptions"} & set(actions))
         and options.get("trapping_math") is False
     )
-    restored = any(bool(_payload(item).get("restores_environment")) for item in summaries)
+    restored = "restores_environment" in actions or any(
+        bool(_payload(item).get("restores_environment")) for item in summaries
+    )
     if restored and not rounding_conflict and not exception_conflict:
         return _assessment(
             descriptor, context.scope, "not_matched", "environment_restored", refs
@@ -1479,42 +1510,6 @@ def _reduction_candidate(
     return assessment, finding
 
 
-def _reduction_evaluations(
-    context: RuleContext,
-    limit: int,
-) -> Iterator[tuple[RuleAssessment, dict[str, Any] | None]]:
-    descriptor = RULE_BY_CODE["reduction-reassociation"]
-    candidates = reduction_candidates(_facts(context), context.scope)
-    if not candidates:
-        yield _assessment(descriptor, context.scope, "not_matched", "no_reduction"), None
-    for index, candidate in enumerate(candidates):
-        scope = stable_id(
-            "rule_candidate_scope",
-            {
-                "rule": descriptor.code,
-                "version": descriptor.version,
-                "candidate": candidate.identity,
-            },
-        )
-        if index >= limit:
-            yield (
-                _assessment(
-                    descriptor, scope, "unknown", "budget_exceeded", frontier=candidate.identity
-                ),
-                None,
-            )
-            return
-        try:
-            yield _reduction_candidate(context, candidate, scope)
-        except (AttributeError, KeyError, TypeError, ValueError):
-            yield (
-                _assessment(
-                    descriptor, scope, "failed", "invalid_rule_input", _fact_refs(candidate.facts)
-                ),
-                None,
-            )
-
-
 def _math_library(context: RuleContext) -> tuple[RuleAssessment, dict[str, Any] | None]:
     descriptor = RULE_BY_CODE["math-library-variance"]
     candidates = [
@@ -1533,7 +1528,7 @@ def _math_library(context: RuleContext) -> tuple[RuleAssessment, dict[str, Any] 
         return _assessment(
             descriptor, context.scope, "unknown", "libm_identity_unknown", refs
         ), None
-    semantic_fields = ("errno", "exceptions", "special_values", "rounding", "functions")
+    semantic_fields = ("errno", "exceptions", "special_values", "rounding")
     if any(field not in source_libm or field not in target_libm for field in semantic_fields[:3]):
         return _assessment(
             descriptor, context.scope, "unknown", "libm_capability_unknown", refs
@@ -1545,6 +1540,15 @@ def _math_library(context: RuleContext) -> tuple[RuleAssessment, dict[str, Any] 
         and field in target_libm
         and source_libm.get(field) != target_libm.get(field)
     }
+    family = str(_payload(candidates[0]).get("math_family"))
+    if "functions" in source_libm or "functions" in target_libm:
+        left, right = source_libm.get("functions"), target_libm.get("functions")
+        if (not isinstance(left, Mapping) or not isinstance(right, Mapping)
+                or family not in left or family not in right):
+            return _assessment(descriptor, context.scope, "unknown", "libm_capability_unknown",
+                               refs), None
+        if left[family] != right[family]:
+            differences["functions"] = {"source": left[family], "target": right[family]}
     if not differences:
         return _assessment(
             descriptor, context.scope, "not_matched", "libm_semantics_equal", refs
@@ -1626,7 +1630,84 @@ _EVALUATORS = {
 }
 
 
-def _unknown_diagnostic(assessment: RuleAssessment) -> Diagnostic:
+def _candidate_evaluations(
+    code: str, context: RuleContext, limit: int, max_evidence_refs: int,
+) -> Iterator[tuple[RuleAssessment, dict[str, Any] | None]]:
+    descriptor = RULE_BY_CODE[code]
+    candidates = construct(code, _facts(context), str(context.source_bundle.get("context_id")))
+    if not candidates:
+        if code == "reduction-reassociation":
+            yield _assessment(descriptor, context.scope, "not_matched", "no_reduction"), None
+        else:
+            yield _EVALUATORS[code](replace(context, source_bundle={**context.source_bundle,
+                                                                  "facts": []}))
+        return
+    for index, candidate in enumerate(candidates):
+        scope = stable_id("rule_candidate_scope", {
+            "rule": code, "version": descriptor.version, "candidate": candidate.identity,
+        })
+        if index >= limit:
+            yield _assessment(descriptor, scope, "unknown", "budget_exceeded",
+                              frontier=candidate.identity), None
+            return
+        try:
+            if code != "unsafe-fp-optimization" and (
+                len(candidate.facts) + len(candidate.dependencies) > max_evidence_refs
+            ):
+                yield _assessment(descriptor, scope, "unknown", "provenance_budget_exceeded",
+                                  frontier=candidate.identity), None
+                continue
+            if any(not isinstance(fact.get("payload"), Mapping) for fact in candidate.facts):
+                raise TypeError("invalid_candidate_payload")
+            for fact in candidate.facts:
+                data = _payload(fact)
+                identity_fields = ("expression_id", "evaluation_chain_id", "environment_region_id")
+                if any(data.get(key) is not None and not isinstance(data[key], str)
+                       for key in identity_fields):
+                    raise TypeError("invalid_candidate_relation")
+                if any(key in data and not isinstance(data[key], list)
+                       for key in ("dependency_expression_ids", "fma_operand_expression_ids")):
+                    raise TypeError("invalid_candidate_dependencies")
+            if code != "unsafe-fp-optimization" and any(
+                _payload(fact).get("expression_identity_unknown")
+                and not (code == "long-double-abi" and _payload(fact).get("name"))
+                for fact in candidate.facts
+            ):
+                yield _assessment(descriptor, scope, "unknown", "candidate_identity_unknown",
+                                  _fact_refs(candidate.facts)), None
+                continue
+            if code == "reduction-reassociation":
+                yield _reduction_candidate(
+                    context, ReductionCandidate(candidate.identity, candidate.facts), scope,
+                )
+                continue
+            ir, evidence = (context.ir_bundles, context.evidence_bundles)
+            if code in {"fma-contraction", "x87-excess-precision"}:
+                ir = tuple(b for b in ir
+                           if b.get("artifact", {}).get("profile") == "build-faithful")
+                evidence = tuple(b for b in evidence
+                                 if b.get("artifact", {}).get("profile") == "build-faithful")
+            if code in {"fma-contraction", "x87-excess-precision"}:
+                ir, evidence = local_evidence(candidate, ir, evidence)
+            elif code != "unsafe-fp-optimization":
+                ir, evidence = (), ()
+            local = replace(context, candidate_scope=scope, ir_bundles=ir,
+                            evidence_bundles=evidence,
+                            source_bundle={**context.source_bundle,
+                                           "facts": [*candidate.facts, *candidate.dependencies],
+                                           "candidate_fact_ids": [f["fact_id"]
+                                                                  for f in candidate.facts]})
+            assessment, finding = _EVALUATORS[code](local)
+            if finding is not None:
+                finding["semantic"] = {**finding["semantic"], "candidate_id": candidate.identity,
+                                       "translation_unit_id": context.scope}
+            yield assessment, finding
+        except (AttributeError, KeyError, TypeError, ValueError):
+            yield _assessment(descriptor, scope, "failed", "invalid_rule_input",
+                              _fact_refs(candidate.facts)), None
+
+
+def _unknown_diagnostic(assessment: RuleAssessment, tu: str | None = None) -> Diagnostic:
     return diagnostic(
         f"{assessment.rule_code.replace('-', '_')}_{assessment.reason_code}",
         "rule_evaluation",
@@ -1638,7 +1719,7 @@ def _unknown_diagnostic(assessment: RuleAssessment) -> Diagnostic:
         severity="warning",
         suggestion=f"补齐证据：{assessment.reason_code}。",
         suggestion_en=f"Provide or correct evidence: {assessment.reason_code}.",
-        translation_unit_id=assessment.scope,
+        translation_unit_id=tu or assessment.scope,
     )
 
 
@@ -1652,6 +1733,18 @@ def _aggregate_findings(
     result: list[Mapping[str, Any]] = []
     for key in sorted(groups):
         values = sorted(groups[key], key=lambda item: str(item["finding_id"]))
+        combined_refs = _refs(
+            EvidenceRef(str(ref["kind"]), str(ref["ref"]))
+            for value in values for ref in [*value.get("evidence", []),
+                *([{"kind": "assessment", "ref": value["assessment_id"]}]
+                  if value.get("assessment_id") else [])]
+        )
+        if len(values) > 1 and len(combined_refs) > 128:
+            # 不通过截断丢弃成员证据；预算不允许合并时保留完整独立成员。
+            result.extend(_aggregate_findings(
+                [{**value, "aggregation_key": None} for value in values], max_related_locations,
+            ))
+            continue
         primary = dict(values[0])
         locations = [location for item in values
                      for location in [item.get("location"), *item.get("related_locations", [])]
@@ -1668,6 +1761,12 @@ def _aggregate_findings(
                                    "total_locations": len(ordered_locations)}
         primary["affected_count"] = sum(int(item.get("affected_count", 1)) for item in values)
         if len(values) > 1:
+            primary["evidence"] = [item.to_dict() for item in combined_refs]
+            primary["semantic"] = {**primary.get("semantic", {}), "members": [
+                {"finding_id": item["finding_id"], "assessment_id": item["assessment_id"],
+                 "location": item.get("location"), "evidence": item.get("evidence", [])}
+                for item in values
+            ]}
             primary["finding_id"] = stable_id(
                 "finding_aggregate",
                 {
@@ -1691,6 +1790,8 @@ def evaluate_rules(
     budgets: Mapping[str, int | float],
     source_build_context: BuildContext | None = None,
     target_build_context: BuildContext | None = None,
+    *,
+    aggregate: bool = True,
 ) -> RuleRun:
     max_assessments = int(budgets.get("max_rule_assessments", 100_000))
     max_candidates = int(budgets.get("max_rule_candidates", 100_000))
@@ -1732,7 +1833,7 @@ def evaluate_rules(
                     frontier=assessments[-1].assessment_id if assessments else None,
                 )
                 assessments.append(item)
-                diagnostics.append(_unknown_diagnostic(item))
+                diagnostics.append(_unknown_diagnostic(item, context.scope))
                 return RuleRun(
                     tuple(
                         sorted(
@@ -1744,8 +1845,9 @@ def evaluate_rules(
                             ),
                         )
                     ),
-                    _aggregate_findings(findings, max_related),
+                    _aggregate_findings(findings, max_related) if aggregate else tuple(findings),
                     tuple(diagnostics),
+                    tuple(sorted(findings, key=lambda value: str(value["finding_id"]))),
                 )
             if candidate_counts[code] >= max_candidates:
                 item = _assessment(
@@ -1756,21 +1858,15 @@ def evaluate_rules(
                     frontier=assessments[-1].assessment_id if assessments else None,
                 )
                 assessments.append(item)
-                diagnostics.append(_unknown_diagnostic(item))
+                diagnostics.append(_unknown_diagnostic(item, context.scope))
                 continue
             try:
                 evaluations: Iterable[tuple[RuleAssessment, dict[str, Any] | None]]
-                if code == "long-double-abi":
-                    evaluations = _long_double_evaluations(context)
-                elif code == "mixed-precision-conversion":
-                    evaluations = _mixed_precision_evaluations(context)
-                elif code == "reduction-reassociation":
-                    evaluations = _reduction_evaluations(
-                        context, min(max_candidates - candidate_counts[code],
-                                     max_assessments - len(assessments)),
-                    )
-                else:
-                    evaluations = [_EVALUATORS[code](context)]
+                evaluations = _candidate_evaluations(
+                    code, context, min(max_candidates - candidate_counts[code],
+                                       max_assessments - len(assessments)),
+                    max_evidence_refs,
+                )
             except (AttributeError, KeyError, TypeError, ValueError) as exc:
                 evaluations = [(_assessment(
                     descriptor, context.scope, "failed", "invalid_rule_input"
@@ -1789,29 +1885,28 @@ def evaluate_rules(
             for assessment, finding in evaluations:
                 if candidate_counts[code] >= max_candidates or len(assessments) >= max_assessments:
                     budget_item = assessment if (
-                        code == "reduction-reassociation"
-                        and assessment.reason_code == "budget_exceeded"
+                        assessment.reason_code == "budget_exceeded"
                     ) else _assessment(
                         descriptor, context.scope, "unknown", "budget_exceeded",
                         frontier=assessments[-1].assessment_id if assessments else None,
                     )
                     assessments.append(budget_item)
-                    diagnostics.append(_unknown_diagnostic(budget_item))
+                    diagnostics.append(_unknown_diagnostic(budget_item, context.scope))
                     break
                 candidate_counts[code] += 1
                 assessments.append(assessment)
                 if assessment.status == "unknown":
-                    diagnostics.append(_unknown_diagnostic(assessment))
-                if code == "reduction-reassociation" and assessment.status == "failed":
+                    diagnostics.append(_unknown_diagnostic(assessment, context.scope))
+                if assessment.status == "failed":
                     diagnostics.append(diagnostic(
                         "rule_evaluation_failed", "rule_evaluation",
-                        "当前归约候选包含无效输入，其他候选继续评估。",
-                        "This reduction candidate has invalid input; other candidates continue.",
+                        "当前候选包含无效输入，其他候选继续评估。",
+                        "This candidate has invalid input; other candidates continue.",
                         translation_unit_id=context.scope,
                         suggestion=f"检查候选：{assessment.scope}。",
                         suggestion_en=f"Check candidate: {assessment.scope}.",
                     ))
-                if finding is not None and len(finding.get("evidence", [])) > max_evidence_refs:
+                if len(assessment.evidence) > max_evidence_refs:
                     assessment = _assessment(
                         descriptor,
                         assessment.scope,
@@ -1820,7 +1915,7 @@ def evaluate_rules(
                         frontier=assessment.assessment_id,
                     )
                     assessments[-1] = assessment
-                    diagnostics.append(_unknown_diagnostic(assessment))
+                    diagnostics.append(_unknown_diagnostic(assessment, context.scope))
                     finding = None
                 if finding is not None:
                     findings.append(finding)
@@ -1828,6 +1923,7 @@ def evaluate_rules(
         tuple(
             sorted(assessments, key=lambda item: (item.rule_code, item.scope, item.assessment_id))
         ),
-        _aggregate_findings(findings, max_related),
+        _aggregate_findings(findings, max_related) if aggregate else tuple(findings),
         tuple(diagnostics),
+        tuple(sorted(findings, key=lambda value: str(value["finding_id"]))),
     )

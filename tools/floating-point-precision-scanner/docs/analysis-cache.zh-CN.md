@@ -1,9 +1,15 @@
 # 分析缓存维护说明
 
-归约粒度修复使用 facts **1.5**、mapper **1.2**、evidence **1.2** 和 rule registry **1.3**。
-facts 保存最近循环与累加器的稳定身份；source-facts key 随 schema/mapper 变化而失效。
-evidence key 显式包含 evidence schema，旧绑定缓存不能复用。归约 binding ID 由自身关联
-身份生成，bundle digest 仍用于来源校验，但不再让无关候选的变化扰动本候选 ID。
+全规则粒度修复使用 tool **0.6.0**、facts **1.6**、mapper **1.3**、evidence **1.3**、
+rule registry **1.4** 与 LLVM extractor **1.2**；十条规则均为 **1.2**。
+facts 保存表达式、求值链、舍入边界、环境区间、循环与累加器的稳定身份。
+source-facts key 随 schema/mapper 变化而失效，evidence key 显式包含 evidence schema，
+旧事实和绑定缓存不能复用。IR 身份使用编译上下文、函数及指令语义，剥离无关 metadata 编号；
+artifact/bundle digest 继续用于来源校验，不再直接进入候选身份。
+
+`tests/integration/test_candidate_lifecycle.py` 对全部十规则分别执行真实冷缓存、暖缓存和
+绝对工作区搬迁扫描，严格比较 Finding、assessment、证据引用与稳定身份。
+嵌套证据说明采用 canonical JSON，避免缓存重排字典字段后产生不同文本。
 
 [English](analysis-cache.md) | 简体中文
 

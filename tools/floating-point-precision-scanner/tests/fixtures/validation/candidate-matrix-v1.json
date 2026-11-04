@@ -1,0 +1,230 @@
+{
+  "schema_version": "1.0",
+  "required_lifecycle": [
+    "independence",
+    "deduplication",
+    "mixed_states",
+    "local_failure",
+    "evidence",
+    "suppression",
+    "budget",
+    "identity",
+    "cache_relocation",
+    "same_candidate_facts",
+    "matched_unknown",
+    "matched_not_matched",
+    "v2_refs"
+  ],
+  "rules": {
+    "architecture-specific-fp-api": {
+      "boundary": "独立架构 API 调用点",
+      "merge": "仅同一候选的重复事实；禁止跨候选聚合",
+      "evidence": "自身调用事实与目标 profile",
+      "real_case": "granularity-api-two-functions",
+      "lifecycle": {
+        "independence": "test_independent_candidates_and_configuration_exception",
+        "deduplication": "test_duplicate_order_budget_and_member_suppression",
+        "mixed_states": "test_local_invalid_candidate_preserves_other_finding；comparison/libm/IR 专项混合状态",
+        "local_failure": "test_local_invalid_candidate_preserves_other_finding",
+        "evidence": "test_real_candidate_cache_and_relocation；test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "suppression": "test_duplicate_order_budget_and_member_suppression",
+        "budget": "test_zero_budget_does_not_evaluate；test_duplicate_order_budget_and_member_suppression",
+        "identity": "test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "cache_relocation": "test_real_candidate_cache_and_relocation",
+        "same_candidate_facts": "test_duplicate_order_budget_and_member_suppression；复杂关系由 test_ast_data_edges_group_one_chain_but_keep_separate_fma_candidates 及真实语料验证",
+        "matched_unknown": "test_matched_unknown_failed_coexist_without_cross_candidate_refs",
+        "matched_not_matched": "test_safe_candidate_does_not_hide_matched_candidate",
+        "v2_refs": "test_real_candidate_cache_and_relocation；test_result_example_matches_schema_and_is_deterministic；test_configuration_member_audit_remains_closed_after_suppression"
+      }
+    },
+    "math-library-variance": {
+      "boundary": "独立数学调用及其函数语义",
+      "merge": "仅同一候选的重复事实；禁止跨候选聚合",
+      "evidence": "自身调用、输入域及相关 libm 函数上下文",
+      "real_case": "granularity-libm-two-functions",
+      "lifecycle": {
+        "independence": "test_independent_candidates_and_configuration_exception",
+        "deduplication": "test_duplicate_order_budget_and_member_suppression",
+        "mixed_states": "test_local_invalid_candidate_preserves_other_finding；comparison/libm/IR 专项混合状态",
+        "local_failure": "test_local_invalid_candidate_preserves_other_finding",
+        "evidence": "test_real_candidate_cache_and_relocation；test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "suppression": "test_duplicate_order_budget_and_member_suppression",
+        "budget": "test_zero_budget_does_not_evaluate；test_duplicate_order_budget_and_member_suppression",
+        "identity": "test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "cache_relocation": "test_real_candidate_cache_and_relocation",
+        "same_candidate_facts": "test_duplicate_order_budget_and_member_suppression；复杂关系由 test_ast_data_edges_group_one_chain_but_keep_separate_fma_candidates 及真实语料验证",
+        "matched_unknown": "test_matched_unknown_failed_coexist_without_cross_candidate_refs",
+        "matched_not_matched": "test_libm_function_table_is_scoped_to_each_call",
+        "v2_refs": "test_real_candidate_cache_and_relocation；test_result_example_matches_schema_and_is_deterministic；test_configuration_member_audit_remains_closed_after_suppression"
+      }
+    },
+    "fragile-fp-comparison": {
+      "boundary": "独立比较表达式",
+      "merge": "仅同一候选的重复事实；禁止跨候选聚合",
+      "evidence": "自身比较事实及类型/常量",
+      "real_case": "granularity-comparison-mixed",
+      "lifecycle": {
+        "independence": "test_independent_candidates_and_configuration_exception",
+        "deduplication": "test_duplicate_order_budget_and_member_suppression",
+        "mixed_states": "test_local_invalid_candidate_preserves_other_finding；comparison/libm/IR 专项混合状态",
+        "local_failure": "test_local_invalid_candidate_preserves_other_finding",
+        "evidence": "test_real_candidate_cache_and_relocation；test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "suppression": "test_duplicate_order_budget_and_member_suppression",
+        "budget": "test_zero_budget_does_not_evaluate；test_duplicate_order_budget_and_member_suppression",
+        "identity": "test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "cache_relocation": "test_real_candidate_cache_and_relocation",
+        "same_candidate_facts": "test_duplicate_order_budget_and_member_suppression；复杂关系由 test_ast_data_edges_group_one_chain_but_keep_separate_fma_candidates 及真实语料验证",
+        "matched_unknown": "test_matched_unknown_failed_coexist_without_cross_candidate_refs",
+        "matched_not_matched": "test_safe_candidate_does_not_hide_matched_candidate",
+        "v2_refs": "test_real_candidate_cache_and_relocation；test_result_example_matches_schema_and_is_deterministic；test_configuration_member_audit_remains_closed_after_suppression"
+      }
+    },
+    "floating-environment": {
+      "boundary": "函数内 save/change/restore 影响区间",
+      "merge": "仅同一候选的重复事实；禁止跨候选聚合",
+      "evidence": "自身区间与实际调用的函数摘要",
+      "real_case": "granularity-fenv-two-regions",
+      "lifecycle": {
+        "independence": "test_independent_candidates_and_configuration_exception",
+        "deduplication": "test_duplicate_order_budget_and_member_suppression",
+        "mixed_states": "test_local_invalid_candidate_preserves_other_finding；comparison/libm/IR 专项混合状态",
+        "local_failure": "test_local_invalid_candidate_preserves_other_finding",
+        "evidence": "test_real_candidate_cache_and_relocation；test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "suppression": "test_duplicate_order_budget_and_member_suppression",
+        "budget": "test_zero_budget_does_not_evaluate；test_duplicate_order_budget_and_member_suppression",
+        "identity": "test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "cache_relocation": "test_real_candidate_cache_and_relocation",
+        "same_candidate_facts": "test_duplicate_order_budget_and_member_suppression；复杂关系由 test_ast_data_edges_group_one_chain_but_keep_separate_fma_candidates 及真实语料验证",
+        "matched_unknown": "test_matched_unknown_failed_coexist_without_cross_candidate_refs",
+        "matched_not_matched": "test_safe_candidate_does_not_hide_matched_candidate",
+        "v2_refs": "test_real_candidate_cache_and_relocation；test_result_example_matches_schema_and_is_deterministic；test_configuration_member_audit_remains_closed_after_suppression"
+      }
+    },
+    "fma-contraction": {
+      "boundary": "完整乘加或乘减表达式",
+      "merge": "仅同一候选的重复事实；禁止跨候选聚合",
+      "evidence": "自身直接乘法操作数与可靠绑定的 IR operand 关系",
+      "real_case": "granularity-fma-two-functions",
+      "lifecycle": {
+        "independence": "test_independent_candidates_and_configuration_exception",
+        "deduplication": "test_duplicate_order_budget_and_member_suppression",
+        "mixed_states": "test_local_invalid_candidate_preserves_other_finding；comparison/libm/IR 专项混合状态",
+        "local_failure": "test_local_invalid_candidate_preserves_other_finding",
+        "evidence": "test_real_candidate_cache_and_relocation；test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "suppression": "test_duplicate_order_budget_and_member_suppression",
+        "budget": "test_zero_budget_does_not_evaluate；test_duplicate_order_budget_and_member_suppression",
+        "identity": "test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "cache_relocation": "test_real_candidate_cache_and_relocation",
+        "same_candidate_facts": "test_duplicate_order_budget_and_member_suppression；复杂关系由 test_ast_data_edges_group_one_chain_but_keep_separate_fma_candidates 及真实语料验证",
+        "matched_unknown": "test_matched_unknown_failed_coexist_without_cross_candidate_refs",
+        "matched_not_matched": "编译选项/profile 决策在同 TU 共享；各 TU 标准/扩展精度及收缩开关反例由真实 executable corpus 验证，不伪造候选私有 profile",
+        "v2_refs": "test_real_candidate_cache_and_relocation；test_result_example_matches_schema_and_is_deterministic；test_configuration_member_audit_remains_closed_after_suppression"
+      }
+    },
+    "x87-excess-precision": {
+      "boundary": "至显式舍入边界的连接求值链",
+      "merge": "仅同一候选的重复事实；禁止跨候选聚合",
+      "evidence": "自身链上的算术/转换事实及可靠 IR",
+      "real_case": "granularity-x87-two-functions",
+      "lifecycle": {
+        "independence": "test_independent_candidates_and_configuration_exception",
+        "deduplication": "test_duplicate_order_budget_and_member_suppression",
+        "mixed_states": "test_local_invalid_candidate_preserves_other_finding；comparison/libm/IR 专项混合状态",
+        "local_failure": "test_local_invalid_candidate_preserves_other_finding",
+        "evidence": "test_real_candidate_cache_and_relocation；test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "suppression": "test_duplicate_order_budget_and_member_suppression",
+        "budget": "test_zero_budget_does_not_evaluate；test_duplicate_order_budget_and_member_suppression",
+        "identity": "test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "cache_relocation": "test_real_candidate_cache_and_relocation",
+        "same_candidate_facts": "test_duplicate_order_budget_and_member_suppression；复杂关系由 test_ast_data_edges_group_one_chain_but_keep_separate_fma_candidates 及真实语料验证",
+        "matched_unknown": "test_matched_unknown_failed_coexist_without_cross_candidate_refs",
+        "matched_not_matched": "编译选项/profile 决策在同 TU 共享；各 TU 标准/扩展精度及收缩开关反例由真实 executable corpus 验证，不伪造候选私有 profile",
+        "v2_refs": "test_real_candidate_cache_and_relocation；test_result_example_matches_schema_and_is_deterministic；test_configuration_member_audit_remains_closed_after_suppression"
+      }
+    },
+    "long-double-abi": {
+      "boundary": "独立 ABI 声明边界",
+      "merge": "仅同一候选的重复事实；禁止跨候选聚合",
+      "evidence": "自身 ABI 边界与源/目标布局",
+      "real_case": "granularity-abi-two-declarations",
+      "lifecycle": {
+        "independence": "test_independent_candidates_and_configuration_exception",
+        "deduplication": "test_duplicate_order_budget_and_member_suppression",
+        "mixed_states": "test_local_invalid_candidate_preserves_other_finding；comparison/libm/IR 专项混合状态",
+        "local_failure": "test_local_invalid_candidate_preserves_other_finding",
+        "evidence": "test_real_candidate_cache_and_relocation；test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "suppression": "test_duplicate_order_budget_and_member_suppression",
+        "budget": "test_zero_budget_does_not_evaluate；test_duplicate_order_budget_and_member_suppression",
+        "identity": "test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "cache_relocation": "test_real_candidate_cache_and_relocation",
+        "same_candidate_facts": "test_duplicate_order_budget_and_member_suppression；复杂关系由 test_ast_data_edges_group_one_chain_but_keep_separate_fma_candidates 及真实语料验证",
+        "matched_unknown": "test_matched_unknown_failed_coexist_without_cross_candidate_refs",
+        "matched_not_matched": "test_safe_candidate_does_not_hide_matched_candidate",
+        "v2_refs": "test_real_candidate_cache_and_relocation；test_result_example_matches_schema_and_is_deterministic；test_configuration_member_audit_remains_closed_after_suppression"
+      }
+    },
+    "mixed-precision-conversion": {
+      "boundary": "独立转换表达式",
+      "merge": "仅同一候选的重复事实；禁止跨候选聚合",
+      "evidence": "自身转换及源/目标类型",
+      "real_case": "granularity-conversions-two-functions",
+      "lifecycle": {
+        "independence": "test_independent_candidates_and_configuration_exception",
+        "deduplication": "test_duplicate_order_budget_and_member_suppression",
+        "mixed_states": "test_local_invalid_candidate_preserves_other_finding；comparison/libm/IR 专项混合状态",
+        "local_failure": "test_local_invalid_candidate_preserves_other_finding",
+        "evidence": "test_real_candidate_cache_and_relocation；test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "suppression": "test_duplicate_order_budget_and_member_suppression",
+        "budget": "test_zero_budget_does_not_evaluate；test_duplicate_order_budget_and_member_suppression",
+        "identity": "test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "cache_relocation": "test_real_candidate_cache_and_relocation",
+        "same_candidate_facts": "test_duplicate_order_budget_and_member_suppression；复杂关系由 test_ast_data_edges_group_one_chain_but_keep_separate_fma_candidates 及真实语料验证",
+        "matched_unknown": "test_matched_unknown_failed_coexist_without_cross_candidate_refs",
+        "matched_not_matched": "test_safe_candidate_does_not_hide_matched_candidate",
+        "v2_refs": "test_real_candidate_cache_and_relocation；test_result_example_matches_schema_and_is_deterministic；test_configuration_member_audit_remains_closed_after_suppression"
+      }
+    },
+    "reduction-reassociation": {
+      "boundary": "循环与累加器候选",
+      "merge": "仅同一候选的重复事实；禁止跨候选聚合",
+      "evidence": "自身循环/累加器及可靠绑定 IR",
+      "real_case": "granularity-reduction-two-functions",
+      "lifecycle": {
+        "independence": "test_independent_candidates_and_configuration_exception",
+        "deduplication": "test_duplicate_order_budget_and_member_suppression",
+        "mixed_states": "test_local_invalid_candidate_preserves_other_finding；comparison/libm/IR 专项混合状态",
+        "local_failure": "test_local_invalid_candidate_preserves_other_finding",
+        "evidence": "test_real_candidate_cache_and_relocation；test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "suppression": "test_duplicate_order_budget_and_member_suppression",
+        "budget": "test_zero_budget_does_not_evaluate；test_duplicate_order_budget_and_member_suppression",
+        "identity": "test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "cache_relocation": "test_real_candidate_cache_and_relocation",
+        "same_candidate_facts": "test_duplicate_order_budget_and_member_suppression；复杂关系由 test_ast_data_edges_group_one_chain_but_keep_separate_fma_candidates 及真实语料验证",
+        "matched_unknown": "test_matched_unknown_failed_coexist_without_cross_candidate_refs",
+        "matched_not_matched": "test_unknown_failed_nonmatch_and_match_are_isolated",
+        "v2_refs": "test_real_candidate_cache_and_relocation；test_result_example_matches_schema_and_is_deterministic；test_configuration_member_audit_remains_closed_after_suppression"
+      }
+    },
+    "unsafe-fp-optimization": {
+      "boundary": "编译上下文中的配置成员",
+      "merge": "仅完整配置语义等价；抑制先于聚合",
+      "evidence": "完整有效 flag/语义 options、编译上下文及 profiles",
+      "real_case": "granularity-config-equal",
+      "lifecycle": {
+        "independence": "test_independent_candidates_and_configuration_exception",
+        "deduplication": "每 TU 仅一个配置成员；test_configuration_members_keep_all_evidence_and_suppress_before_aggregation",
+        "mixed_states": "test_configuration_member_mixed_states_are_isolated_by_context",
+        "local_failure": "test_configuration_member_mixed_states_are_isolated_by_context",
+        "evidence": "test_real_candidate_cache_and_relocation；test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "suppression": "test_configuration_members_keep_all_evidence_and_suppress_before_aggregation",
+        "budget": "test_zero_budget_does_not_evaluate；test_large_configuration_group_keeps_complete_members_instead_of_truncation",
+        "identity": "test_unrelated_facts_and_ir_do_not_change_existing_candidate",
+        "cache_relocation": "test_real_candidate_cache_and_relocation",
+        "same_candidate_facts": "每 TU 一配置成员，事实数不增加影响数；test_independent_candidates_and_configuration_exception",
+        "matched_unknown": "test_configuration_member_mixed_states_are_isolated_by_context",
+        "matched_not_matched": "test_configuration_member_mixed_states_are_isolated_by_context",
+        "v2_refs": "test_real_candidate_cache_and_relocation；test_result_example_matches_schema_and_is_deterministic；test_configuration_member_audit_remains_closed_after_suppression"
+      }
+    }
+  }
+}

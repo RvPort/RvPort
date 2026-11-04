@@ -119,6 +119,8 @@ def _evidence(context: str = "a" * 64, *, ambiguous: bool = False) -> dict[str, 
                 "binding_id": "b" * 64,
                 "source_fact_id": f"{1:064x}",
                 "ir_fact_id": "e" * 64,
+                "confidence": "exact",
+                "method": "explicit-sidecar",
             }
         ],
         "ambiguities": (
@@ -311,7 +313,7 @@ def test_x87_rule_matches_with_ir_and_is_unknown_without_it() -> None:
     matched = _run(
         ("x87-excess-precision",),
         _source(facts=[chain], options=options),
-        ir=[_ir(opcode="fpext", callee=None)],
+        ir=[_ir(opcode="fadd", callee=None)],
         evidence=[_evidence()],
     )
     assert matched.assessments[0].status == "matched"
@@ -347,14 +349,20 @@ def test_fma_rule_handles_match_missing_ir_ambiguity_and_explicit_call() -> None
     assert _run(("fma-contraction",), _source(facts=[explicit])).assessments[0].status == (
         "not_matched"
     )
+    contract_evidence = _evidence()
+    contract_evidence["bindings"].append({
+        **contract_evidence["bindings"][0], "binding_id": "c" * 64, "ir_fact_id": "d" * 64,
+    })
+    contract_ir = _contract_ir()
+    contract_ir["facts"][1]["operand_fact_ids"] = ["d" * 64]
     contract_pair = _run(
         ("fma-contraction",),
         _source(
             facts=[candidate],
             options=normalize_fp_options(["-ffp-contract=fast"]),
         ),
-        ir=[_contract_ir()],
-        evidence=[_evidence()],
+        ir=[contract_ir],
+        evidence=[contract_evidence],
     )
     assert contract_pair.assessments[0].status == "matched"
     assert contract_pair.findings[0]["semantic"]["lowering"] == "contractable-mul-add"
@@ -459,7 +467,7 @@ def test_application_executes_default_rules_and_result_schema(tmp_path: Path) ->
 
 
 def test_rule_engine_isolates_invalid_input() -> None:
-    malformed = _source(facts=[_fact(1, type_name="long double", payload=None)])
+    malformed = _source(facts=[_fact(1, kind="type", type_name="long double", payload=None)])
     malformed["facts"][0]["payload"] = None
     run = _run(("long-double-abi",), malformed)
     assert run.assessments[0].status == "failed"

@@ -7,11 +7,11 @@
   "required": ["kind", "schema_version", "producer", "translation_unit_id", "physical_tu_id", "context_id", "compile_context", "effective_fp_options", "profiles", "facts", "unknowns", "diagnostics", "semantic_digest"],
   "properties": {
     "kind": {"const": "FloatingPointFactBundle"},
-    "schema_version": {"const": "1.5"},
+    "schema_version": {"const": "1.6"},
     "producer": {
       "type": "object", "additionalProperties": false,
       "required": ["tool_version", "clang_version", "mapper_version"],
-      "properties": {"tool_version": {"type": "string"}, "clang_version": {"const": "21.1.8"}, "mapper_version": {"const": "1.2"}}
+      "properties": {"tool_version": {"type": "string"}, "clang_version": {"const": "21.1.8"}, "mapper_version": {"const": "1.3"}}
     },
     "translation_unit_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "physical_tu_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},

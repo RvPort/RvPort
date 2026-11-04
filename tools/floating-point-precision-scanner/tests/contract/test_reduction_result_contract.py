@@ -35,7 +35,7 @@ def test_independent_reductions_keep_v2_references_counts_and_bilingual_fields()
     assessments = result["extensions"][EXTENSION_ANALYSIS]["assessments"]
     assert len({item["scope"] for item in assessments}) == 2
     for finding in result["findings"]:
-        assert finding["conclusion"]["ruleVersion"] == "1.1"
+        assert finding["conclusion"]["ruleVersion"] == "1.2"
         assert finding["conclusion"]["affectedCount"] == 1
         assert len(finding["occurrences"]) == 1
         assert finding["primaryOccurrenceId"] == finding["occurrences"][0]["id"]
@@ -52,4 +52,4 @@ def test_independent_reductions_keep_v2_references_counts_and_bilingual_fields()
     broken["findings"][0]["primaryOccurrenceId"] = "missing"
     assert SchemaRegistry().validate("result", broken)
     assert normalize_rule_selection({"enabled": [RULE], "versions": {RULE: "1.0"}})[2]
-    assert normalize_rule_selection({"enabled": [RULE], "versions": {RULE: "1.1"}})[2] == []
+    assert normalize_rule_selection({"enabled": [RULE], "versions": {RULE: "1.2"}})[2] == []

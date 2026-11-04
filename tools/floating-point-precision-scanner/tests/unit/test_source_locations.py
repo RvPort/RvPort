@@ -127,9 +127,11 @@ def test_same_line_operations_match_their_actual_opcodes() -> None:
 def test_aggregate_preserves_positions_and_selects_valid_primary() -> None:
     points = [{"path": "main.c", "line": line, "column": 2} for line in (8, 3, 15)]
     findings = [
-        {"finding_id": "a", "finding_code": "risk", "aggregation_key": "same",
+        {"finding_id": "a", "assessment_id": "assessment-a",
+         "finding_code": "risk", "aggregation_key": "same",
          "location": None, "related_locations": [points[0]]},
-        {"finding_id": "b", "finding_code": "risk", "aggregation_key": "same",
+        {"finding_id": "b", "assessment_id": "assessment-b",
+         "finding_code": "risk", "aggregation_key": "same",
          "location": points[1], "related_locations": [points[1], points[2]]},
     ]
     result = _aggregate_findings(findings, 10)[0]

@@ -105,16 +105,16 @@
         "enabled": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
         "disabled": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}, "default": []},
         "versions": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}, "properties": {
-          "long-double-abi": {"const": "1.0"},
-          "x87-excess-precision": {"const": "1.0"},
-          "fma-contraction": {"const": "1.0"},
-          "unsafe-fp-optimization": {"const": "1.0"},
-          "floating-environment": {"const": "1.0"},
-          "mixed-precision-conversion": {"const": "1.0"},
-          "fragile-fp-comparison": {"const": "1.0"},
-          "reduction-reassociation": {"const": "1.0"},
-          "math-library-variance": {"const": "1.0"},
-          "architecture-specific-fp-api": {"const": "1.0"}
+          "long-double-abi": {"const": "1.2"},
+          "x87-excess-precision": {"const": "1.2"},
+          "fma-contraction": {"const": "1.2"},
+          "unsafe-fp-optimization": {"const": "1.2"},
+          "floating-environment": {"const": "1.2"},
+          "mixed-precision-conversion": {"const": "1.2"},
+          "fragile-fp-comparison": {"const": "1.2"},
+          "reduction-reassociation": {"const": "1.2"},
+          "math-library-variance": {"const": "1.2"},
+          "architecture-specific-fp-api": {"const": "1.2"}
         }}
       }
     },
@@ -133,9 +133,9 @@
         "max_frontend_output_bytes": {"type": "integer", "minimum": 1},
         "max_bitcode_bytes": {"type": "integer", "minimum": 1},
         "max_evidence_candidates": {"type": "integer", "minimum": 1},
-        "max_rule_assessments": {"type": "integer", "minimum": 1},
-        "max_rule_candidates": {"type": "integer", "minimum": 1},
-        "max_rule_evidence_refs": {"type": "integer", "minimum": 1},
+        "max_rule_assessments": {"type": "integer", "minimum": 0},
+        "max_rule_candidates": {"type": "integer", "minimum": 0},
+        "max_rule_evidence_refs": {"type": "integer", "minimum": 0},
         "max_related_locations": {"type": "integer", "minimum": 1},
         "max_rule_diagnostics": {"type": "integer", "minimum": 1}
         ,"max_function_summary_depth": {"type": "integer", "minimum": 0}

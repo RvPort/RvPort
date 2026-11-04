@@ -294,8 +294,9 @@ def test_frontend_reads_complete_ast_from_file_and_cleans_it(tmp_path: Path) -> 
     assert runner.output_path is not None and not runner.output_path.exists()
 
 
-def test_frontend_reports_output_limit_before_json_parsing(tmp_path: Path) -> None:
-    runner = FileQueueRunner(json.dumps(ast_for(tmp_path / "main.c")))
+@pytest.mark.parametrize("returncode", [0, -9])
+def test_frontend_reports_output_limit_before_json_parsing(tmp_path: Path, returncode: int) -> None:
+    runner = FileQueueRunner(json.dumps(ast_for(tmp_path / "main.c")), returncode=returncode)
     frontend = ClangFrontend(executable(tmp_path), runner, output_limit=2)
 
     with pytest.raises(FrontendFailure) as error:
@@ -382,12 +383,39 @@ def test_subprocess_runner_spools_stdout_and_enforces_limit(tmp_path: Path) -> N
         cwd=tmp_path,
         timeout=5,
         output_limit=32,
+        memory_bytes=512 * 1024 * 1024,
     )
     try:
         assert value.process.stdout_truncated is True
         assert value.stdout_path.stat().st_size > 32
     finally:
         value.stdout_path.unlink(missing_ok=True)
+
+
+def test_spooled_limit_kills_running_producer_and_preserves_diagnostic(tmp_path: Path) -> None:
+    runner = SubprocessRunner()
+    result = runner.run_to_file(
+        [str(Path(__import__("sys").executable)), "-c",
+         "import sys,time; sys.stdout.write('x'*4096); sys.stdout.flush(); time.sleep(5)"],
+        cwd=tmp_path, timeout=10, output_limit=32,
+    )
+    try:
+        assert result.process.stdout_truncated and result.process.returncode != 0
+    finally:
+        result.stdout_path.unlink()
+    fallback = ClangFrontend(executable(tmp_path), QueueRunner(result.process))
+    with pytest.raises(FrontendFailure) as error:
+        fallback.ast(context(tmp_path))
+    assert error.value.diagnostic.diagnostic_code == "frontend_output_limit_exceeded"
+
+
+def test_unlimited_process_preserves_stdout_and_stderr(tmp_path: Path) -> None:
+    result = SubprocessRunner().run(
+        [str(Path(__import__("sys").executable)), "-c",
+         "import sys; print('out'); print('err',file=sys.stderr)"],
+        cwd=tmp_path, timeout=5, output_limit=1024,
+    )
+    assert (result.returncode, result.stdout, result.stderr) == (0, "out\n", "err\n")
 
 
 def test_subprocess_runner_timeout_removes_spooled_file(tmp_path: Path) -> None:

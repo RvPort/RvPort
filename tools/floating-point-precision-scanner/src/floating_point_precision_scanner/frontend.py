@@ -293,7 +293,7 @@ class ClangFrontend:
                 memory_bytes=memory_bytes,
                 output_limit=active_limit,
             )
-        if result.returncode != 0:
+        if result.returncode != 0 and not result.stdout_truncated:
             safe = sanitize_text(result.stderr, context.directory)
             if file_result is not None:
                 file_result.stdout_path.unlink(missing_ok=True)

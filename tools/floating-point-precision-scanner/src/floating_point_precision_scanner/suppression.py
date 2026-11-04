@@ -63,7 +63,8 @@ def apply_suppressions(
     visible: list[Mapping[str, Any]] = []
     records: list[Mapping[str, Any]] = []
     matched_suppressions: set[Suppression] = set()
-    for finding in findings:
+    for finding in sorted(findings, key=lambda item: (str(item["finding_code"]),
+                                                     str(item["finding_id"]))):
         matching = [item for item in suppressions if item.matches(finding)]
         if not matching or len(records) >= max_records:
             visible.append(finding)
