@@ -72,18 +72,29 @@ def _bitcode(request: dict[str, Any], clang: Path, flags: list[str]) -> None:
     if parsed is None or errors:
         raise ValueError("invalid_corpus_request")
     plan = load_compilation_plan(parsed)
-    context = plan.contexts[0]
+    if plan.failed_count or not plan.contexts:
+        raise ValueError("invalid_corpus_compilation_plan")
     artifact_root = root / "bitcode"
-    artifact_root.mkdir()
-    path = artifact_root / "main.bc"
-    source = request["input"]["translation_units"][0]["file"]
-    subprocess.run(
-        [str(clang), *flags, "-emit-llvm", "-c", source, "-o", str(path)],
-        cwd=root,
-        check=True,
-        capture_output=True,
-        timeout=60,
-    )
+    artifact_root.mkdir(exist_ok=True)
+    members = []
+    for context in plan.contexts:
+        filename = "main.bc" if len(plan.contexts) == 1 else f"{context.context_id}.bc"
+        path = artifact_root / filename
+        compile_flags = flags if len(plan.contexts) == 1 else list(context.semantic_arguments)
+        subprocess.run(
+            [str(clang), *compile_flags, "-emit-llvm", "-c", context.file, "-o", str(path)],
+            cwd=root, check=True, capture_output=True, timeout=60,
+        )
+        members.append({
+            "physical_tu_id": context.physical_tu_id, "context_id": context.context_id,
+            "artifact_key": semantic_digest({"context": context.context_id,
+                                             "bytes": path.read_bytes().hex()}),
+            "language": context.language, "target": context.target, "abi": context.abi,
+            "profile": "build-faithful", "profile_version": "1.0",
+            "capabilities": ["debug-location", "llvm-fp-facts"], "path": path.name,
+            "size_bytes": path.stat().st_size,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "data_layout": None,
+        })
     compiler = {"name": "clang", "version": "21.1.8"}
     manifest = {
         "kind": "SharedBitcodeArtifactSet",
@@ -99,24 +110,8 @@ def _bitcode(request: dict[str, Any], clang: Path, flags: list[str]) -> None:
             "analysis_compiler": compiler,
             "production_compiler": compiler,
         },
-        "counts": {"planned": 1, "completed": 1, "failed": 0},
-        "members": [
-            {
-                "physical_tu_id": context.physical_tu_id,
-                "context_id": context.context_id,
-                "artifact_key": semantic_digest(path.read_bytes().hex()),
-                "language": context.language,
-                "target": context.target,
-                "abi": context.abi,
-                "profile": "build-faithful",
-                "profile_version": "1.0",
-                "capabilities": ["debug-location", "llvm-fp-facts"],
-                "path": path.name,
-                "size_bytes": path.stat().st_size,
-                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                "data_layout": None,
-            }
-        ],
+        "counts": {"planned": len(members), "completed": len(members), "failed": 0},
+        "members": members,
         "failures": [],
     }
     manifest_path = artifact_root / "manifest.json"
@@ -132,9 +127,29 @@ def _bitcode(request: dict[str, Any], clang: Path, flags: list[str]) -> None:
 
 def run_case(recipe: Mapping[str, Any], root: Path, clang: Path, worker: Path) -> dict[str, Any]:
     standard = str(recipe.get("standard", "c17"))
-    source = root / ("main.cpp" if standard.startswith("c++") else "main.c")
-    source.write_text(str(recipe["source"]), encoding="utf-8")
+    name = "main.cpp" if standard.startswith("c++") else "main.c"
+    files = recipe.get("files", {name: recipe.get("source", "")})
+    if not isinstance(files, Mapping) or not files:
+        raise ValueError("invalid_corpus_files")
+    for relative, content in files.items():
+        path = root / str(relative)
+        if (Path(str(relative)).is_absolute() or "\\" in str(relative)
+                or ":" in str(relative) or not path.resolve().is_relative_to(root.resolve())
+                or not isinstance(content, str)):
+            raise ValueError("invalid_corpus_file_path")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
     flags = [f"-std={standard}", *recipe.get("flags", [])]
+    units = recipe.get("translation_units", [{"file": name}])
+    if not isinstance(units, list) or not units:
+        raise ValueError("invalid_corpus_translation_units")
+    translation_units = []
+    for unit in units:
+        if not isinstance(unit, Mapping) or unit.get("file") not in files:
+            raise ValueError("invalid_corpus_translation_unit_file")
+        unit_flags = [f"-std={unit.get('standard', standard)}", *unit.get("flags", flags[1:])]
+        translation_units.append({"file": unit["file"], "directory": str(root),
+                                  "arguments": ["clang", *unit_flags, "-c", unit["file"]]})
     profiles = _profiles(recipe.get("profile_patches", {}))
     request: dict[str, Any] = {
         "kind": "FloatingPointPrecisionScanRequest",
@@ -145,13 +160,7 @@ def run_case(recipe: Mapping[str, Any], root: Path, clang: Path, worker: Path) -
         "source_profile": X86,
         "target_profile": RISCV,
         "input": {
-            "translation_units": [
-                {
-                    "file": source.name,
-                    "directory": str(root),
-                    "arguments": ["clang", *flags, "-c", source.name],
-                }
-            ]
+            "translation_units": translation_units
         },
         "rules": {"enabled": [recipe["rule"]]},
         "budgets": recipe.get("budgets", {}),
@@ -162,6 +171,8 @@ def run_case(recipe: Mapping[str, Any], root: Path, clang: Path, worker: Path) -
             profiles.get(request[f"{side}_profile"]),
             libm,
         )
+    if recipe.get("cache"):
+        request["cache"] = {"mode": "read-write", "root": str(root / ".cache")}
     if recipe.get("bitcode"):
         _bitcode(request, clang, [f"-std={standard}", *recipe.get("bitcode_flags", flags[1:])])
     result = Scanner(ClangFrontend(clang), profiles=profiles, ir_worker=IrWorker(worker)).scan(

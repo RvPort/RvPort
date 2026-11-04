@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from .canonical import semantic_digest
+from .canonical import canonical_json, semantic_digest
 
 _KINDS = {
     "sourceFact": ("源码观测", "Source observation"),
@@ -86,7 +86,8 @@ _REASONS = {
 
 
 def _text(value: Any, limit: int = 240) -> str:
-    text = " ".join(str(value).split())
+    text = " ".join((canonical_json(value) if isinstance(value, Mapping | list | tuple)
+                     else str(value)).split())
     # Never copy absolute paths, credentials, or arbitrary command lines into display prose.
     text = re.sub(
         r"(?i)(?<![\w.])(?:[a-z][a-z0-9+.-]*://\S+|(?:[A-Z]:[\\/]|/|\.\.[/\\])\S+)",

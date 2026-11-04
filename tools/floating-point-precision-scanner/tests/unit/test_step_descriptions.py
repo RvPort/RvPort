@@ -175,6 +175,7 @@ def test_safe_positions(position, expected):
 
 
 def test_text_limits_safety_and_determinism():
+    assert _text({"outer": {"z": 1, "a": 2}}) == _text({"outer": {"a": 2, "z": 1}})
     assert _text("a\n b\t c") == "a b c"
     assert _text("src/main.c:3") == "src/main.c:3"
     for raw in [

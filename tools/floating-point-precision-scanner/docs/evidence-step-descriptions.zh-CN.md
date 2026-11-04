@@ -29,4 +29,4 @@ AST 的累加不等于 LLVM 已执行重排；profile 不等于实机测试。�
 
 ## 验证
 
-Linux 容器内执行 `make coverage`，统计包含所有自有 Python 源码（包括未导入模块），整体和受影响模块行/分支均需达到 90%。`step_descriptions` 已纳入门禁。真实 Clang 验证执行 `pytest -q tests/integration`；IR worker 工具版本同步为 0.5.1，需同时重建以避免版本锁校验失败。
+Linux 容器内执行 `make coverage`，统计包含所有自有 Python 源码（包括未导入模块），整体和受影响模块行/分支均需达到 90%。`step_descriptions` 已纳入门禁。真实 Clang 验证执行 `pytest -q tests/integration`；当前 IR worker 工具版本同步为 0.6.0，需同时重建以避免版本锁校验失败。嵌套数据说明使用 canonical JSON，冷暖缓存及工作区搬迁不改变说明内容。

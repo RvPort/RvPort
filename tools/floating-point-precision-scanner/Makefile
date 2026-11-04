@@ -43,6 +43,9 @@ coverage:
 	python -m coverage html -d artifacts/coverage/htmlcov
 	python -m floating_point_precision_scanner.coverage_gate artifacts/coverage/coverage.json \
 		--affected floating_point_precision_scanner.canonical_types \
+		--affected floating_point_precision_scanner.ast_relations \
+		--affected floating_point_precision_scanner.candidates \
+		--affected floating_point_precision_scanner.frontend \
 		--affected floating_point_precision_scanner.facts \
 		--affected floating_point_precision_scanner.ir_worker \
 		--affected floating_point_precision_scanner.evidence \
@@ -70,12 +73,13 @@ cpp-configure:
 
 cpp-unit: cpp-configure
 	mkdir -p artifacts/coverage
+	rm -f artifacts/coverage/cpp-*.profraw
 	LLVM_PROFILE_FILE=$(CURDIR)/artifacts/coverage/cpp-%p.profraw ctest --test-dir build --output-on-failure
 
 cpp-coverage: cpp-unit
 	llvm-profdata-21 merge -sparse artifacts/coverage/cpp-*.profraw -o artifacts/coverage/cpp.profdata
 	llvm-cov-21 export build/fp-ir-worker-tests -object build/fp-ir-worker -instr-profile=artifacts/coverage/cpp.profdata -format=text src/cpp/ir_facts.cpp src/cpp/ir_worker.cpp > artifacts/coverage/cpp-coverage.json
-	python -c "import json; d=json.load(open('artifacts/coverage/cpp-coverage.json')); t=d['data'][0]['totals']; assert t['lines']['percent'] >= 90 and t['branches']['percent'] >= 90, t"
+	python -c "import json; d=json.load(open('artifacts/coverage/cpp-coverage.json'))['data'][0]; checks=[('total', d['totals'])]+[(f['filename'], f['summary']) for f in d['files']]; print([(n, s['lines']['percent'], s['branches']['percent']) for n,s in checks]); assert all(s['lines']['percent'] >= 90 and s['branches']['percent'] >= 90 for n,s in checks), checks"
 
 verify: lint typecheck coverage validation cpp-coverage
 

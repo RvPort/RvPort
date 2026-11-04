@@ -12,6 +12,7 @@
     "ruleDependencies": {"type": "array", "maxItems": 64, "items": {"type": "object"}},
     "ruleRegistryDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "assessments": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/assessment"}},
+    "configurationMembers": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/configurationMember"}},
     "layers": {"type": "object", "maxProperties": 32, "additionalProperties": {"type": "object"}},
     "objects": {"type": "array", "maxItems": 500000, "items": {"$ref": "#/$defs/reference"}},
     "bundleDigests": {
@@ -26,6 +27,18 @@
     }
   },
   "$defs": {
+    "configurationMember": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidateFindingId", "assessmentId", "aggregateFindingId", "status", "location", "evidence"],
+      "properties": {
+        "candidateFindingId": {"type": "string", "minLength": 1},
+        "assessmentId": {"type": "string", "minLength": 1},
+        "aggregateFindingId": {"type": ["string", "null"]},
+        "status": {"enum": ["visible", "suppressed", "truncated"]},
+        "location": {"type": ["object", "null"]},
+        "evidence": {"type": "array", "maxItems": 128, "items": {"$ref": "#/$defs/reference"}}
+      }
+    },
     "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "digests": {"type": "array", "uniqueItems": true, "maxItems": 100000, "items": {"$ref": "#/$defs/digest"}},
     "reference": {

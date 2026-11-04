@@ -10,10 +10,10 @@
 
 namespace fp_scanner {
 
-inline constexpr llvm::StringLiteral kToolVersion = "0.5.1";
+inline constexpr llvm::StringLiteral kToolVersion = "0.6.0";
 inline constexpr llvm::StringLiteral kLlvmVersion = "21.1.8";
 inline constexpr llvm::StringLiteral kReaderVersion = "1.0";
-inline constexpr llvm::StringLiteral kExtractorVersion = "1.1";
+inline constexpr llvm::StringLiteral kExtractorVersion = "1.2";
 inline constexpr llvm::StringLiteral kWorkerProtocolVersion = "1.1";
 
 struct ArtifactIdentity {

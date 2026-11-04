@@ -16,9 +16,28 @@
 
 `make validation` 先执行 `corpus_runner`，再评分。输入为
 `tests/fixtures/validation/executable-inputs-v1.json`，预期为独立编写的
-`executable-corpus-v1.json`。182 个输入都包含真实 C/C++ 源码；运行器在独立临时目录中使用
+`executable-corpus-v1.json`。206 个输入都包含真实 C/C++ 源码；运行器在独立临时目录中使用
 锁定的 Clang 扫描，需要 IR 的 case 当场生成共享 bitcode 并进入正式证据流水线。
 libm overlay 明确为测试契约，不宣称代表真实平台运行库。运行器不读取 oracle。
+
+全规则粒度矩阵见 `tests/fixtures/validation/candidate-matrix-v1.json`，单元测试自动核对
+registry、真实案例及生命周期字段的完整性。新增语料包括跨函数、同行、宏展开、模板实例、
+AVX 向量项目、同函数多个环境区间、完整 FMA、x87 链和多 TU 配置成员。
+多文件 recipe 使用 `files` 与 `translation_units`；路径必须位于独立项目根内，每个 TU 可提供
+独立 flags/standard，bitcode 按归一化编译上下文生成。旧单文件 recipe 继续有效。
+原始案例全部保留；粒度语义变化的 oracle 有明确 review_basis，不读取 observed 回填。
+
+非配置规则按独立问题输出，普通 Finding 的 affectedCount 为 1。一个问题确需多个事实时，
+这些事实仍可属于同一 Finding，不能把每个证据节点强行拆成问题。配置成员先抑制再聚合，
+完整语义等价才允许合并；结果 v2 的可选 `analysis.configurationMembers` 保留可见/已抑制
+成员、原始 assessment 和所属聚合结果。输出预算移除聚合结果时，成员标为 `truncated`，
+聚合引用清空，原始 assessment 与证据仍可审计；不能误记为 suppression。
+历史结果不回填，旧请求默认规则集合不变。
+
+`make coverage` 纳入全部 Python 自有源码（包含未加载模块），并分别检查整体及受影响模块
+行/分支至少 90%。仅排除运行时不存在的 TYPE_CHECKING 导入。`make cpp-coverage` 清空旧
+profile 后重新执行 C++ 单测，覆盖两个自有可执行 .cpp，整体和每个文件行/分支均至少 90%；
+第三方 LLVM/GTest 与仅声明头文件不计入自有可执行源码。
 
 评分比较全部候选状态、结果位置与重数、affectedCount、诊断、扫描状态和抑制审计数量。
 状态混合时先报告 matched，但仍精确比较完整 assessment 状态多重集，不能隐藏 unknown。

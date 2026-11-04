@@ -30,7 +30,7 @@ from .ir_worker import IrWorker, IrWorkerFailure
 from .profiles import ProfileLookupError, ProfileRegistry, profile_context_diagnostic
 from .protocol import SchemaRegistry, parse_request
 from .result_v2 import project_result_v2, refresh_semantic_digest
-from .rules import RULE_BY_CODE, RuleRun, evaluate_rules
+from .rules import RULE_BY_CODE, RuleRun, _aggregate_findings, evaluate_rules
 from .suppression import Suppression, apply_suppressions
 
 
@@ -663,6 +663,7 @@ class Scanner:
             request.budgets,
             source_build_context,
             target_build_context,
+            aggregate=False,
         )
         diagnostics.extend(rule_run.diagnostics)
         inline_suppressions, suppression_diagnostics = self._source_suppressions(facts)
@@ -700,7 +701,9 @@ class Scanner:
                     severity="warning",
                 )
             )
-        rule_run = RuleRun(rule_run.assessments, visible_findings, rule_run.diagnostics)
+        rule_run = RuleRun(rule_run.assessments, _aggregate_findings(
+            visible_findings, int(request.budgets.get("max_related_locations", 100)),
+        ), rule_run.diagnostics, rule_run.candidate_findings)
         rule_counts = rule_run.counts
         planned += rule_counts["planned"]
         completed += rule_counts["completed"]

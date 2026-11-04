@@ -192,7 +192,34 @@ def _occurrences(finding: Mapping[str, Any]) -> list[dict[str, Any]]:
         }
         for index, location in enumerate(normalized)
     ]
-    return sorted(values, key=lambda item: (item["kind"] != "primary", item["id"]))
+    members = finding.get("semantic", {}).get("members", [])
+    for occurrence in values:
+        local = [
+            ref
+            for member in members
+            if _safe_location(member.get("location")) == occurrence["location"]
+            for ref in member.get("evidence", [])
+        ]
+        if local:
+            occurrence["provenance"] = sorted(
+                {
+                    _reference_key(ref): ref for raw in local if (ref := _typed_reference(raw))
+                }.values(),
+                key=_reference_key,
+            )
+
+    def source_order(item: Mapping[str, Any]) -> tuple[Any, ...]:
+        location = item.get("location") or {}
+        point = location.get("expansion") or location.get("spelling") or location
+        return (
+            item["kind"] != "primary",
+            point.get("file", point.get("path", "")),
+            point.get("line", 0),
+            point.get("column", 0),
+            item["id"],
+        )
+
+    return sorted(values, key=source_order)
 
 
 def _evidence_chain(finding: Mapping[str, Any], descriptions: StepDescriptions) -> dict[str, Any]:
@@ -320,7 +347,9 @@ def _finding(
         "targetProfileFingerprint": value.get("target_profile_fingerprint"),
         "sourceBuildContextFingerprint": value.get("source_build_context_fingerprint"),
         "targetBuildContextFingerprint": value.get("target_build_context_fingerprint"),
-        "semantic": _camelize(value.get("semantic", {})),
+        "semantic": _camelize(
+            {key: item for key, item in value.get("semantic", {}).items() if key != "members"}
+        ),
     }
     return {
         "id": finding_id,
@@ -461,6 +490,33 @@ def _semantic_projection(document: Mapping[str, Any]) -> dict[str, Any]:
         "diagnostics": diagnostics,
         "extensions": extensions,
     }
+
+
+def _configuration_members(rule_run: RuleRun | None) -> list[dict[str, Any]]:
+    if rule_run is None:
+        return []
+    visible = {
+        str(member["finding_id"]): str(finding["finding_id"])
+        for finding in rule_run.findings
+        for member in finding.get("semantic", {}).get("members", [finding])
+    }
+    return [
+        {
+            "candidateFindingId": str(member["finding_id"]),
+            "assessmentId": str(member["assessment_id"]),
+            "aggregateFindingId": visible.get(str(member["finding_id"])),
+            "status": "visible" if str(member["finding_id"]) in visible else "suppressed",
+            "location": _safe_location(member.get("location")),
+            "evidence": sorted(
+                (_typed_reference(ref) for ref in member.get("evidence", [])), key=_reference_key
+            ),
+        }
+        for member in sorted(
+            rule_run.candidate_findings or rule_run.findings,
+            key=lambda item: str(item["finding_id"]),
+        )
+        if member["finding_code"] == "unsafe-fp-optimization"
+    ]
 
 
 def project_result_v2(
@@ -612,6 +668,7 @@ def project_result_v2(
             ],
             "ruleRegistryDigest": RULE_REGISTRY_DIGEST,
             "assessments": assessments,
+            "configurationMembers": _configuration_members(rule_run),
             "layers": layer_values,
             "objects": _catalog(projected_findings, assessments),
             "bundleDigests": {
@@ -852,6 +909,11 @@ def truncate_result_v2(document: Mapping[str, Any], maximum_bytes: int) -> dict[
     item["count"] = max(1, dropped)
     candidate["summary"]["findings"] = len(findings)
     runtime["budgets"]["frontiers"][-1]["frontier"] = findings[-1]["id"] if findings else None
+    retained_ids = {finding["id"] for finding in findings}
+    for member in candidate["extensions"][EXTENSION_ANALYSIS].get("configurationMembers", []):
+        if member["status"] == "visible" and member["aggregateFindingId"] not in retained_ids:
+            member["status"] = "truncated"
+            member["aggregateFindingId"] = None
     refresh_semantic_digest(candidate)
     return candidate if len(serialize_json(candidate)) <= maximum_bytes else None
 
@@ -1001,6 +1063,35 @@ def validate_result_invariants(document: Mapping[str, Any]) -> list[str]:
     suppressions = (
         suppressions_ext.get("records", []) if isinstance(suppressions_ext, Mapping) else []
     )
+    if isinstance(analysis, Mapping):
+        assessment_ids = {str(item.get("id")) for item in analysis.get("assessments", [])}
+        suppressed_ids = {
+            str(item.get("findingId")) for item in suppressions if item.get("status") == "applied"
+        }
+        for member in analysis.get("configurationMembers", []):
+            if any(str(ref.get("id")) not in catalog_ids for ref in member.get("evidence", [])):
+                errors.add("dangling-external-reference")
+            if (
+                member.get("assessmentId") not in assessment_ids
+                or (
+                    member.get("status") == "visible"
+                    and member.get("aggregateFindingId") not in finding_ids
+                )
+                or (
+                    member.get("status") == "suppressed"
+                    and member.get("candidateFindingId") not in suppressed_ids
+                )
+                or (
+                    member.get("status") == "truncated"
+                    and (
+                        member.get("aggregateFindingId") is not None
+                        or not any(
+                            item.get("code") == "result_budget_truncated" for item in diagnostics
+                        )
+                    )
+                )
+            ):
+                errors.add("dangling-configuration-member")
     if isinstance(summary, Mapping):
         if summary.get("findings") != len(findings) or summary.get("diagnostics") != len(
             diagnostics

@@ -44,6 +44,10 @@ def _compatible(source: Mapping[str, Any], ir: Mapping[str, Any]) -> bool:
     opcode = str(ir.get("opcode", ""))
     arithmetic = {"+": "fadd", "-": "fsub", "*": "fmul", "/": "fdiv", "%": "frem"}
     source_opcode = source.get("payload", {}).get("opcode")
+    if kind == "arithmetic" and source.get("payload", {}).get("fma_candidate") and (
+        opcode == "fma" or str(ir.get("callee", "")).startswith(("llvm.fma.", "llvm.fmuladd."))
+    ):
+        return True
     if kind == "arithmetic" and source_opcode in arithmetic:
         return opcode == arithmetic[source_opcode]
     if kind == "reduction":
@@ -83,7 +87,7 @@ def _binding(
         "relation": relation,
     }
     stable_identity = dict(identity)
-    if relation == "reduction-lowering":
+    if relation:
         # bundle 摘要用于校验来源；无关候选变化不能改变本条归约关联的身份。
         stable_identity.pop("source_fact_bundle_digest")
         stable_identity.pop("ir_fact_bundle_digest")
@@ -217,8 +221,7 @@ def build_evidence(
                 )
                 and _compatible(source_fact, ir_fact)
                 and (
-                    source_fact.get("fact_kind") != "reduction"
-                    or position_matches_source(source_fact, ir_fact.get("debug_location"))
+                    position_matches_source(source_fact, ir_fact.get("debug_location"))
                 )
             ):
                 candidates.append((source_id, source_fact))

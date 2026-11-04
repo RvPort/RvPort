@@ -30,7 +30,7 @@ TEST(IrFacts, ReportsLockedVersions) {
   const llvm::json::Object version = fp_scanner::versionJson();
   EXPECT_EQ(*version.getString("llvm_version"), "21.1.8");
   EXPECT_EQ(*version.getString("reader_version"), "1.0");
-  EXPECT_EQ(*version.getString("extractor_version"), "1.1");
+  EXPECT_EQ(*version.getString("extractor_version"), "1.2");
   EXPECT_EQ(*version.getString("worker_protocol_version"), "1.1");
 }
 
@@ -79,6 +79,34 @@ TEST(IrFacts, ExcludesIntegerOnlyInstructionsAndDeclarations) {
   auto result = fp_scanner::extractFactsFromModule(*module, identity(), 100);
   ASSERT_TRUE(static_cast<bool>(result)) << llvm::toString(result.takeError());
   EXPECT_TRUE(result->getArray("facts")->empty());
+}
+
+TEST(IrFacts, UnrelatedArtifactBytesDoNotChangeLocalEvidenceIdentity) {
+  llvm::LLVMContext context;
+  auto module = parse(context, R"(
+    define double @compute(double %a, double %b) {
+      %product = fmul double %a, %b
+      %sum = fadd double %product, %a
+      ret double %sum
+    }
+  )");
+  ASSERT_NE(module, nullptr);
+  auto original = fp_scanner::extractFactsFromModule(*module, identity(), 100);
+  auto changed_identity = identity();
+  changed_identity.artifact_key = std::string(64, 'f');
+  changed_identity.sha256 = std::string(64, '9');
+  auto changed = fp_scanner::extractFactsFromModule(*module, changed_identity, 100);
+  ASSERT_TRUE(static_cast<bool>(original));
+  ASSERT_TRUE(static_cast<bool>(changed));
+  for (std::size_t index = 0; index < 2; ++index) {
+    EXPECT_EQ(*(*original->getArray("facts"))[index].getAsObject()->getString("fact_id"),
+              *(*changed->getArray("facts"))[index].getAsObject()->getString("fact_id"));
+  }
+  changed_identity.context_id = std::string(64, '8');
+  auto different = fp_scanner::extractFactsFromModule(*module, changed_identity, 100);
+  ASSERT_TRUE(static_cast<bool>(different));
+  EXPECT_NE(*(*original->getArray("facts"))[0].getAsObject()->getString("fact_id"),
+            *(*different->getArray("facts"))[0].getAsObject()->getString("fact_id"));
 }
 
 TEST(IrFacts, RejectsFactBudgetOverflow) {

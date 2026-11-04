@@ -24,10 +24,10 @@ def ir_bundle(context_id: str, *, debug: bool = True, opcode: str = "fadd") -> d
         "kind": "LLVMFloatingPointFactBundle",
         "schema_version": "1.1",
         "producer": {
-            "tool_version": "0.5.1",
+            "tool_version": "0.6.0",
             "llvm_version": "21.1.8",
             "reader_version": "1.0",
-            "extractor_version": "1.1",
+            "extractor_version": "1.2",
             "worker_protocol_version": "1.1",
         },
         "artifact": {
@@ -145,10 +145,10 @@ def test_ir_worker_verify_and_extract_success(tmp_path: Path) -> None:
             0,
             json.dumps(
                 {
-                    "tool_version": "0.5.1",
+                    "tool_version": "0.6.0",
                     "llvm_version": "21.1.8",
                     "reader_version": "1.0",
-                    "extractor_version": "1.1",
+                    "extractor_version": "1.2",
                     "worker_protocol_version": "1.1",
                 }
             ),

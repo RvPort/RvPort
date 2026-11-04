@@ -7,7 +7,7 @@
   "required": ["kind", "schema_version", "producer", "artifact", "source_fact_bundle_digest", "ir_fact_bundle_digest", "bindings", "ambiguities", "unmatched_source_fact_ids", "unmatched_ir_fact_ids", "diagnostics", "semantic_digest"],
   "properties": {
     "kind": {"const": "FloatingPointEvidenceBundle"},
-    "schema_version": {"const": "1.2"},
+    "schema_version": {"const": "1.3"},
     "producer": {
       "type": "object", "additionalProperties": false,
       "required": ["tool_version"],
