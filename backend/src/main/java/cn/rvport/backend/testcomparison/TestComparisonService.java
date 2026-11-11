@@ -119,11 +119,13 @@ public class TestComparisonService {
 
     private TestComparisonRunView createOrDispatch(UUID projectId, AutomatedTestRunView source, AutomatedTestRunView target, UUID actorUserId) {
         TestComparisonRunView comparison = repository.createIfAbsent(projectId, source.testBatchId(), source.id(), target.id());
-        if (comparison.status() == TestComparisonStatus.SUCCEEDED || comparison.status() == TestComparisonStatus.RUNNING || comparison.status() == TestComparisonStatus.QUEUED) {
+        if (comparison.status() != TestComparisonStatus.PENDING) {
             return comparison;
         }
+        cn.rvport.backend.agentruntime.AgentModelRuntimeConfig config;
         try {
-            agentRuntime.resolveRunnableConfig();
+            if (actorUserId == null) { throw cn.rvport.backend.modelprofile.ModelExecutionSelection.missing(); }
+            config = agentRuntime.resolveRunnableConfig(actorUserId);
         } catch (ApiException ex) {
             repository.markUnavailable(comparison.id(), MODEL_NOT_CONFIGURED, ex.getMessage());
             TestComparisonRunView unavailable = require(comparison.id());
@@ -135,6 +137,7 @@ public class TestComparisonService {
             return unavailable;
         }
         Map<String, Object> input = new LinkedHashMap<>();
+        input.put("modelExecution", cn.rvport.backend.modelprofile.ModelExecutionSelection.from(actorUserId, config));
         input.put("projectId", projectId);
         input.put("comparisonRunId", comparison.id());
         input.put("sourceTestRunId", source.id());
@@ -152,8 +155,21 @@ public class TestComparisonService {
     }
 
     private UUID taskCreator(AutomatedTestRunView source, AutomatedTestRunView target) {
-        UUID taskId = source.taskId() == null ? target.taskId() : source.taskId();
-        return taskService.getInternal(taskId).createdBy();
+        if (source.taskId() == null || target.taskId() == null) { return null; }
+        try {
+            var sourceTask = taskService.getInternal(source.taskId());
+            var targetTask = taskService.getInternal(target.taskId());
+            if (sourceTask == null || targetTask == null
+                    || !source.projectId().equals(target.projectId())
+                    || !source.projectId().equals(sourceTask.projectId())
+                    || !target.projectId().equals(targetTask.projectId())) { return null; }
+            UUID actor = sourceTask.createdBy();
+            return actor != null && actor.equals(targetTask.createdBy())
+                    && actor.equals(taskService.configurationUserId(source.taskId()))
+                    && actor.equals(taskService.configurationUserId(target.taskId())) ? actor : null;
+        } catch (ApiException ex) {
+            return null;
+        }
     }
 
     private boolean terminal(TaskStatus status) {

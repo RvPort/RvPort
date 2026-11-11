@@ -41,15 +41,16 @@ public class ModelProfileController {
         this.assignmentParser = assignmentParser;
     }
 
-    @GetMapping("/api/admin/model-profiles")
+    @GetMapping("/api/me/model-profiles")
     public ApiResponse<PageResponse<ModelProfileResponse>> list(
+            @AuthenticationPrincipal RvPortUserPrincipal principal,
             @Valid @ModelAttribute ModelProfileListRequest request,
             HttpServletRequest servletRequest
     ) {
-        return ApiResponse.ok(service.list(request), TraceIdFilter.currentTraceId(servletRequest));
+        return ApiResponse.ok(service.list(request, principal.id()), TraceIdFilter.currentTraceId(servletRequest));
     }
 
-    @PostMapping("/api/admin/model-profiles")
+    @PostMapping("/api/me/model-profiles")
     public ApiResponse<ModelProfileResponse> create(
             @AuthenticationPrincipal RvPortUserPrincipal principal,
             @RequestBody JsonNode body,
@@ -58,12 +59,12 @@ public class ModelProfileController {
         return ApiResponse.ok(service.create(profileParser.parse(body), principal.id()), TraceIdFilter.currentTraceId(request));
     }
 
-    @GetMapping("/api/admin/model-profiles/{profileId}")
-    public ApiResponse<ModelProfileResponse> get(@PathVariable UUID profileId, HttpServletRequest request) {
-        return ApiResponse.ok(service.get(profileId), TraceIdFilter.currentTraceId(request));
+    @GetMapping("/api/me/model-profiles/{profileId}")
+    public ApiResponse<ModelProfileResponse> get(@AuthenticationPrincipal RvPortUserPrincipal principal, @PathVariable UUID profileId, HttpServletRequest request) {
+        return ApiResponse.ok(service.get(profileId, principal.id()), TraceIdFilter.currentTraceId(request));
     }
 
-    @PatchMapping("/api/admin/model-profiles/{profileId}")
+    @PatchMapping("/api/me/model-profiles/{profileId}")
     public ApiResponse<ModelProfileResponse> update(
             @AuthenticationPrincipal RvPortUserPrincipal principal,
             @PathVariable UUID profileId,
@@ -73,13 +74,13 @@ public class ModelProfileController {
         return ApiResponse.ok(service.update(profileId, profileParser.parse(body), principal.id()), TraceIdFilter.currentTraceId(request));
     }
 
-    @DeleteMapping("/api/admin/model-profiles/{profileId}")
-    public ApiResponse<Map<String, Object>> delete(@PathVariable UUID profileId, HttpServletRequest request) {
-        service.delete(profileId);
+    @DeleteMapping("/api/me/model-profiles/{profileId}")
+    public ApiResponse<Map<String, Object>> delete(@AuthenticationPrincipal RvPortUserPrincipal principal, @PathVariable UUID profileId, HttpServletRequest request) {
+        service.delete(profileId, principal.id());
         return ApiResponse.ok(Map.of("deleted", true), TraceIdFilter.currentTraceId(request));
     }
 
-    @PostMapping("/api/admin/model-profiles/{profileId}:test")
+    @PostMapping("/api/me/model-profiles/{profileId}:test")
     public ApiResponse<CodexProviderTestResult> test(
             @AuthenticationPrincipal RvPortUserPrincipal principal,
             @PathVariable UUID profileId,
@@ -90,7 +91,7 @@ public class ModelProfileController {
         return ApiResponse.ok(service.test(profileId, parsed, principal.id()), TraceIdFilter.currentTraceId(request));
     }
 
-    @PostMapping("/api/admin/model-profiles/{profileId}:test-connectivity")
+    @PostMapping("/api/me/model-profiles/{profileId}:test-connectivity")
     public ApiResponse<ModelProfileConnectivityTestResult> testConnectivity(
             @AuthenticationPrincipal RvPortUserPrincipal principal,
             @PathVariable UUID profileId,
@@ -101,7 +102,7 @@ public class ModelProfileController {
         return ApiResponse.ok(service.testConnectivity(profileId, parsed, principal.id()), TraceIdFilter.currentTraceId(request));
     }
 
-    @PostMapping("/api/admin/model-profiles/{profileId}:test-agents")
+    @PostMapping("/api/me/model-profiles/{profileId}:test-agents")
     public ApiResponse<ModelProfileAgentProbeRunResponse> testAgents(
             @AuthenticationPrincipal RvPortUserPrincipal principal,
             @PathVariable UUID profileId,
@@ -114,28 +115,30 @@ public class ModelProfileController {
         );
     }
 
-    @GetMapping("/api/admin/model-profile-agent-test-runs/{runId}")
+    @GetMapping("/api/me/model-profile-agent-test-runs/{runId}")
     public ApiResponse<ModelProfileAgentProbeRunResponse> getAgentTestRun(
+            @AuthenticationPrincipal RvPortUserPrincipal principal,
             @PathVariable UUID runId,
             HttpServletRequest request
     ) {
-        return ApiResponse.ok(service.getAgentTestRun(runId), TraceIdFilter.currentTraceId(request));
+        return ApiResponse.ok(service.getAgentTestRun(runId, principal.id()), TraceIdFilter.currentTraceId(request));
     }
 
-    @GetMapping("/api/admin/model-profiles/{profileId}/agent-probe-results")
+    @GetMapping("/api/me/model-profiles/{profileId}/agent-probe-results")
     public ApiResponse<List<ModelProfileAgentProbeResultResponse>> listAgentProbeResults(
+            @AuthenticationPrincipal RvPortUserPrincipal principal,
             @PathVariable UUID profileId,
             HttpServletRequest request
     ) {
-        return ApiResponse.ok(service.listAgentProbeResults(profileId), TraceIdFilter.currentTraceId(request));
+        return ApiResponse.ok(service.listAgentProbeResults(profileId, principal.id()), TraceIdFilter.currentTraceId(request));
     }
 
-    @GetMapping("/api/admin/model-stage-assignments")
-    public ApiResponse<List<ModelProfileAssignmentResponse>> listAssignments(HttpServletRequest request) {
-        return ApiResponse.ok(service.listAssignments(), TraceIdFilter.currentTraceId(request));
+    @GetMapping("/api/me/model-stage-assignments")
+    public ApiResponse<List<ModelProfileAssignmentResponse>> listAssignments(@AuthenticationPrincipal RvPortUserPrincipal principal, HttpServletRequest request) {
+        return ApiResponse.ok(service.listAssignments(principal.id()), TraceIdFilter.currentTraceId(request));
     }
 
-    @PatchMapping("/api/admin/model-stage-assignments")
+    @PatchMapping("/api/me/model-stage-assignments")
     public ApiResponse<List<ModelProfileAssignmentResponse>> saveAssignments(
             @AuthenticationPrincipal RvPortUserPrincipal principal,
             @RequestBody JsonNode body,

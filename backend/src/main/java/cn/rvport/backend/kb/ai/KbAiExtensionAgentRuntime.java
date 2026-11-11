@@ -9,6 +9,8 @@ import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.kb.FindingView;
 import cn.rvport.backend.modelprofile.ModelProfileService;
 import cn.rvport.backend.modelprofile.ModelProfileStage;
+import cn.rvport.backend.modelprofile.ModelExecutionSelection;
+import java.util.UUID;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
@@ -51,8 +53,12 @@ public class KbAiExtensionAgentRuntime {
         this.objectMapper = objectMapper;
     }
 
-    public AgentModelRuntimeConfig resolveRunnableConfig() {
-        AgentModelRuntimeConfig resolved = modelProfileService.resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION);
+    public AgentModelRuntimeConfig resolveRunnableConfig(UUID actorUserId) {
+        AgentModelRuntimeConfig resolved = modelProfileService.resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION, actorUserId);
+        return validate(resolved);
+    }
+
+    private AgentModelRuntimeConfig validate(AgentModelRuntimeConfig resolved) {
         CodexProviderResolvedConfig config = resolved.model();
         if (!config.enabled() || isBlank(config.apiKey()) || isBlank(config.baseUrl()) || isBlank(config.model())
                 || resolved.runtime() == null || isBlank(resolved.runtime().getExecutablePath())) {
@@ -61,11 +67,17 @@ public class KbAiExtensionAgentRuntime {
         return resolved;
     }
 
-    public KbAiExtensionAgentResult run(Path sourceRoot, List<FindingView> findings, List<Map<String, Object>> exportRows)
+    public AgentModelRuntimeConfig resolveExecution(ModelExecutionSelection selection, UUID actor, UUID projectId) {
+        if (selection == null) { throw ModelExecutionSelection.missing(); }
+        selection.requireActor(actor);
+        AgentModelRuntimeConfig resolved = modelProfileService.resolveExecution(actor, projectId,
+                selection.modelProfileId(), selection.agentRuntimeId());
+        return validate(resolved);
+    }
+    public KbAiExtensionAgentResult run(Path sourceRoot, List<FindingView> findings, List<Map<String, Object>> exportRows, AgentModelRuntimeConfig resolved)
             throws IOException, InterruptedException {
         Path workspace = Files.createTempDirectory("rvport-kb-ai-extension-");
         try {
-            AgentModelRuntimeConfig resolved = resolveRunnableConfig();
             CodexProviderResolvedConfig config = resolved.model();
             AgentRuntimeAdapter adapter = adapterRegistry.get(resolved.runtime().getAgentType());
             Path inputDir = Files.createDirectories(workspace.resolve("input"));

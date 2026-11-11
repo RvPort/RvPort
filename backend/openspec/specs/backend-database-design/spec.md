@@ -865,7 +865,7 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 #### Scenario: 保存模型 profile 普通配置
 - **WHEN** 后端保存模型 profile 的普通配置项
 - **THEN** 数据库 SHALL 将配置写入 `model_profiles`
-- **AND** `name` SHALL 在未删除 profile 中唯一
+- **AND** `owner_user_id` SHALL 非空引用 users；`name` SHALL 在同一所有者未删除 profile 内大小写不敏感唯一
 - **AND** `model_provider_type` SHALL 表达 provider 类型，MVP 只允许 `OPENAI_COMPATIBLE`
 - **AND** `wire_api` SHALL 使用非加密值保存，并 SHALL 只表达 `RESPONSES` 或 `CHAT`
 - **AND** `enabled` SHALL 表达该 profile 是否可被阶段绑定和运行时解析
@@ -887,18 +887,22 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 #### Scenario: 保存阶段模型绑定
 - **WHEN** 后端保存阶段模型绑定
 - **THEN** 数据库 SHALL 将绑定写入 `model_stage_assignments`
-- **AND** `stage` SHALL 唯一
-- **AND** 本 change 只要求保存 `TEST_LOG_COMPARE` 阶段绑定
-- **AND** `model_profile_id` SHALL 外键引用 `model_profiles.id`
+- **AND** (`owner_user_id`, `stage`) SHALL 唯一
+- **AND** SHALL 保存 TEST_LOG_COMPARE 和 KB_AI_EXTENSION 的个人阶段绑定
+- **AND** (`owner_user_id`, `model_profile_id`) SHALL 通过复合外键引用 profile 的同所有者唯一键，拒绝跨用户绑定
 - **AND** `agent_runtime_id` SHALL 外键引用 `agent_runtimes.id`
 - **AND** 后端 SHALL 拒绝绑定不存在或已禁用的模型 profile
 - **AND** 后端 SHALL 拒绝绑定不存在或已禁用的 agent runtime
 
 #### Scenario: 查询阶段模型绑定
 - **WHEN** 后端按阶段解析模型和 agent 配置
-- **THEN** 数据库 SHALL 支持按 `model_stage_assignments.stage` 查询绑定 profile 和 runtime
+- **THEN** 数据库 SHALL 支持按当前配置主体的 owner_user_id 与 stage 查询绑定 profile 和 runtime
 - **AND** 数据库 SHALL 支持按 `model_profiles.enabled` 和 `agent_runtimes.enabled` 过滤可用配置
 - **AND** 后端 MUST NOT 从历史 `system_configs.codex-provider` 直接解析阶段模型或 agent
+
+#### Scenario: 审计与执行身份独立
+- **WHEN** 保存个人配置或任务执行上下文
+- **THEN** owner SHALL 独立于 created_by/updated_by；AI 任务 SHALL 持久化配置主体、选中的 profile/runtime、父任务或批次引用和安全尝试版本，不保存明文密钥
 
 ### Requirement: 数据库必须支持远程自动化测试输出和日志引用
 数据库 SHALL 支持保存自动化测试在远程环境中的执行摘要、输出摘要、日志引用和报告产物引用，并 SHALL 允许通过项目、源码版本、环境和状态查询。
@@ -1109,12 +1113,16 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 #### Scenario: Agent runtime 安全边界
 - **WHEN** 保存 `default_args`、`config` 或最近 probe 结果
 - **THEN** 数据库 MUST NOT 保存 API key 明文、授权头、完整 prompt、完整 agent 输入或服务器真实敏感路径
-- **AND** 可执行路径 SHALL 只作为后端配置字段返回给超级管理员
+- **AND** 可执行路径 SHALL 仅用于平台受管配置，个人 API MUST NOT 返回或允许覆盖
 
 #### Scenario: 初始化默认 runtime
 - **WHEN** 首次执行迁移或应用启动初始化
 - **THEN** 数据库 SHALL upsert `CODEX`、`DEEPSEEK_HARNESS` 和 `OPENCODE` 默认 runtime
 - **AND** 该初始化 SHALL 可重复执行
+
+#### Scenario: 遗留全局探测字段
+- **WHEN** 个人 probe 完成或查询 runtime 目录
+- **THEN** last_probe_* 历史字段 SHALL 不再承接个人结果写入或作为共享兼容状态返回；历史数据不伪造或改写为新结果
 
 ### Requirement: 数据库必须支持构建上下文 artifact 引用
 数据库 SHALL 支持构建运行保存 compile database 输出制品引用，并 SHALL 支持 KB 扫描按项目和源码版本查询最新可用构建上下文。
@@ -1186,6 +1194,11 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 #### Scenario: Probe 结果安全边界
 - **WHEN** 保存 run 或 result 的详情字段
 - **THEN** 数据库 MUST NOT 保存 API key、授权头、完整 agent 命令、完整 prompt、临时 workspace 绝对路径或服务器真实敏感路径
+
+#### Scenario: 个人 Probe 所有者一致性
+- **WHEN** 创建、查询、恢复或写入 run/result/job
+- **THEN** 数据库约束或受控事务 SHALL 验证 profile、run、result 与 job 配置主体一致，个人查询 SHALL 带 owner 条件
+- **AND** 历史记录 SHALL 随 profile 归 admin 而保留原触发用户和测试事实
 
 ### Requirement: 数据库必须持久化环境配置版本及结果归属
 数据库 SHALL 持久化单环境配置版本，并 SHALL 使环境任务和环境快照能够证明其所属配置版本。

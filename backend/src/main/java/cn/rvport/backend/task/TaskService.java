@@ -142,6 +142,21 @@ public class TaskService {
         return requireTask(taskId);
     }
 
+    /** 只接受新任务显式持久化且与操作者一致的配置主体；旧任务不推断身份。 */
+    public UUID configurationUserId(UUID taskId) {
+        var task = taskRepository.findRecordById(taskId).orElse(null);
+        if (task == null || task.getInputSnapshot() == null) { return null; }
+        try {
+            var root = objectMapper.readTree(task.getInputSnapshot().data());
+            var value = root == null ? null : root.get("configurationUserId");
+            if (value == null || !value.isTextual()) { return null; }
+            UUID actor = UUID.fromString(value.asText());
+            return actor.equals(task.getCreatedBy()) ? actor : null;
+        } catch (java.io.IOException | IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
     private void validateCreate(TaskCreateCommand command) {
         if (command.projectId() == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "项目 ID 不能为空");

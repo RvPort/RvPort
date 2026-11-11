@@ -60,47 +60,48 @@ public class ModelProfileRepository {
                 .set(MODEL_PROFILES.API_KEY_ENCRYPTED, apiKeyEncrypted)
                 .set(MODEL_PROFILES.TIMEOUT_SECONDS, timeoutSeconds)
                 .set(MODEL_PROFILES.MAX_RUNTIME_SECONDS, maxRuntimeSeconds)
+                .set(MODEL_PROFILES.OWNER_USER_ID, actorUserId)
                 .set(MODEL_PROFILES.CREATED_BY, actorUserId)
                 .set(MODEL_PROFILES.UPDATED_BY, actorUserId)
                 .returning()
                 .fetchOne();
     }
 
-    public Optional<ModelProfilesRecord> findById(UUID profileId) {
+    public Optional<ModelProfilesRecord> findById(UUID profileId, UUID ownerUserId) {
         return dsl.selectFrom(MODEL_PROFILES)
-                .where(MODEL_PROFILES.ID.eq(profileId))
+                .where(MODEL_PROFILES.ID.eq(profileId).and(MODEL_PROFILES.OWNER_USER_ID.eq(ownerUserId)))
                 .fetchOptional();
     }
 
-    public Optional<ModelProfilesRecord> findEnabledById(UUID profileId) {
+    public Optional<ModelProfilesRecord> findEnabledById(UUID profileId, UUID ownerUserId) {
         return dsl.selectFrom(MODEL_PROFILES)
-                .where(MODEL_PROFILES.ID.eq(profileId).and(MODEL_PROFILES.ENABLED.isTrue()))
+                .where(MODEL_PROFILES.ID.eq(profileId).and(MODEL_PROFILES.OWNER_USER_ID.eq(ownerUserId)).and(MODEL_PROFILES.ENABLED.isTrue()))
                 .fetchOptional();
     }
 
-    public boolean nameExists(String name, UUID exceptId) {
-        Condition condition = DSL.lower(MODEL_PROFILES.NAME).eq(name.toLowerCase());
+    public boolean nameExists(String name, UUID exceptId, UUID ownerUserId) {
+        Condition condition = MODEL_PROFILES.OWNER_USER_ID.eq(ownerUserId).and(DSL.lower(MODEL_PROFILES.NAME).eq(name.toLowerCase(java.util.Locale.ROOT)));
         if (exceptId != null) {
             condition = condition.and(MODEL_PROFILES.ID.ne(exceptId));
         }
         return dsl.fetchExists(MODEL_PROFILES, condition);
     }
 
-    public List<ModelProfilesRecord> list(ModelProfileListRequest request) {
+    public List<ModelProfilesRecord> list(ModelProfileListRequest request, UUID ownerUserId) {
         int page = request.normalizedPage();
         int pageSize = request.normalizedPageSize();
         return dsl.selectFrom(MODEL_PROFILES)
-                .where(filters(request))
+                .where(filters(request)).and(MODEL_PROFILES.OWNER_USER_ID.eq(ownerUserId))
                 .orderBy(sort(request), MODEL_PROFILES.ID.asc())
                 .limit(pageSize)
                 .offset((page - 1) * pageSize)
                 .fetch();
     }
 
-    public long count(ModelProfileListRequest request) {
+    public long count(ModelProfileListRequest request, UUID ownerUserId) {
         return dsl.selectCount()
                 .from(MODEL_PROFILES)
-                .where(filters(request))
+                .where(filters(request)).and(MODEL_PROFILES.OWNER_USER_ID.eq(ownerUserId))
                 .fetchOne(0, long.class);
     }
 
@@ -152,7 +153,7 @@ public class ModelProfileRepository {
         if (maxRuntimeSeconds != null) {
             update.set(MODEL_PROFILES.MAX_RUNTIME_SECONDS, maxRuntimeSeconds);
         }
-        return update.where(MODEL_PROFILES.ID.eq(current.getId()))
+        return update.where(MODEL_PROFILES.ID.eq(current.getId()).and(MODEL_PROFILES.OWNER_USER_ID.eq(actorUserId)))
                 .returning()
                 .fetchOne();
     }
@@ -178,7 +179,7 @@ public class ModelProfileRepository {
                 .set(MODEL_PROFILES.LAST_TEST_DETAILS, details)
                 .set(MODEL_PROFILES.UPDATED_BY, actorUserId)
                 .set(MODEL_PROFILES.UPDATED_AT, OffsetDateTime.now())
-                .where(MODEL_PROFILES.ID.eq(profileId))
+                .where(MODEL_PROFILES.ID.eq(profileId).and(MODEL_PROFILES.OWNER_USER_ID.eq(actorUserId)))
                 .and(MODEL_PROFILES.LAST_TESTED_AT.isNull().or(MODEL_PROFILES.LAST_TESTED_AT.le(testedAt)))
                 .returning()
                 .fetchOne();
@@ -201,7 +202,7 @@ public class ModelProfileRepository {
                 .set(MODEL_PROFILES.LAST_CONNECTIVITY_DURATION_MS, durationMs)
                 .set(MODEL_PROFILES.UPDATED_BY, actorUserId)
                 .set(MODEL_PROFILES.UPDATED_AT, OffsetDateTime.now())
-                .where(MODEL_PROFILES.ID.eq(profileId))
+                .where(MODEL_PROFILES.ID.eq(profileId).and(MODEL_PROFILES.OWNER_USER_ID.eq(actorUserId)))
                 .returning()
                 .fetchOne();
     }
@@ -219,20 +220,22 @@ public class ModelProfileRepository {
                 .set(MODEL_PROFILE_AGENT_PROBE_RUNS.STATUS, AgentProbeRunStatus.PENDING.name())
                 .set(MODEL_PROFILE_AGENT_PROBE_RUNS.SELECTED_AGENT_RUNTIME_IDS, selectedRuntimeIds)
                 .set(MODEL_PROFILE_AGENT_PROBE_RUNS.SELECTED_AGENT_RUNTIMES, selectedRuntimeSummaries)
+                .set(MODEL_PROFILE_AGENT_PROBE_RUNS.OWNER_USER_ID, actorUserId)
                 .set(MODEL_PROFILE_AGENT_PROBE_RUNS.CREATED_BY, actorUserId)
                 .returning()
                 .fetchOne();
     }
 
-    public Optional<ModelProfileAgentProbeRunsRecord> findProbeRun(UUID runId) {
+    public Optional<ModelProfileAgentProbeRunsRecord> findProbeRun(UUID runId, UUID ownerUserId) {
         return dsl.selectFrom(MODEL_PROFILE_AGENT_PROBE_RUNS)
-                .where(MODEL_PROFILE_AGENT_PROBE_RUNS.ID.eq(runId))
+                .where(MODEL_PROFILE_AGENT_PROBE_RUNS.ID.eq(runId).and(MODEL_PROFILE_AGENT_PROBE_RUNS.OWNER_USER_ID.eq(ownerUserId)))
                 .fetchOptional();
     }
 
-    public Optional<ModelProfileAgentProbeRunsRecord> findActiveProbeRun(UUID profileId) {
+    public Optional<ModelProfileAgentProbeRunsRecord> findActiveProbeRun(UUID profileId, UUID ownerUserId) {
         return dsl.selectFrom(MODEL_PROFILE_AGENT_PROBE_RUNS)
                 .where(MODEL_PROFILE_AGENT_PROBE_RUNS.MODEL_PROFILE_ID.eq(profileId)
+                        .and(MODEL_PROFILE_AGENT_PROBE_RUNS.OWNER_USER_ID.eq(ownerUserId))
                         .and(MODEL_PROFILE_AGENT_PROBE_RUNS.STATUS.in(
                                 AgentProbeRunStatus.PENDING.name(),
                                 AgentProbeRunStatus.RUNNING.name())))
@@ -302,16 +305,21 @@ public class ModelProfileRepository {
                 .fetchOne();
     }
 
-    public List<ModelProfileAgentProbeResultsRecord> listProbeResultsByRun(UUID runId) {
+    public List<ModelProfileAgentProbeResultsRecord> listProbeResultsByRun(UUID runId, UUID ownerUserId) {
         return dsl.selectFrom(MODEL_PROFILE_AGENT_PROBE_RESULTS)
                 .where(MODEL_PROFILE_AGENT_PROBE_RESULTS.RUN_ID.eq(runId))
+                .andExists(dsl.selectOne().from(MODEL_PROFILE_AGENT_PROBE_RUNS)
+                        .where(MODEL_PROFILE_AGENT_PROBE_RUNS.ID.eq(runId)
+                                .and(MODEL_PROFILE_AGENT_PROBE_RUNS.OWNER_USER_ID.eq(ownerUserId))))
                 .orderBy(MODEL_PROFILE_AGENT_PROBE_RESULTS.CREATED_AT.asc(), MODEL_PROFILE_AGENT_PROBE_RESULTS.ID.asc())
                 .fetch();
     }
 
-    public List<ModelProfileAgentProbeResultsRecord> listLatestProbeResults(UUID profileId) {
+    public List<ModelProfileAgentProbeResultsRecord> listLatestProbeResults(UUID profileId, UUID ownerUserId) {
         List<ModelProfileAgentProbeResultsRecord> ordered = dsl.selectFrom(MODEL_PROFILE_AGENT_PROBE_RESULTS)
                 .where(MODEL_PROFILE_AGENT_PROBE_RESULTS.MODEL_PROFILE_ID.eq(profileId))
+                .andExists(dsl.selectOne().from(MODEL_PROFILES)
+                        .where(MODEL_PROFILES.ID.eq(profileId).and(MODEL_PROFILES.OWNER_USER_ID.eq(ownerUserId))))
                 .orderBy(MODEL_PROFILE_AGENT_PROBE_RESULTS.AGENT_RUNTIME_ID.asc(),
                         MODEL_PROFILE_AGENT_PROBE_RESULTS.CREATED_AT.desc())
                 .fetch();
@@ -326,40 +334,43 @@ public class ModelProfileRepository {
         return latest;
     }
 
-    public boolean isAssigned(UUID profileId) {
-        return dsl.fetchExists(MODEL_STAGE_ASSIGNMENTS, MODEL_STAGE_ASSIGNMENTS.MODEL_PROFILE_ID.eq(profileId));
+    public boolean isAssigned(UUID profileId, UUID ownerUserId) {
+        return dsl.fetchExists(MODEL_STAGE_ASSIGNMENTS, MODEL_STAGE_ASSIGNMENTS.MODEL_PROFILE_ID.eq(profileId)
+                .and(MODEL_STAGE_ASSIGNMENTS.OWNER_USER_ID.eq(ownerUserId)));
     }
 
-    public void delete(UUID profileId) {
+    public void delete(UUID profileId, UUID ownerUserId) {
         dsl.deleteFrom(MODEL_PROFILES)
-                .where(MODEL_PROFILES.ID.eq(profileId))
+                .where(MODEL_PROFILES.ID.eq(profileId).and(MODEL_PROFILES.OWNER_USER_ID.eq(ownerUserId)))
                 .execute();
     }
 
-    public List<AssignmentView> listAssignments() {
+    public List<AssignmentView> listAssignments(UUID ownerUserId) {
         return dsl.select()
                 .from(MODEL_STAGE_ASSIGNMENTS)
                 .leftJoin(MODEL_PROFILES).on(MODEL_STAGE_ASSIGNMENTS.MODEL_PROFILE_ID.eq(MODEL_PROFILES.ID))
                 .leftJoin(AGENT_RUNTIMES).on(MODEL_STAGE_ASSIGNMENTS.AGENT_RUNTIME_ID.eq(AGENT_RUNTIMES.ID))
+                .where(MODEL_STAGE_ASSIGNMENTS.OWNER_USER_ID.eq(ownerUserId))
                 .fetch(this::mapAssignment);
     }
 
-    public Optional<AssignmentView> findAssignment(ModelProfileStage stage) {
+    public Optional<AssignmentView> findAssignment(ModelProfileStage stage, UUID ownerUserId) {
         return dsl.select()
                 .from(MODEL_STAGE_ASSIGNMENTS)
                 .join(MODEL_PROFILES).on(MODEL_STAGE_ASSIGNMENTS.MODEL_PROFILE_ID.eq(MODEL_PROFILES.ID))
                 .join(AGENT_RUNTIMES).on(MODEL_STAGE_ASSIGNMENTS.AGENT_RUNTIME_ID.eq(AGENT_RUNTIMES.ID))
-                .where(MODEL_STAGE_ASSIGNMENTS.STAGE.eq(stage.name()))
+                .where(MODEL_STAGE_ASSIGNMENTS.STAGE.eq(stage.name()).and(MODEL_STAGE_ASSIGNMENTS.OWNER_USER_ID.eq(ownerUserId)))
                 .fetchOptional(this::mapAssignment);
     }
 
     public void upsertAssignment(ModelProfileStage stage, UUID profileId, UUID agentRuntimeId, UUID actorUserId) {
         dsl.insertInto(MODEL_STAGE_ASSIGNMENTS)
+                .set(MODEL_STAGE_ASSIGNMENTS.OWNER_USER_ID, actorUserId)
                 .set(MODEL_STAGE_ASSIGNMENTS.STAGE, stage.name())
                 .set(MODEL_STAGE_ASSIGNMENTS.MODEL_PROFILE_ID, profileId)
                 .set(MODEL_STAGE_ASSIGNMENTS.AGENT_RUNTIME_ID, agentRuntimeId)
                 .set(MODEL_STAGE_ASSIGNMENTS.UPDATED_BY, actorUserId)
-                .onConflict(MODEL_STAGE_ASSIGNMENTS.STAGE)
+                .onConflict(MODEL_STAGE_ASSIGNMENTS.OWNER_USER_ID, MODEL_STAGE_ASSIGNMENTS.STAGE)
                 .doUpdate()
                 .set(MODEL_STAGE_ASSIGNMENTS.MODEL_PROFILE_ID, profileId)
                 .set(MODEL_STAGE_ASSIGNMENTS.AGENT_RUNTIME_ID, agentRuntimeId)

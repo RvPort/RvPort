@@ -39,20 +39,21 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class TestComparisonAgentRuntimeTests {
+    private static final UUID OWNER_ID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
 
     @Mock
     private ModelProfileService modelProfileService;
 
     @Test
     void parsesSuccessfulJsonOutput() {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         TestComparisonAgentRuntime runtime = new TestComparisonAgentRuntime(
                 modelProfileService,
                 registry(new CapturingRunner(new CodexProcessResult(0, false, "agent finished", ""), workingDirectory -> writeResult(workingDirectory, validJson()))),
                 new ObjectMapper()
         );
 
-        TestComparisonAgentResult result = runtime.run(new TestComparisonInputBundle(Map.of("source", Map.of(), "target", Map.of()), false, Map.of()));
+        TestComparisonAgentResult result = runtime.run(new TestComparisonInputBundle(Map.of("source", Map.of(), "target", Map.of()), false, Map.of()), runtime.resolveRunnableConfig(OWNER_ID));
 
         assertThat(result.overallStatus()).isEqualTo(TestComparisonOverallStatus.DIFFERENT_BLOCKING);
         assertThat(result.riskLevel()).isEqualTo(TestComparisonRiskLevel.HIGH);
@@ -67,7 +68,7 @@ class TestComparisonAgentRuntimeTests {
 
     @Test
     void fallsBackToStdoutFencedJsonWhenResultFileIsMissing() {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         TestComparisonAgentRuntime runtime = new TestComparisonAgentRuntime(
                 modelProfileService,
                 registry(new CapturingRunner(new CodexProcessResult(0, false, """
@@ -79,7 +80,7 @@ class TestComparisonAgentRuntimeTests {
                 new ObjectMapper()
         );
 
-        TestComparisonAgentResult result = runtime.run(new TestComparisonInputBundle(Map.of(), false, Map.of()));
+        TestComparisonAgentResult result = runtime.run(new TestComparisonInputBundle(Map.of(), false, Map.of()), runtime.resolveRunnableConfig(OWNER_ID));
 
         assertThat(result.overallStatus()).isEqualTo(TestComparisonOverallStatus.DIFFERENT_BLOCKING);
         assertThat(result.agentOutput())
@@ -89,7 +90,7 @@ class TestComparisonAgentRuntimeTests {
 
     @Test
     void rejectsPlaceholderOutputAndCombinedEnums() {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         TestComparisonAgentRuntime placeholder = new TestComparisonAgentRuntime(
                 modelProfileService,
                 registry(new CapturingRunner(new CodexProcessResult(0, false, "agent finished", ""), workingDirectory -> writeResult(workingDirectory, """
@@ -97,7 +98,7 @@ class TestComparisonAgentRuntimeTests {
                         """.replace("target failed", "...")))),
                 new ObjectMapper()
         );
-        assertThatThrownBy(() -> placeholder.run(new TestComparisonInputBundle(Map.of(), false, Map.of())))
+        assertThatThrownBy(() -> placeholder.run(new TestComparisonInputBundle(Map.of(), false, Map.of()), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .isInstanceOf(TestComparisonAgentOutputException.class)
                 .extracting("code")
                 .isEqualTo("TEST_COMPARE_AGENT_OUTPUT_INVALID");
@@ -108,7 +109,7 @@ class TestComparisonAgentRuntimeTests {
                         .replace("\"status\":\"SUCCEEDED\"", "\"status\":\"SUCCEEDED|FAILED|CANCELLED|TIMEOUT|UNKNOWN\"")))),
                 new ObjectMapper()
         );
-        assertThatThrownBy(() -> combinedEnum.run(new TestComparisonInputBundle(Map.of(), false, Map.of())))
+        assertThatThrownBy(() -> combinedEnum.run(new TestComparisonInputBundle(Map.of(), false, Map.of()), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .isInstanceOf(TestComparisonAgentOutputException.class)
                 .extracting("code")
                 .isEqualTo("TEST_COMPARE_AGENT_OUTPUT_INVALID");
@@ -116,7 +117,7 @@ class TestComparisonAgentRuntimeTests {
 
     @Test
     void rejectsMissingModelConfigAndInvalidAgentJson() {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(new CodexProviderResolvedConfig(
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(new CodexProviderResolvedConfig(
                 true,
                 "codex",
                 CodexProviderType.OPENAI_COMPATIBLE,
@@ -129,12 +130,12 @@ class TestComparisonAgentRuntimeTests {
         )));
         TestComparisonAgentRuntime missing = new TestComparisonAgentRuntime(modelProfileService,
                 registry(new CapturingRunner(new CodexProcessResult(0, false, "{}", ""))), new ObjectMapper());
-        assertThatThrownBy(missing::resolveRunnableConfig).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> missing.resolveRunnableConfig(OWNER_ID)).isInstanceOf(ApiException.class);
 
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         TestComparisonAgentRuntime invalid = new TestComparisonAgentRuntime(modelProfileService,
                 registry(new CapturingRunner(new CodexProcessResult(0, false, "not-json", ""))), new ObjectMapper());
-        assertThatThrownBy(() -> invalid.run(new TestComparisonInputBundle(Map.of(), false, Map.of())))
+        assertThatThrownBy(() -> invalid.run(new TestComparisonInputBundle(Map.of(), false, Map.of()), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .isInstanceOf(TestComparisonAgentOutputException.class)
                 .extracting("code")
                 .isEqualTo("TEST_COMPARE_AGENT_OUTPUT_INVALID");
@@ -155,9 +156,9 @@ class TestComparisonAgentRuntimeTests {
                 new AgentModelRuntimeConfig(runtime(" "), null, config()));
 
         for (AgentModelRuntimeConfig candidate : invalid) {
-            when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(candidate);
+            when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(candidate);
             assertThatThrownBy(() -> new TestComparisonAgentRuntime(modelProfileService,
-                    new AgentRuntimeAdapterRegistry(List.of()), new ObjectMapper()).resolveRunnableConfig())
+                    new AgentRuntimeAdapterRegistry(List.of()), new ObjectMapper()).resolveRunnableConfig(OWNER_ID))
                     .isInstanceOf(ApiException.class)
                     .extracting("code").isEqualTo("TEST_COMPARE_MODEL_NOT_CONFIGURED");
         }
@@ -165,9 +166,9 @@ class TestComparisonAgentRuntimeTests {
 
     @Test
     void reportsTimeoutAndSanitizedNonzeroExitWithAgentDiagnostics() {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         TestComparisonAgentRuntime timeout = runtime(new CodexProcessResult(0, true, null, null, null), path -> { });
-        assertThatThrownBy(() -> timeout.run(bundle()))
+        assertThatThrownBy(() -> timeout.run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .isInstanceOfSatisfying(TestComparisonAgentOutputException.class, ex -> {
                     assertThat(ex.code()).isEqualTo("TEST_COMPARE_AGENT_TIMEOUT");
                     assertThat(ex.agentOutput()).containsEntry("timedOut", true).containsEntry("stdout", "");
@@ -175,7 +176,7 @@ class TestComparisonAgentRuntimeTests {
 
         String stderr = "token secret and api key=" + config().apiKey() + " " + "x".repeat(1200);
         TestComparisonAgentRuntime failed = runtime(new CodexProcessResult(7, false, "", stderr, "merged"), path -> { });
-        assertThatThrownBy(() -> failed.run(bundle()))
+        assertThatThrownBy(() -> failed.run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .isInstanceOfSatisfying(TestComparisonAgentOutputException.class, ex -> {
                     assertThat(ex.code()).isEqualTo("TEST_COMPARE_AGENT_FAILED");
                     assertThat(ex.getMessage()).contains("[REDACTED]").doesNotContain(config().apiKey());
@@ -186,15 +187,15 @@ class TestComparisonAgentRuntimeTests {
 
     @Test
     void convertsAdapterIoAndInterruptionWithoutExternalProcess() throws Exception {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         AgentRuntimeAdapter io = adapter(request -> { throw new IOException("disk"); });
         assertThatThrownBy(() -> new TestComparisonAgentRuntime(modelProfileService,
-                new AgentRuntimeAdapterRegistry(List.of(io)), new ObjectMapper()).run(bundle()))
+                new AgentRuntimeAdapterRegistry(List.of(io)), new ObjectMapper()).run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .isInstanceOf(ApiException.class).extracting("code").isEqualTo("TEST_COMPARE_AGENT_IO_FAILED");
 
         AgentRuntimeAdapter interrupted = adapter(request -> { throw new InterruptedException("stop"); });
         assertThatThrownBy(() -> new TestComparisonAgentRuntime(modelProfileService,
-                new AgentRuntimeAdapterRegistry(List.of(interrupted)), new ObjectMapper()).run(bundle()))
+                new AgentRuntimeAdapterRegistry(List.of(interrupted)), new ObjectMapper()).run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .isInstanceOf(ApiException.class).extracting("code").isEqualTo("TEST_COMPARE_AGENT_INTERRUPTED");
         assertThat(Thread.currentThread().isInterrupted()).isTrue();
         Thread.interrupted();
@@ -202,11 +203,11 @@ class TestComparisonAgentRuntimeTests {
 
     @Test
     void statsAllowUnknownCountsAndDefaultMissingOptionalFields() {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         String json = json("{\"status\":\"UNKNOWN\",\"failedItems\":null}", "[]");
 
         TestComparisonAgentResult result = runtime(new CodexProcessResult(0, false, "done", ""),
-                path -> writeResult(path, json)).run(bundle());
+                path -> writeResult(path, json)).run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID));
 
         assertThat(result.sourceStats())
                 .containsEntry("failedItems", List.of())
@@ -216,7 +217,7 @@ class TestComparisonAgentRuntimeTests {
 
     @Test
     void rejectsMalformedStatisticsFindingsRangesEnumsAndPlaceholders() {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         String validFinding = "{\"differenceType\":\"OTHER\",\"severity\":\"LOW\",\"confidence\":0.5,"
                 + "\"title\":\"title\",\"description\":\"description\",\"recommendation\":\"next\"}";
         List<String> invalid = List.of(
@@ -241,7 +242,7 @@ class TestComparisonAgentRuntimeTests {
 
         for (String candidate : invalid) {
             assertThatThrownBy(() -> runtime(new CodexProcessResult(0, false, "done", ""),
-                    path -> writeResult(path, candidate)).run(bundle()))
+                    path -> writeResult(path, candidate)).run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                     .isInstanceOf(TestComparisonAgentOutputException.class)
                     .extracting("code").isEqualTo("TEST_COMPARE_AGENT_OUTPUT_INVALID");
         }
@@ -249,7 +250,7 @@ class TestComparisonAgentRuntimeTests {
 
     @Test
     void plainStdoutNestedJsonCurrentlySelectsNestedObjectInsteadOfRoot() throws Exception {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         @SuppressWarnings("unchecked")
         Map<String, Object> selectedMap = new ObjectMapper().readValue(
                 json("{\"status\":\"SUCCEEDED\",\"totalTests\":null}", "[]"), Map.class);
@@ -258,7 +259,7 @@ class TestComparisonAgentRuntimeTests {
         String earlier = json("{\"status\":\"FAILED\"}", "[]");
         String stdout = "prefix {not-json} " + earlier + " middle " + selected + " suffix";
 
-        assertThatThrownBy(() -> runtime(new CodexProcessResult(0, false, stdout, ""), path -> { }).run(bundle()))
+        assertThatThrownBy(() -> runtime(new CodexProcessResult(0, false, stdout, ""), path -> { }).run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .isInstanceOfSatisfying(TestComparisonAgentOutputException.class, ex -> {
                     assertThat(ex.code()).isEqualTo("TEST_COMPARE_AGENT_OUTPUT_INVALID");
                     assertThat(ex.agentOutput()).containsEntry("parseSource", "stdout");
@@ -267,26 +268,26 @@ class TestComparisonAgentRuntimeTests {
 
     @Test
     void rejectsOversizedResultFileAndMissingJsonWithPreciseDiagnostics() {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         assertThatThrownBy(() -> runtime(new CodexProcessResult(0, false, "ignored", ""), path ->
-                writeResult(path, "x".repeat(1024 * 1024 + 1))).run(bundle()))
+                writeResult(path, "x".repeat(1024 * 1024 + 1))).run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .isInstanceOfSatisfying(TestComparisonAgentOutputException.class, ex ->
                         assertThat(ex.agentOutput()).containsEntry("resultFilePresent", true)
                                 .containsEntry("parseSource", "file-too-large"));
 
-        assertThatThrownBy(() -> runtime(new CodexProcessResult(0, false, null, null, null), path -> { }).run(bundle()))
+        assertThatThrownBy(() -> runtime(new CodexProcessResult(0, false, null, null, null), path -> { }).run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .isInstanceOfSatisfying(TestComparisonAgentOutputException.class, ex ->
                         assertThat(ex.agentOutput()).containsEntry("parseSource", "missing"));
     }
 
     @Test
     void nonzeroExitFallsBackAcrossStdoutMergedAndDefaultMessages() {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(agentConfig(config()));
-        assertThatThrownBy(() -> runtime(new CodexProcessResult(1, false, "stdout error", "", "merged"), path -> { }).run(bundle()))
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
+        assertThatThrownBy(() -> runtime(new CodexProcessResult(1, false, "stdout error", "", "merged"), path -> { }).run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .hasMessage("stdout error");
-        assertThatThrownBy(() -> runtime(new CodexProcessResult(1, false, "", "", "merged error"), path -> { }).run(bundle()))
+        assertThatThrownBy(() -> runtime(new CodexProcessResult(1, false, "", "", "merged error"), path -> { }).run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .hasMessage("merged error");
-        assertThatThrownBy(() -> runtime(new CodexProcessResult(1, false, null, null, null), path -> { }).run(bundle()))
+        assertThatThrownBy(() -> runtime(new CodexProcessResult(1, false, null, null, null), path -> { }).run(bundle(), modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID)))
                 .hasMessage("");
     }
 

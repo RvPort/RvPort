@@ -8,6 +8,7 @@ public record TestComparisonTaskInput(
         UUID projectId,
         UUID comparisonRunId,
         UUID sourceTestRunId,
-        UUID targetTestRunId
+        UUID targetTestRunId,
+        cn.rvport.backend.modelprofile.ModelExecutionSelection modelExecution
 ) {
 }

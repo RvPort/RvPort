@@ -13,7 +13,6 @@ public class ModelProfileRequestParser {
     private static final Set<String> ALLOWED_FIELDS = Set.of(
             "name",
             "enabled",
-            "executablePath",
             "modelProviderType",
             "baseUrl",
             "model",

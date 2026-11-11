@@ -10,6 +10,7 @@ import cn.rvport.backend.jooq.tables.ArchiveItems;
 import cn.rvport.backend.jooq.tables.Archives;
 import cn.rvport.backend.jooq.tables.AuditLogs;
 import cn.rvport.backend.jooq.tables.BuildRuns;
+import cn.rvport.backend.jooq.tables.CodexProbeJobs;
 import cn.rvport.backend.jooq.tables.Credentials;
 import cn.rvport.backend.jooq.tables.DependencyAnalysisResultItems;
 import cn.rvport.backend.jooq.tables.DependencyAnalysisRuns;
@@ -100,6 +101,11 @@ public class Tables {
      * The table <code>public.build_runs</code>.
      */
     public static final BuildRuns BUILD_RUNS = BuildRuns.BUILD_RUNS;
+
+    /**
+     * The table <code>public.codex_probe_jobs</code>.
+     */
+    public static final CodexProbeJobs CODEX_PROBE_JOBS = CodexProbeJobs.CODEX_PROBE_JOBS;
 
     /**
      * The table <code>public.credentials</code>.

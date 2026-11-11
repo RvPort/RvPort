@@ -10,6 +10,7 @@ import cn.rvport.backend.jooq.tables.ArchiveItems;
 import cn.rvport.backend.jooq.tables.Archives;
 import cn.rvport.backend.jooq.tables.AuditLogs;
 import cn.rvport.backend.jooq.tables.BuildRuns;
+import cn.rvport.backend.jooq.tables.CodexProbeJobs;
 import cn.rvport.backend.jooq.tables.Credentials;
 import cn.rvport.backend.jooq.tables.DependencyAnalysisResultItems;
 import cn.rvport.backend.jooq.tables.DependencyAnalysisRuns;
@@ -108,6 +109,8 @@ public class Indexes {
     public static final Index BUILD_RUNS_SOURCE_DEPLOY_RUN_IDX = Internal.createIndex(DSL.name("build_runs_source_deploy_run_idx"), BuildRuns.BUILD_RUNS, new OrderField[] { BuildRuns.BUILD_RUNS.SOURCE_DEPLOY_RUN_ID }, false);
     public static final Index BUILD_RUNS_SOURCE_REVISION_IDX = Internal.createIndex(DSL.name("build_runs_source_revision_idx"), BuildRuns.BUILD_RUNS, new OrderField[] { BuildRuns.BUILD_RUNS.SOURCE_REVISION_ID }, false);
     public static final Index BUILD_RUNS_STATUS_STARTED_IDX = Internal.createIndex(DSL.name("build_runs_status_started_idx"), BuildRuns.BUILD_RUNS, new OrderField[] { BuildRuns.BUILD_RUNS.STATUS, BuildRuns.BUILD_RUNS.STARTED_AT.desc() }, false);
+    public static final Index CODEX_PROBE_JOBS_PENDING = Internal.createIndex(DSL.name("codex_probe_jobs_pending"), CodexProbeJobs.CODEX_PROBE_JOBS, new OrderField[] { CodexProbeJobs.CODEX_PROBE_JOBS.STATUS, CodexProbeJobs.CODEX_PROBE_JOBS.DEADLINE }, false);
+    public static final Index CODEX_PROBE_JOBS_RUN_RUNTIME = Internal.createIndex(DSL.name("codex_probe_jobs_run_runtime"), CodexProbeJobs.CODEX_PROBE_JOBS, new OrderField[] { CodexProbeJobs.CODEX_PROBE_JOBS.RUN_ID, CodexProbeJobs.CODEX_PROBE_JOBS.RUNTIME_ID }, true);
     public static final Index CREDENTIALS_KIND_IDX = Internal.createIndex(DSL.name("credentials_kind_idx"), Credentials.CREDENTIALS, new OrderField[] { Credentials.CREDENTIALS.KIND }, false);
     public static final Index CREDENTIALS_OWNER_USER_IDX = Internal.createIndex(DSL.name("credentials_owner_user_idx"), Credentials.CREDENTIALS, new OrderField[] { Credentials.CREDENTIALS.OWNER_USER_ID }, false);
     public static final Index CREDENTIALS_PROJECT_IDX = Internal.createIndex(DSL.name("credentials_project_idx"), Credentials.CREDENTIALS, new OrderField[] { Credentials.CREDENTIALS.PROJECT_ID }, false);

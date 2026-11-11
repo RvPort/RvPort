@@ -57,6 +57,10 @@ public class ModelProfileService {
     private final AgentRuntimeService agentRuntimeService;
     private final ExecutorService agentProbeExecutor;
     private CodexProbeDispatcher codexProbeDispatcher;
+    private ModelConfigurationAccess configurationAccess;
+
+    @Autowired
+    void setConfigurationAccess(ModelConfigurationAccess access) { this.configurationAccess = access; }
 
     @Autowired
     void setCodexProbeDispatcher(CodexProbeDispatcher dispatcher) {
@@ -99,22 +103,25 @@ public class ModelProfileService {
         this.agentProbeExecutor = agentProbeExecutor;
     }
 
-    public PageResponse<ModelProfileResponse> list(ModelProfileListRequest request) {
+    public PageResponse<ModelProfileResponse> list(ModelProfileListRequest request, UUID actorUserId) {
+        configurationAccess.requireActive(actorUserId);
         validateListRequest(request);
-        List<ModelProfileResponse> items = repository.list(request).stream()
+        List<ModelProfileResponse> items = repository.list(request, actorUserId).stream()
                 .map(this::response)
                 .toList();
-        return PageResponse.of(items, request.normalizedPage(), request.normalizedPageSize(), repository.count(request));
+        return PageResponse.of(items, request.normalizedPage(), request.normalizedPageSize(), repository.count(request, actorUserId));
     }
 
-    public ModelProfileResponse get(UUID profileId) {
-        return response(require(profileId));
+    public ModelProfileResponse get(UUID profileId, UUID actorUserId) {
+        return response(require(profileId, actorUserId));
     }
 
     @Transactional
     public ModelProfileResponse create(ModelProfileRequest request, UUID actorUserId) {
+        configurationAccess.requireActive(actorUserId);
+        rejectExecutableOverride(request);
         Normalized normalized = normalizeForCreate(request);
-        if (repository.nameExists(normalized.name(), null)) {
+        if (repository.nameExists(normalized.name(), null, actorUserId)) {
             throw validation("模型 profile 名称已存在");
         }
         ModelProfilesRecord record = repository.create(
@@ -136,9 +143,10 @@ public class ModelProfileService {
 
     @Transactional
     public ModelProfileResponse update(UUID profileId, ModelProfileRequest request, UUID actorUserId) {
-        ModelProfilesRecord current = require(profileId);
+        ModelProfilesRecord current = require(profileId, actorUserId);
+        rejectExecutableOverride(request);
         Normalized normalized = normalizeForUpdate(current, request);
-        if (normalized.name() != null && repository.nameExists(normalized.name(), profileId)) {
+        if (normalized.name() != null && repository.nameExists(normalized.name(), profileId, actorUserId)) {
             throw validation("模型 profile 名称已存在");
         }
         ModelProfilesRecord record = repository.update(
@@ -160,27 +168,23 @@ public class ModelProfileService {
     }
 
     @Transactional
-    public void delete(UUID profileId) {
-        require(profileId);
-        if (repository.isAssigned(profileId)) {
+    public void delete(UUID profileId, UUID actorUserId) {
+        require(profileId, actorUserId);
+        if (repository.isAssigned(profileId, actorUserId)) {
             throw new ApiException(HttpStatus.CONFLICT, "MODEL_PROFILE_ASSIGNED", "模型 profile 已被阶段绑定，不能删除");
         }
-        repository.delete(profileId);
+        repository.delete(profileId, actorUserId);
     }
 
     @Transactional
     public CodexProviderTestResult test(UUID profileId, ModelProfileRequest overrideRequest, UUID actorUserId) {
-        ModelProfilesRecord current = require(profileId);
+        ModelProfilesRecord current = require(profileId, actorUserId);
         AgentRuntimesRecord runtime = resolveRuntimeForTest(overrideRequest);
         CodexProviderResolvedConfig config = resolveForTest(current, overrideRequest, runtime.getExecutablePath());
-        CodexProviderTestResult result = probe(null, profileId, runtime, config, overrideRequest != null);
-        agentRuntimeRepository.updateProbeResult(
-                runtime.getId(),
-                result.status(),
-                result.message(),
-                toJsonb(result.details()),
-                OffsetDateTime.ofInstant(result.testedAt(), ZoneOffset.UTC)
-        );
+        configurationAccess.requireActive(actorUserId);
+        CodexProviderTestResult result = probe(null, profileId, runtime, config, overrideRequest != null, actorUserId);
+        result = new ModelExecutionSelection(actorUserId, profileId, runtime.getId())
+                .auditProbe(result, new AgentModelRuntimeConfig(runtime, current, config));
         repository.updateTestResult(
                 profileId,
                 result.status(),
@@ -197,7 +201,7 @@ public class ModelProfileService {
 
     @Transactional
     public ModelProfileConnectivityTestResult testConnectivity(UUID profileId, ModelProfileRequest overrideRequest, UUID actorUserId) {
-        ModelProfilesRecord current = require(profileId);
+        ModelProfilesRecord current = require(profileId, actorUserId);
         CodexProviderResolvedConfig config = resolveForTest(current, overrideRequest, current.getExecutablePath());
         ModelProfileConnectivityTestResult result = probeService.testConnectivity(config);
         repository.updateConnectivityResult(
@@ -213,7 +217,8 @@ public class ModelProfileService {
     }
 
     public ModelProfileAgentProbeRunResponse startAgentTests(UUID profileId, ModelProfileAgentProbeRequest request, UUID actorUserId) {
-        ModelProfilesRecord profile = require(profileId);
+        ModelProfilesRecord profile = require(profileId, actorUserId);
+        if (!Boolean.TRUE.equals(profile.getEnabled())) { throw validation("模型 profile 未启用 / Model profile disabled"); }
         List<AgentRuntimesRecord> runtimes = requireEnabledRuntimes(request);
         UUID runId = newRunId();
         ModelProfileAgentProbeRunsRecord run = repository.createProbeRun(
@@ -227,23 +232,25 @@ public class ModelProfileService {
         return ModelProfileAgentProbeRunResponse.from(run, List.of());
     }
 
-    public ModelProfileAgentProbeRunResponse getAgentTestRun(UUID runId) {
-        ModelProfileAgentProbeRunsRecord run = repository.findProbeRun(runId)
+    public ModelProfileAgentProbeRunResponse getAgentTestRun(UUID runId, UUID actorUserId) {
+        configurationAccess.requireActive(actorUserId);
+        ModelProfileAgentProbeRunsRecord run = repository.findProbeRun(runId, actorUserId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "MODEL_PROFILE_AGENT_PROBE_RUN_NOT_FOUND", "模型 Agent 测试任务不存在"));
-        return ModelProfileAgentProbeRunResponse.from(run, repository.listProbeResultsByRun(runId).stream()
+        return ModelProfileAgentProbeRunResponse.from(run, repository.listProbeResultsByRun(runId, actorUserId).stream()
                 .map(ModelProfileAgentProbeResultResponse::from)
                 .toList());
     }
 
-    public List<ModelProfileAgentProbeResultResponse> listAgentProbeResults(UUID profileId) {
-        require(profileId);
-        return repository.listLatestProbeResults(profileId).stream()
+    public List<ModelProfileAgentProbeResultResponse> listAgentProbeResults(UUID profileId, UUID actorUserId) {
+        require(profileId, actorUserId);
+        return repository.listLatestProbeResults(profileId, actorUserId).stream()
                 .map(ModelProfileAgentProbeResultResponse::from)
                 .toList();
     }
 
-    public List<ModelProfileAssignmentResponse> listAssignments() {
-        List<ModelProfileRepository.AssignmentView> views = repository.listAssignments();
+    public List<ModelProfileAssignmentResponse> listAssignments(UUID actorUserId) {
+        configurationAccess.requireActive(actorUserId);
+        List<ModelProfileRepository.AssignmentView> views = repository.listAssignments(actorUserId);
         List<ModelProfileAssignmentResponse> responses = new ArrayList<>();
         for (ModelProfileStage stage : ModelProfileStage.values()) {
             ModelProfileRepository.AssignmentView view = views.stream()
@@ -265,6 +272,7 @@ public class ModelProfileService {
 
     @Transactional
     public List<ModelProfileAssignmentResponse> saveAssignments(ModelStageAssignmentRequest request, UUID actorUserId) {
+        configurationAccess.requireActive(actorUserId);
         if (request == null || request.assignments() == null || request.assignments().isEmpty()) {
             throw validation("assignments 不能为空");
         }
@@ -274,23 +282,24 @@ public class ModelProfileService {
             if (!seen.add(stage)) {
                 throw validation("阶段重复: " + stage.name());
             }
-            repository.findEnabledById(entry.modelProfileId())
+            repository.findEnabledById(entry.modelProfileId(), actorUserId)
                     .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "MODEL_PROFILE_NOT_AVAILABLE", "模型 profile 不存在或未启用"));
             agentRuntimeService.requireEnabled(entry.agentRuntimeId());
         }
         for (ModelStageAssignmentRequest.Entry entry : request.assignments()) {
             repository.upsertAssignment(parseStage(entry.stage()), entry.modelProfileId(), entry.agentRuntimeId(), actorUserId);
         }
-        return listAssignments();
+        return listAssignments(actorUserId);
     }
 
-    public CodexProviderResolvedConfig resolveForStage(ModelProfileStage stage) {
-        AgentModelRuntimeConfig resolved = resolveAgentForStage(stage);
+    public CodexProviderResolvedConfig resolveForStage(ModelProfileStage stage, UUID actorUserId) {
+        AgentModelRuntimeConfig resolved = resolveAgentForStage(stage, actorUserId);
         return resolved.model();
     }
 
-    public AgentModelRuntimeConfig resolveAgentForStage(ModelProfileStage stage) {
-        ModelProfileRepository.AssignmentView assignment = repository.findAssignment(stage)
+    public AgentModelRuntimeConfig resolveAgentForStage(ModelProfileStage stage, UUID actorUserId) {
+        configurationAccess.requireActive(actorUserId);
+        ModelProfileRepository.AssignmentView assignment = repository.findAssignment(stage, actorUserId)
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "MODEL_ASSIGNMENT_MISSING", stageLabel(stage) + "未绑定模型 profile"));
         ModelProfilesRecord profile = assignment.profile();
         if (profile == null || !Boolean.TRUE.equals(profile.getEnabled())) {
@@ -303,6 +312,19 @@ public class ModelProfileService {
         return new AgentModelRuntimeConfig(runtime, profile, resolved(profile, null, runtime.getExecutablePath()));
     }
 
+    public AgentModelRuntimeConfig resolveExecution(UUID ownerUserId, UUID projectId, UUID profileId, UUID runtimeId) {
+        configurationAccess.requireProject(ownerUserId, projectId);
+        ModelProfilesRecord profile = repository.findEnabledById(profileId, ownerUserId)
+                .orElseThrow(() -> validation("执行模型不存在、归属不符或已禁用 / Execution profile unavailable"));
+        AgentRuntimesRecord runtime = agentRuntimeService.requireEnabled(runtimeId);
+        return new AgentModelRuntimeConfig(runtime, profile, resolved(profile, null, runtime.getExecutablePath()));
+    }
+
+    private void rejectExecutableOverride(ModelProfileRequest request) {
+        if (request != null && request.executablePath() != null) {
+            throw validation("不允许覆盖平台 Agent 命令 / Managed Agent executable cannot be overridden");
+        }
+    }
     private String stageLabel(ModelProfileStage stage) {
         return switch (stage) {
             case TEST_LOG_COMPARE -> "测试结果比较阶段";
@@ -310,8 +332,9 @@ public class ModelProfileService {
         };
     }
 
-    private ModelProfilesRecord require(UUID profileId) {
-        return repository.findById(profileId)
+    private ModelProfilesRecord require(UUID profileId, UUID actorUserId) {
+        configurationAccess.requireActive(actorUserId);
+        return repository.findById(profileId, actorUserId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "MODEL_PROFILE_NOT_FOUND", "模型 profile 不存在"));
     }
 
@@ -322,16 +345,17 @@ public class ModelProfileService {
     private ModelProfileResponse response(ModelProfilesRecord record) {
         return ModelProfileResponse.from(
                 record,
-                repository.listLatestProbeResults(record.getId()).stream()
+                repository.listLatestProbeResults(record.getId(), record.getOwnerUserId()).stream()
                         .map(ModelProfileAgentProbeResultResponse::from)
                         .toList(),
-                repository.findActiveProbeRun(record.getId())
+                repository.findActiveProbeRun(record.getId(), record.getOwnerUserId())
                         .map(ActiveAgentProbeRunResponse::from)
                         .orElse(null)
         );
     }
 
     private CodexProviderResolvedConfig resolveForTest(ModelProfilesRecord current, ModelProfileRequest overrideRequest, String executablePath) {
+        rejectExecutableOverride(overrideRequest);
         Normalized normalized = normalizeForTestOverride(current, overrideRequest);
         return new CodexProviderResolvedConfig(
                 normalized.enabled(),
@@ -351,6 +375,7 @@ public class ModelProfileService {
             return agentRuntimeService.requireEnabled(overrideRequest.agentRuntimeId());
         }
         return agentRuntimeRepository.findByType(AgentType.CODEX)
+                .filter(runtime -> Boolean.TRUE.equals(runtime.getEnabled()))
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "AGENT_RUNTIME_DEFAULT_MISSING", "默认 Codex Agent runtime 不存在"));
     }
 
@@ -415,9 +440,14 @@ public class ModelProfileService {
         OffsetDateTime startedAt = OffsetDateTime.now(ZoneOffset.UTC);
         long startedNanos = System.nanoTime();
         try {
-            ModelProfilesRecord profile = require(profileId);
+            ModelProfilesRecord profile = require(profileId, actorUserId);
+            if (!Boolean.TRUE.equals(profile.getEnabled())) { throw validation("模型 profile 未启用 / Model profile disabled"); }
+            configurationAccess.requireActive(actorUserId);
+            runtime = agentRuntimeService.requireEnabled(runtime.getId());
             CodexProviderResolvedConfig config = resolved(profile, null, runtime.getExecutablePath());
-            CodexProviderTestResult result = probe(runId, profileId, runtime, config, false);
+            CodexProviderTestResult result = probe(runId, profileId, runtime, config, false, actorUserId);
+            result = new ModelExecutionSelection(actorUserId, profileId, runtime.getId())
+                    .auditProbe(result, new AgentModelRuntimeConfig(runtime, profile, config));
             OffsetDateTime finishedAt = OffsetDateTime.now(ZoneOffset.UTC);
             long durationMs = Duration.ofNanos(System.nanoTime() - startedNanos).toMillis();
             String errorCode = result.success() ? null : firstFailureCode(result);
@@ -439,9 +469,7 @@ public class ModelProfileService {
                     durationMs
             );
             OffsetDateTime testedAt = OffsetDateTime.ofInstant(result.testedAt(), ZoneOffset.UTC);
-            agentRuntimeRepository.updateProbeResult(runtime.getId(), result.status(), result.message(),
-                    toJsonb(result.details()), testedAt);
-            repository.updateTestResult(
+                repository.updateTestResult(
                     profileId,
                     result.status(),
                     result.message(),
@@ -489,12 +517,12 @@ public class ModelProfileService {
     }
 
     private CodexProviderTestResult probe(UUID runId, UUID profileId, AgentRuntimesRecord runtime,
-            CodexProviderResolvedConfig config, boolean override) {
+            CodexProviderResolvedConfig config, boolean override, UUID actorUserId) {
         if ("CODEX".equals(runtime.getAgentType()) && config.wireApi() == CodexProviderWireApi.CHAT) {
             if (codexProbeDispatcher == null) {
                 return CodexProbeDispatcher.failure(runtime.getId(), "AGENT_PROBE_DISPATCH_UNAVAILABLE");
             }
-            return codexProbeDispatcher.execute(runId, profileId, runtime.getId(),
+            return codexProbeDispatcher.execute(runId, profileId, runtime.getId(), actorUserId,
                     override ? config : null, config.timeoutSeconds());
         }
         return probeService.test(config, runtime);

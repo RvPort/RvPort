@@ -18,12 +18,12 @@ public class AgentRuntimeController {
         this.service = service;
     }
 
-    @GetMapping("/api/admin/agent-runtimes")
+    @GetMapping("/api/me/agent-runtimes")
     public ApiResponse<List<AgentRuntimeResponse>> list(HttpServletRequest request) {
         return ApiResponse.ok(service.list(), TraceIdFilter.currentTraceId(request));
     }
 
-    @GetMapping("/api/admin/agent-runtimes/{runtimeId}")
+    @GetMapping("/api/me/agent-runtimes/{runtimeId}")
     public ApiResponse<AgentRuntimeResponse> get(@PathVariable UUID runtimeId, HttpServletRequest request) {
         return ApiResponse.ok(service.get(runtimeId), TraceIdFilter.currentTraceId(request));
     }

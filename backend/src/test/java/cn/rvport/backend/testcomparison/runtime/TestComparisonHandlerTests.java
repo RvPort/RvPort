@@ -41,6 +41,11 @@ import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
 class TestComparisonHandlerTests {
+    private static final UUID PROFILE_ID = UUID.randomUUID(), RUNTIME_ID = UUID.randomUUID();
+    private cn.rvport.backend.modelprofile.ModelExecutionSelection selection() {
+        return new cn.rvport.backend.modelprofile.ModelExecutionSelection(OWNER_ID, PROFILE_ID, RUNTIME_ID);
+    }
+    private static final UUID OWNER_ID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
 
     @Mock
     private TestComparisonRepository repository;
@@ -59,6 +64,10 @@ class TestComparisonHandlerTests {
 
     @org.junit.jupiter.api.BeforeEach
     void allowPublication() {
+        var profile = new cn.rvport.backend.jooq.tables.records.ModelProfilesRecord(); profile.setId(PROFILE_ID);
+        var runtime = new cn.rvport.backend.jooq.tables.records.AgentRuntimesRecord(); runtime.setId(RUNTIME_ID);
+        org.mockito.Mockito.lenient().when(agentRuntime.resolveExecution(eq(selection()), eq(OWNER_ID), any())).thenReturn(
+                new cn.rvport.backend.agentruntime.AgentModelRuntimeConfig(runtime, profile, null));
         org.mockito.Mockito.lenient().when(context.publish(any()))
                 .thenAnswer(call -> ((java.util.function.Supplier<?>) call.getArgument(0)).get());
     }
@@ -83,9 +92,9 @@ class TestComparisonHandlerTests {
         UUID sourceRunId = UUID.randomUUID();
         UUID targetRunId = UUID.randomUUID();
         UUID taskId = UUID.randomUUID();
-        TestComparisonTaskInput input = new TestComparisonTaskInput(projectId, comparisonRunId, sourceRunId, targetRunId);
+        TestComparisonTaskInput input = new TestComparisonTaskInput(projectId,  comparisonRunId,  sourceRunId, targetRunId, selection());
         TaskView task = new TaskView(taskId, projectId, RvPortTaskTypes.TEST_LOG_COMPARE, TaskStatus.RUNNING, 20,
-                "running", UUID.randomUUID(), OffsetDateTime.now(), null, OffsetDateTime.now(), null, null,
+                "running", OWNER_ID, OffsetDateTime.now(), null, OffsetDateTime.now(), null, null,
                 null, null, 0);
         AutomatedTestRunView source = run(projectId, sourceRunId, TaskStatus.SUCCEEDED, 0, TestBatchRole.SOURCE);
         AutomatedTestRunView target = run(projectId, targetRunId, TaskStatus.SUCCEEDED, 0, TestBatchRole.TARGET);
@@ -108,7 +117,7 @@ class TestComparisonHandlerTests {
         when(automatedTestRepository.findById(sourceRunId)).thenReturn(Optional.of(source));
         org.mockito.Mockito.lenient().when(automatedTestRepository.findById(targetRunId)).thenReturn(Optional.of(target));
         when(inputAggregator.aggregate(source, target)).thenReturn(bundle);
-        when(agentRuntime.run(bundle)).thenReturn(result);
+        when(agentRuntime.run(org.mockito.ArgumentMatchers.eq(bundle), org.mockito.ArgumentMatchers.any())).thenReturn(result);
         when(storedArtifactService.storeJson(eq(projectId), eq(taskId), eq(StoredArtifactOwnerType.TEST_COMPARISON),
                 eq(comparisonRunId), eq("AGENT_OUTPUT"), any(), any(), eq(context)))
                 .thenReturn(artifact(projectId, taskId, comparisonRunId));
@@ -130,9 +139,9 @@ class TestComparisonHandlerTests {
         UUID sourceRunId = UUID.randomUUID();
         UUID targetRunId = UUID.randomUUID();
         UUID taskId = UUID.randomUUID();
-        TestComparisonTaskInput input = new TestComparisonTaskInput(projectId, comparisonRunId, sourceRunId, targetRunId);
+        TestComparisonTaskInput input = new TestComparisonTaskInput(projectId,  comparisonRunId,  sourceRunId, targetRunId, selection());
         TaskView task = new TaskView(taskId, projectId, RvPortTaskTypes.TEST_LOG_COMPARE, TaskStatus.RUNNING, 20,
-                "running", UUID.randomUUID(), OffsetDateTime.now(), null, OffsetDateTime.now(), null, null,
+                "running", OWNER_ID, OffsetDateTime.now(), null, OffsetDateTime.now(), null, null,
                 null, null, 0);
         AutomatedTestRunView source = run(projectId, sourceRunId, TaskStatus.SUCCEEDED, 0, TestBatchRole.SOURCE);
         AutomatedTestRunView target = run(projectId, targetRunId, TaskStatus.FAILED, 1, TestBatchRole.TARGET);
@@ -144,7 +153,7 @@ class TestComparisonHandlerTests {
         when(automatedTestRepository.findById(sourceRunId)).thenReturn(Optional.of(source));
         when(automatedTestRepository.findById(targetRunId)).thenReturn(Optional.of(target));
         when(inputAggregator.aggregate(source, target)).thenReturn(bundle);
-        when(agentRuntime.run(bundle)).thenThrow(new TestComparisonAgentOutputException(
+        when(agentRuntime.run(org.mockito.ArgumentMatchers.eq(bundle), org.mockito.ArgumentMatchers.any())).thenThrow(new TestComparisonAgentOutputException(
                 "TEST_COMPARE_AGENT_OUTPUT_INVALID",
                 "测试结果比较 agent 输出不是有效 JSON 或未通过语义校验",
                 diagnostics
@@ -204,7 +213,7 @@ class TestComparisonHandlerTests {
         TestComparisonInputBundle bundle = new TestComparisonInputBundle(Map.of(), false, Map.of());
         when(inputAggregator.aggregate(setup.source, setup.target)).thenReturn(bundle);
         TaskExecutionException failure = new TaskExecutionException("MODEL_UNAVAILABLE", "模型不可用", null);
-        when(agentRuntime.run(bundle)).thenThrow(failure);
+        when(agentRuntime.run(org.mockito.ArgumentMatchers.eq(bundle), org.mockito.ArgumentMatchers.any())).thenThrow(failure);
 
         assertThatThrownBy(() -> handler().handle(context)).isSameAs(failure);
         verify(repository).markFailed(setup.input.comparisonRunId(), TestComparisonStatus.FAILED,
@@ -217,7 +226,7 @@ class TestComparisonHandlerTests {
         TestComparisonInputBundle bundle = new TestComparisonInputBundle(Map.of(), false, Map.of());
         when(inputAggregator.aggregate(setup.source, setup.target)).thenReturn(bundle);
         RuntimeException failure = new IllegalStateException("unexpected");
-        when(agentRuntime.run(bundle)).thenThrow(failure);
+        when(agentRuntime.run(org.mockito.ArgumentMatchers.eq(bundle), org.mockito.ArgumentMatchers.any())).thenThrow(failure);
 
         assertThatThrownBy(() -> handler().handle(context)).isSameAs(failure);
         verify(repository).markFailed(setup.input.comparisonRunId(), TestComparisonStatus.FAILED,
@@ -233,7 +242,7 @@ class TestComparisonHandlerTests {
                 Map.of("passedTests", "12", "failedTests", "not-a-number"),
                 Map.of("passedTests", 3L), List.of(), "{}", Map.of());
         when(inputAggregator.aggregate(setup.source, setup.target)).thenReturn(bundle);
-        when(agentRuntime.run(bundle)).thenReturn(result);
+        when(agentRuntime.run(org.mockito.ArgumentMatchers.eq(bundle), org.mockito.ArgumentMatchers.any())).thenReturn(result);
         when(storedArtifactService.storeJson(eq(setup.input.projectId()), eq(setup.task.id()),
                 eq(StoredArtifactOwnerType.TEST_COMPARISON), eq(setup.input.comparisonRunId()),
                 eq("AGENT_OUTPUT"), any(), any(), eq(context)))
@@ -259,9 +268,9 @@ class TestComparisonHandlerTests {
         UUID sourceRunId = UUID.randomUUID();
         UUID targetRunId = UUID.randomUUID();
         TestComparisonTaskInput input = new TestComparisonTaskInput(
-                projectId, UUID.randomUUID(), sourceRunId, targetRunId);
+                projectId,  UUID.randomUUID(),  sourceRunId, targetRunId, selection());
         TaskView task = new TaskView(taskId, projectId, RvPortTaskTypes.TEST_LOG_COMPARE, TaskStatus.RUNNING, 20,
-                "running", UUID.randomUUID(), OffsetDateTime.now(), null, OffsetDateTime.now(), null, null,
+                "running", OWNER_ID, OffsetDateTime.now(), null, OffsetDateTime.now(), null, null,
                 null, null, 0);
         AutomatedTestRunView source = run(projectId, sourceRunId, TaskStatus.SUCCEEDED, 0, TestBatchRole.SOURCE);
         AutomatedTestRunView target = run(projectId, targetRunId, TaskStatus.SUCCEEDED, 0, TestBatchRole.TARGET);

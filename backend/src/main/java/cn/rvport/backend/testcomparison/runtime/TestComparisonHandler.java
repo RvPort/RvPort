@@ -58,13 +58,16 @@ public class TestComparisonHandler implements TaskHandler {
         context.publish(() -> { repository.markRunning(input.comparisonRunId()); return null; });
         context.progress(10, "开始聚合测试结果");
         try {
+            if (!java.util.Objects.equals(input.projectId(), context.task().projectId())) { throw cn.rvport.backend.modelprofile.ModelExecutionSelection.missing(); }
             AutomatedTestRunView source = automatedTestRepository.findById(input.sourceTestRunId())
                     .orElseThrow(() -> new TaskExecutionException(TaskErrorCode.RESOURCE_NOT_FOUND, "源测试记录不存在", null));
             AutomatedTestRunView target = automatedTestRepository.findById(input.targetTestRunId())
                     .orElseThrow(() -> new TaskExecutionException(TaskErrorCode.RESOURCE_NOT_FOUND, "目标测试记录不存在", null));
             TestComparisonInputBundle bundle = inputAggregator.aggregate(source, target);
+            var config = agentRuntime.resolveExecution(input.modelExecution(), context.task().createdBy(), context.task().projectId());
+            context.log(cn.rvport.backend.task.TaskLogType.TOOL, input.modelExecution().attemptAudit(config));
             context.progress(35, "开始调用测试结果比较 agent");
-            TestComparisonAgentResult result = agentRuntime.run(bundle);
+            TestComparisonAgentResult result = agentRuntime.run(bundle, config);
             context.progress(85, "保存测试结果比较输出");
             var artifact = storedArtifactService.storeJson(
                     input.projectId(),

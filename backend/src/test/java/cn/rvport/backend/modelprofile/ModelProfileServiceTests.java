@@ -41,6 +41,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ModelProfileServiceTests {
+    private static final UUID OWNER_ID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
 
     @Mock
     private ModelProfileRepository repository;
@@ -58,7 +59,7 @@ class ModelProfileServiceTests {
     void createsProfileWithEncryptedApiKeyAndMaskedResponse() {
         UUID actorId = UUID.randomUUID();
         ArgumentCaptor<String> encryptedCaptor = ArgumentCaptor.forClass(String.class);
-        when(repository.nameExists("Test Compare", null)).thenReturn(false);
+        when(repository.nameExists(org.mockito.ArgumentMatchers.eq("Test Compare"), org.mockito.ArgumentMatchers.eq(null), org.mockito.ArgumentMatchers.any())).thenReturn(false);
         when(repository.create(any(), eq("Test Compare"), eq(true), eq("codex"), eq("OPENAI_COMPATIBLE"),
                 eq("https://llm.example.com/v1"), eq("model-a"), eq("CHAT"), encryptedCaptor.capture(),
                 eq(20), eq(1800), eq(actorId))).thenAnswer(invocation -> record(
@@ -77,8 +78,7 @@ class ModelProfileServiceTests {
 
         ModelProfileResponse response = service().create(new ModelProfileRequest(
                 " Test Compare ",
-                true,
-                "codex",
+                true, null,
                 "OPENAI_COMPATIBLE",
                 "https://llm.example.com/v1/",
                 "model-a",
@@ -99,21 +99,21 @@ class ModelProfileServiceTests {
 
     @Test
     void rejectsDuplicateAndInvalidInput() {
-        when(repository.nameExists("Test Compare", null)).thenReturn(true);
+        when(repository.nameExists(org.mockito.ArgumentMatchers.eq("Test Compare"), org.mockito.ArgumentMatchers.eq(null), org.mockito.ArgumentMatchers.any())).thenReturn(true);
 
         assertThatThrownBy(() -> service().create(new ModelProfileRequest(
-                "Test Compare", true, "codex", "OPENAI_COMPATIBLE", "https://llm.example.com/v1",
-                "model-a", "RESPONSES", null, false, 30, 1800, Set.of("name")
+                "Test Compare",  true, null,  "OPENAI_COMPATIBLE",  "https://llm.example.com/v1",
+                "model-a",  "RESPONSES",  null,  false,  30,  1800,  Set.of("name")
         ), UUID.randomUUID())).isInstanceOf(ApiException.class);
 
         assertThatThrownBy(() -> service().create(new ModelProfileRequest(
-                "Other", true, "codex", "DIRECT", "https://llm.example.com/v1",
-                "model-a", "RESPONSES", null, false, 30, 1800, Set.of("name")
+                "Other",  true, null,  "DIRECT",  "https://llm.example.com/v1",
+                "model-a",  "RESPONSES",  null,  false,  30,  1800,  Set.of("name")
         ), UUID.randomUUID())).isInstanceOf(ApiException.class);
 
         assertThatThrownBy(() -> service().create(new ModelProfileRequest(
-                "Other", true, "bad\npath", "OPENAI_COMPATIBLE", "file:///tmp/model",
-                "model-a", "RESPONSES", null, false, 30, 1800, Set.of("name")
+                "Other",  true, null,  "OPENAI_COMPATIBLE",  "file:///tmp/model",
+                "model-a",  "RESPONSES",  null,  false,  30,  1800,  Set.of("name")
         ), UUID.randomUUID())).isInstanceOf(ApiException.class);
     }
 
@@ -123,14 +123,14 @@ class ModelProfileServiceTests {
         UUID actorId = UUID.randomUUID();
         ModelProfilesRecord current = record(profileId, "Existing", true, "codex", "OPENAI_COMPATIBLE",
                 "https://llm.example.com/v1", "model-a", "RESPONSES", "cipher", 30, 1800);
-        when(repository.findById(profileId)).thenReturn(java.util.Optional.of(current));
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(current));
         when(repository.update(eq(current), eq(null), eq(null), eq(null), eq(null), eq("https://llm.example.com/v1"),
                 eq("model-b"), eq(null), eq(null), eq(false), eq(null), eq(null), eq(actorId)))
                 .thenReturn(record(profileId, "Existing", true, "codex", "OPENAI_COMPATIBLE",
                         "https://llm.example.com/v1", "model-b", "RESPONSES", "cipher", 30, 1800));
 
         ModelProfileResponse response = service().update(profileId, new ModelProfileRequest(
-                null, null, null, null, null, "model-b", null, null, false, null, null, Set.of("model")
+                null,  null, null,  null,  null,  "model-b",  null,  null,  false,  null,  null,  Set.of("model")
         ), actorId);
 
         assertThat(response.model()).isEqualTo("model-b");
@@ -143,7 +143,7 @@ class ModelProfileServiceTests {
                         "https://llm.example.com/v1", "model-a", "RESPONSES", null, 30, 1800));
 
         ModelProfileResponse cleared = service().update(profileId, new ModelProfileRequest(
-                null, null, null, null, null, null, null, "", true, null, null, Set.of("apiKey")
+                null,  null, null,  null,  null,  null,  null,  "",  true,  null,  null,  Set.of("apiKey")
         ), actorId);
 
         assertThat(cleared.apiKeyConfigured()).isFalse();
@@ -157,18 +157,18 @@ class ModelProfileServiceTests {
         ModelProfilesRecord current = record(profileId, "Existing", true, "codex", "OPENAI_COMPATIBLE",
                 "https://saved.example.com/v1", "saved-model", "RESPONSES", null, 30, 1800);
         AgentRuntimesRecord runtime = runtime(runtimeId, "CODEX", "codex");
-        when(repository.findById(profileId)).thenReturn(java.util.Optional.of(current));
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(current));
         when(agentRuntimeRepository.findByType(cn.rvport.backend.codexprovider.AgentType.CODEX)).thenReturn(java.util.Optional.of(runtime));
         ArgumentCaptor<CodexProviderResolvedConfig> configCaptor = ArgumentCaptor.forClass(CodexProviderResolvedConfig.class);
         var dispatcher = org.mockito.Mockito.mock(CodexProbeDispatcher.class);
-        when(dispatcher.execute(eq(null), eq(profileId), eq(runtimeId), configCaptor.capture(), eq(10)))
+        when(dispatcher.execute(eq(null),  eq(profileId),  eq(runtimeId), org.mockito.ArgumentMatchers.any(),  configCaptor.capture(),  eq(10)))
                 .thenReturn(CodexProviderTestResult.success("ok", Instant.parse("2026-08-13T00:00:00Z")));
         var service = service();
         service.setCodexProbeDispatcher(dispatcher);
 
         CodexProviderTestResult result = service.test(profileId, new ModelProfileRequest(
-                null, true, null, null, "https://override.example.com/v1", "override-model",
-                "CHAT", "TemporaryKey123", true, 10, 60, Set.of("enabled", "baseUrl", "model", "wireApi", "apiKey", "timeoutSeconds", "maxRuntimeSeconds")
+                null,  true, null,  null,  "https://override.example.com/v1",  "override-model",
+                "CHAT",  "TemporaryKey123",  true,  10,  60,  Set.of("enabled", "baseUrl", "model", "wireApi", "apiKey", "timeoutSeconds", "maxRuntimeSeconds")
         ), actorId);
 
         assertThat(result.success()).isTrue();
@@ -178,7 +178,7 @@ class ModelProfileServiceTests {
         assertThat(result.agentCompatible()).isTrue();
         verify(repository).updateTestResult(eq(profileId), eq("SUCCESS"), eq("ok"), any(),
                 eq("CODEX"), eq(true), eq(true), any(JSONB.class), eq(actorId));
-        verify(agentRuntimeRepository).updateProbeResult(eq(runtimeId), eq("SUCCESS"), eq("ok"), any(JSONB.class), any());
+        verify(agentRuntimeRepository, never()).updateProbeResult(eq(runtimeId), eq("SUCCESS"), eq("ok"), any(JSONB.class), any());
     }
 
     @Test
@@ -187,7 +187,7 @@ class ModelProfileServiceTests {
         UUID actorId = UUID.randomUUID();
         ModelProfilesRecord current = record(profileId, "Connectivity", true, "codex", "OPENAI_COMPATIBLE",
                 "https://saved.example.com/v1", "saved-model", "RESPONSES", null, 30, 1800);
-        when(repository.findById(profileId)).thenReturn(java.util.Optional.of(current));
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(current));
         when(probeService.testConnectivity(any())).thenReturn(new ModelProfileConnectivityTestResult(
                 true,
                 "SUCCESS",
@@ -198,8 +198,8 @@ class ModelProfileServiceTests {
         ));
 
         ModelProfileConnectivityTestResult result = service().testConnectivity(profileId, new ModelProfileRequest(
-                null, true, null, null, "https://override.example.com/v1", "override-model",
-                "CHAT", "TemporaryKey123", true, 10, 60,
+                null,  true, null,  null,  "https://override.example.com/v1",  "override-model",
+                "CHAT",  "TemporaryKey123",  true,  10,  60,
                 Set.of("enabled", "baseUrl", "model", "wireApi", "apiKey", "timeoutSeconds", "maxRuntimeSeconds")
         ), actorId);
 
@@ -220,7 +220,7 @@ class ModelProfileServiceTests {
                 "https://saved.example.com/v1", "saved-model", "RESPONSES", encrypted("SecretKey123"), 30, 1800);
         AgentRuntimesRecord runtime = runtime(runtimeId, "CODEX", "codex");
         ModelProfileAgentProbeRunsRecord run = probeRun(runId, profileId, "PENDING");
-        when(repository.findById(profileId)).thenReturn(java.util.Optional.of(current));
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(current));
         when(agentRuntimeService.requireEnabled(runtimeId)).thenReturn(runtime);
         when(repository.createProbeRun(eq(runId), eq(profileId), any(JSONB.class), any(JSONB.class), eq(actorId)))
                 .thenReturn(run);
@@ -242,10 +242,10 @@ class ModelProfileServiceTests {
                 eq(null), eq("ok"), any(), any(), any());
         verify(repository).updateProbeRunStatus(eq(runId), eq(AgentProbeRunStatus.SUCCESS), any(), eq(null), any());
         var testedAt = OffsetDateTime.parse("2026-08-28T00:00:00Z");
-        verify(agentRuntimeRepository).updateProbeResult(eq(runtimeId), eq("SUCCESS"), eq("ok"), any(), eq(testedAt));
+        verify(agentRuntimeRepository, never()).updateProbeResult(eq(runtimeId), eq("SUCCESS"), eq("ok"), any(), eq(testedAt));
         verify(repository).updateTestResult(eq(profileId), eq("SUCCESS"), eq("ok"), eq(testedAt), eq("CODEX"),
                 eq(true), eq(true), any(), eq(actorId));
-        verify(repository, never()).findAssignment(any());
+        verify(repository, never()).findAssignment(any(), any());
     }
 
     @Test
@@ -259,7 +259,7 @@ class ModelProfileServiceTests {
                 "https://saved.example.com/v1", "saved-model", "RESPONSES", encrypted("SecretKey123"), 30, 1800);
         AgentRuntimesRecord firstRuntime = runtime(firstRuntimeId, "CODEX", "codex");
         AgentRuntimesRecord secondRuntime = runtime(secondRuntimeId, "OPENCODE", "opencode");
-        when(repository.findById(profileId)).thenReturn(java.util.Optional.of(current));
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(current));
         when(agentRuntimeService.requireEnabled(firstRuntimeId)).thenReturn(firstRuntime);
         when(agentRuntimeService.requireEnabled(secondRuntimeId)).thenReturn(secondRuntime);
         when(repository.createProbeRun(eq(runId), eq(profileId), any(JSONB.class), any(JSONB.class), eq(actorId)))
@@ -279,13 +279,13 @@ class ModelProfileServiceTests {
                 any(), any(), any(JSONB.class), any(JSONB.class), any(), any(), any(), any(), any());
         verify(repository).updateProbeRunStatus(eq(runId), eq(AgentProbeRunStatus.PARTIAL_SUCCESS),
                 eq("模型 Agent 兼容性测试完成，成功 1 个，失败 1 个"), eq(null), any());
-        verify(repository, never()).findAssignment(any());
+        verify(repository, never()).findAssignment(any(), any());
     }
 
     @Test
     void rejectsAgentProbeRunWithEmptyOrDuplicateRuntimes() {
         UUID profileId = UUID.randomUUID();
-        when(repository.findById(profileId)).thenReturn(java.util.Optional.of(record(profileId, "Agent Probe", true,
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(record(profileId, "Agent Probe", true,
                 "codex", "OPENAI_COMPATIBLE", "https://saved.example.com/v1", "saved-model", "RESPONSES", null, 30, 1800)));
 
         assertThatThrownBy(() -> service().startAgentTests(profileId, new ModelProfileAgentProbeRequest(List.of()), UUID.randomUUID()))
@@ -302,10 +302,10 @@ class ModelProfileServiceTests {
         UUID actorId = UUID.randomUUID();
         UUID runtimeId = UUID.randomUUID();
         AgentRuntimesRecord runtime = runtime(runtimeId, "CODEX", "codex");
-        when(repository.findEnabledById(profileId)).thenReturn(java.util.Optional.of(record(profileId, "Enabled", true,
+        when(repository.findEnabledById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(record(profileId, "Enabled", true,
                 "codex", "OPENAI_COMPATIBLE", "https://llm.example.com/v1", "model-a", "RESPONSES", "cipher", 30, 1800)));
         when(agentRuntimeService.requireEnabled(runtimeId)).thenReturn(runtime);
-        when(repository.listAssignments()).thenReturn(List.of(new ModelProfileRepository.AssignmentView(
+        when(repository.listAssignments(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(new ModelProfileRepository.AssignmentView(
                 "TEST_LOG_COMPARE", profileId, record(profileId, "Enabled", true,
                 "codex", "OPENAI_COMPATIBLE", "https://llm.example.com/v1", "model-a", "RESPONSES", "cipher", 30, 1800),
                 runtimeId,
@@ -339,15 +339,15 @@ class ModelProfileServiceTests {
 
     @Test
     void resolveForStageRejectsMissingAssignmentAndDisabledProfile() {
-        when(repository.findAssignment(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(java.util.Optional.empty());
-        assertThatThrownBy(() -> service().resolveForStage(ModelProfileStage.TEST_LOG_COMPARE))
+        when(repository.findAssignment(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.empty());
+        assertThatThrownBy(() -> service().resolveForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("测试结果比较阶段未绑定模型 profile");
 
         UUID profileId = UUID.randomUUID();
         UUID runtimeId = UUID.randomUUID();
         AgentRuntimesRecord runtime = runtime(runtimeId, "CODEX", "codex");
-        when(repository.findAssignment(ModelProfileStage.TEST_LOG_COMPARE)).thenReturn(java.util.Optional.of(
+        when(repository.findAssignment(org.mockito.ArgumentMatchers.eq(ModelProfileStage.TEST_LOG_COMPARE), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(
                 new ModelProfileRepository.AssignmentView("TEST_LOG_COMPARE", profileId,
                         record(profileId, "Disabled", false, "codex", "OPENAI_COMPATIBLE",
                                 "https://llm.example.com/v1", "model-a", "RESPONSES", "cipher", 30, 1800),
@@ -356,7 +356,7 @@ class ModelProfileServiceTests {
                         OffsetDateTime.now())
         ));
 
-        assertThatThrownBy(() -> service().resolveForStage(ModelProfileStage.TEST_LOG_COMPARE))
+        assertThatThrownBy(() -> service().resolveForStage(ModelProfileStage.TEST_LOG_COMPARE, OWNER_ID))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("测试结果比较阶段绑定的模型 profile 不可用");
     }
@@ -364,12 +364,12 @@ class ModelProfileServiceTests {
     @Test
     void deleteRejectsAssignedProfile() {
         UUID profileId = UUID.randomUUID();
-        when(repository.findById(profileId)).thenReturn(java.util.Optional.of(record(profileId, "Assigned", true,
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(record(profileId, "Assigned", true,
                 "codex", "OPENAI_COMPATIBLE", "https://llm.example.com/v1", "model-a", "RESPONSES", null, 30, 1800)));
-        when(repository.isAssigned(profileId)).thenReturn(true);
+        when(repository.isAssigned(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(true);
 
-        assertThatThrownBy(() -> service().delete(profileId)).isInstanceOf(ApiException.class);
-        verify(repository, never()).delete(profileId);
+        assertThatThrownBy(() -> service().delete(profileId, OWNER_ID)).isInstanceOf(ApiException.class);
+        verify(repository, never()).delete(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -380,10 +380,10 @@ class ModelProfileServiceTests {
                 .thenAnswer(invocation -> record(invocation.getArgument(0), "Defaults", true, "codex",
                         "OPENAI_COMPATIBLE", null, null, "RESPONSES", null, 30, 1800));
         ModelProfileResponse defaults = service().create(new ModelProfileRequest(
-                "Defaults", null, null, null, " ", " ", null, null, false,
-                null, null, Set.of()), actorId);
+                "Defaults",  null, null,  null,  " ",  " ",  null,  null,  false,
+                null,  null,  Set.of()), actorId);
         assertThat(defaults.enabled()).isTrue();
-        assertThat(defaults.executablePath()).isEqualTo("codex");
+        assertThat(defaults.executablePath()).isNull();
 
         List<ModelProfileRequest> invalid = List.of(
                 request(" ", "codex", "OPENAI_COMPATIBLE", "https://ok.example/v1", "RESPONSES", 30, 1800),
@@ -410,23 +410,23 @@ class ModelProfileServiceTests {
         UUID id = UUID.randomUUID();
         ModelProfilesRecord profile = record(id, "Listed", true, "codex", "OPENAI_COMPATIBLE",
                 "https://llm.example/v1", "model", "RESPONSES", null, 30, 1800);
-        when(repository.list(any())).thenReturn(List.of(profile));
-        when(repository.count(any())).thenReturn(1L);
-        when(repository.listLatestProbeResults(id)).thenReturn(List.of());
-        when(repository.findActiveProbeRun(id)).thenReturn(java.util.Optional.of(probeRun(UUID.randomUUID(), id, "RUNNING")));
+        when(repository.list(any(), org.mockito.ArgumentMatchers.any())).thenReturn(List.of(profile));
+        when(repository.count(any(), org.mockito.ArgumentMatchers.any())).thenReturn(1L);
+        when(repository.listLatestProbeResults(org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(repository.findActiveProbeRun(org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(probeRun(UUID.randomUUID(), id, "RUNNING")));
 
         var page = service().list(new ModelProfileListRequest(null, null, true, " OPENAI_COMPATIBLE ",
-                " SUCCESS ", "key", "updatedAt", "desc"));
+                " SUCCESS ", "key", "updatedAt", "desc"), OWNER_ID);
         assertThat(page.items()).singleElement().satisfies(item -> assertThat(item.activeAgentProbeRun()).isNotNull());
         assertThat(page.page()).isEqualTo(1);
 
         assertThatThrownBy(() -> service().list(new ModelProfileListRequest(1, 20, null, "DIRECT", null,
-                null, null, null))).isInstanceOf(ApiException.class);
+                null, null, null), OWNER_ID)).isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> service().list(new ModelProfileListRequest(1, 20, null, null, "RUNNING",
-                null, null, null))).isInstanceOf(ApiException.class);
+                null, null, null), OWNER_ID)).isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> service().list(new ModelProfileListRequest(1, 20, null, null, "FAILED",
-                null, "unknown", null))).isInstanceOf(ApiException.class);
-        service().list(new ModelProfileListRequest(1, 20, null, " ", " ", null, " ", null));
+                null, "unknown", null), OWNER_ID)).isInstanceOf(ApiException.class);
+        service().list(new ModelProfileListRequest(1, 20, null, " ", " ", null, " ", null), OWNER_ID);
     }
 
     @Test
@@ -435,18 +435,18 @@ class ModelProfileServiceTests {
         UUID actor = UUID.randomUUID();
         ModelProfilesRecord current = record(id, "Old", true, "codex", "OPENAI_COMPATIBLE",
                 "https://old.example/v1", "old", "RESPONSES", null, 30, 1800);
-        when(repository.findById(id)).thenReturn(java.util.Optional.of(current));
-        when(repository.update(eq(current), eq("New"), eq(false), eq("opencode"), eq("OPENAI_COMPATIBLE"),
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(current));
+        when(repository.update(eq(current), eq("New"), eq(false), eq("codex"), eq("OPENAI_COMPATIBLE"),
                 eq("https://new.example/v1"), eq(null), eq("CHAT"), any(), eq(true), eq(1), eq(10), eq(actor)))
-                .thenReturn(record(id, "New", false, "opencode", "OPENAI_COMPATIBLE",
+                .thenReturn(record(id, "New", false, "codex", "OPENAI_COMPATIBLE",
                         "https://new.example/v1", null, "CHAT", "encrypted", 1, 10));
-        ModelProfileRequest update = new ModelProfileRequest(" New ", false, " opencode ", "OPENAI_COMPATIBLE",
-                "https://new.example/v1/", " ", "chat", "new-key", true, 1, 10,
+        ModelProfileRequest update = new ModelProfileRequest(" New ",  false, null,  "OPENAI_COMPATIBLE",
+                "https://new.example/v1/",  " ",  "chat",  "new-key",  true,  1,  10,
                 Set.of("name", "enabled", "executablePath", "modelProviderType", "baseUrl", "model", "wireApi",
                         "apiKey", "timeoutSeconds", "maxRuntimeSeconds"));
         assertThat(service().update(id, update, actor).name()).isEqualTo("New");
 
-        when(repository.nameExists("New", id)).thenReturn(true);
+        when(repository.nameExists(org.mockito.ArgumentMatchers.eq("New"), org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.any())).thenReturn(true);
         assertThatThrownBy(() -> service().update(id, update, actor)).isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> service().update(id, null, actor)).isInstanceOf(ApiException.class);
     }
@@ -458,28 +458,28 @@ class ModelProfileServiceTests {
         ModelProfilesRecord profile = record(id, "Profile", true, "codex", "OPENAI_COMPATIBLE",
                 "https://llm.example/v1", "model", "RESPONSES", encrypted("saved-key"), 30, 1800);
         AgentRuntimesRecord runtime = runtime(runtimeId, "OPENCODE", "opencode");
-        when(repository.findById(id)).thenReturn(java.util.Optional.of(profile));
-        when(repository.listLatestProbeResults(id)).thenReturn(List.of());
-        when(repository.findActiveProbeRun(id)).thenReturn(java.util.Optional.empty());
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(profile));
+        when(repository.listLatestProbeResults(org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+        when(repository.findActiveProbeRun(org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.empty());
         when(agentRuntimeService.requireEnabled(runtimeId)).thenReturn(runtime);
         when(probeService.test(any(), eq(runtime))).thenReturn(CodexProviderTestResult.success("ok", Instant.now()));
 
-        assertThat(service().get(id).id()).isEqualTo(id);
-        service().delete(id);
-        verify(repository).delete(id);
-        service().test(id, new ModelProfileRequest(null, null, null, null, null, null, null,
-                null, false, runtimeId, null, null, Set.of()), UUID.randomUUID());
+        assertThat(service().get(id, OWNER_ID).id()).isEqualTo(id);
+        service().delete(id, OWNER_ID);
+        verify(repository).delete(org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.any());
+        service().test(id, new ModelProfileRequest(null,  null, null,  null,  null,  null,  null,
+                null,  false,  runtimeId,  null,  null,  Set.of()), UUID.randomUUID());
         verify(agentRuntimeRepository, never()).findByType(any());
 
         UUID missing = UUID.randomUUID();
-        when(repository.findById(missing)).thenReturn(java.util.Optional.empty());
-        assertThatThrownBy(() -> service().get(missing)).isInstanceOf(ApiException.class);
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(missing), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.empty());
+        assertThatThrownBy(() -> service().get(missing, OWNER_ID)).isInstanceOf(ApiException.class);
     }
 
     @Test
     void rejectsInvalidAgentRuntimeSelectionsAndAssignments() {
         UUID profileId = UUID.randomUUID();
-        when(repository.findById(profileId)).thenReturn(java.util.Optional.of(record(profileId, "Profile", true,
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(record(profileId, "Profile", true,
                 "codex", "OPENAI_COMPATIBLE", "https://llm.example/v1", "model", "RESPONSES", null, 30, 1800)));
         assertThatThrownBy(() -> service().startAgentTests(profileId, null, UUID.randomUUID()))
                 .isInstanceOf(ApiException.class);
@@ -502,7 +502,7 @@ class ModelProfileServiceTests {
         ModelStageAssignmentRequest.Entry entry = new ModelStageAssignmentRequest.Entry("KB_AI_EXTENSION", profileId, runtimeId);
         assertThatThrownBy(() -> service().saveAssignments(new ModelStageAssignmentRequest(List.of(entry, entry)), UUID.randomUUID()))
                 .isInstanceOf(ApiException.class);
-        when(repository.findEnabledById(profileId)).thenReturn(java.util.Optional.empty());
+        when(repository.findEnabledById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.empty());
         assertThatThrownBy(() -> service().saveAssignments(new ModelStageAssignmentRequest(List.of(entry)), UUID.randomUUID()))
                 .isInstanceOf(ApiException.class);
     }
@@ -516,18 +516,18 @@ class ModelProfileServiceTests {
         AgentRuntimesRecord runtime = runtime(runtimeId, "OPENCODE", "opencode");
         var assignment = new ModelProfileRepository.AssignmentView("KB_AI_EXTENSION", profileId, profile,
                 runtimeId, runtime, OffsetDateTime.now());
-        when(repository.findAssignment(ModelProfileStage.KB_AI_EXTENSION)).thenReturn(java.util.Optional.of(assignment));
-        assertThat(service().resolveForStage(ModelProfileStage.KB_AI_EXTENSION).apiKey()).isEqualTo("secret");
-        assertThat(service().resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION).runtime()).isEqualTo(runtime);
+        when(repository.findAssignment(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(assignment));
+        assertThat(service().resolveForStage(ModelProfileStage.KB_AI_EXTENSION, OWNER_ID).apiKey()).isEqualTo("secret");
+        assertThat(service().resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION, OWNER_ID).runtime()).isEqualTo(runtime);
 
         var noAgent = new ModelProfileRepository.AssignmentView("KB_AI_EXTENSION", profileId, profile,
                 runtimeId, null, OffsetDateTime.now());
-        when(repository.findAssignment(ModelProfileStage.KB_AI_EXTENSION)).thenReturn(java.util.Optional.of(noAgent));
-        assertThatThrownBy(() -> service().resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION))
+        when(repository.findAssignment(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(noAgent));
+        assertThatThrownBy(() -> service().resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION, OWNER_ID))
                 .isInstanceOf(ApiException.class).hasMessageContaining("Agent runtime");
         runtime.setEnabled(false);
-        when(repository.findAssignment(ModelProfileStage.KB_AI_EXTENSION)).thenReturn(java.util.Optional.of(assignment));
-        assertThatThrownBy(() -> service().resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION))
+        when(repository.findAssignment(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(assignment));
+        assertThatThrownBy(() -> service().resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION, OWNER_ID))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -537,7 +537,7 @@ class ModelProfileServiceTests {
         UUID runtimeId = UUID.randomUUID();
         UUID runId = UUID.randomUUID();
         AgentRuntimesRecord runtime = runtime(runtimeId, "CODEX", "codex");
-        when(repository.findById(profileId)).thenReturn(java.util.Optional.of(record(profileId, "Profile", true,
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(record(profileId, "Profile", true,
                 "codex", "OPENAI_COMPATIBLE", "https://llm.example/v1", "model", "RESPONSES", null, 30, 1800)));
         when(agentRuntimeService.requireEnabled(runtimeId)).thenReturn(runtime);
         when(repository.createProbeRun(any(), eq(profileId), any(), any(), any())).thenReturn(probeRun(runId, profileId, "PENDING"));
@@ -564,10 +564,10 @@ class ModelProfileServiceTests {
                 eq(null), eq("model"), eq("RESPONSES"), eq(null), eq(30), eq(1800), eq(actor)))
                 .thenAnswer(invocation -> record(invocation.getArgument(0), "Disabled", false, "codex",
                         "OPENAI_COMPATIBLE", null, "model", "RESPONSES", null, 30, 1800));
-        assertThat(service().create(new ModelProfileRequest("Disabled", false, null, null, null, "model", null,
-                null, false, null, null, Set.of()), actor).enabled()).isFalse();
+        assertThat(service().create(new ModelProfileRequest("Disabled",  false, null,  null,  null,  "model",  null,
+                null,  false,  null,  null,  Set.of()), actor).enabled()).isFalse();
 
-        when(repository.findById(profileId)).thenReturn(java.util.Optional.of(profile));
+        when(repository.findById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(profile));
         when(agentRuntimeRepository.findByType(cn.rvport.backend.codexprovider.AgentType.CODEX))
                 .thenReturn(java.util.Optional.of(runtime));
         var failedCheck = cn.rvport.backend.codexprovider.CodexProviderProbeCheckResult.failure(
@@ -576,9 +576,9 @@ class ModelProfileServiceTests {
                 cn.rvport.backend.codexprovider.AgentType.CODEX, runtimeId, false, false, List.of(failedCheck)));
         assertThat(service().test(profileId, null, actor).success()).isFalse();
 
-        when(repository.listAssignments()).thenReturn(List.of(new ModelProfileRepository.AssignmentView(
+        when(repository.listAssignments(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(new ModelProfileRepository.AssignmentView(
                 "TEST_LOG_COMPARE", profileId, null, runtimeId, null, OffsetDateTime.now())));
-        assertThat(service().listAssignments()).anySatisfy(item -> {
+        assertThat(service().listAssignments(OWNER_ID)).anySatisfy(item -> {
             if (item.stage().equals("TEST_LOG_COMPARE")) {
                 assertThat(item.modelProfile()).isNull();
                 assertThat(item.agentRuntime()).isNull();
@@ -594,22 +594,26 @@ class ModelProfileServiceTests {
 
     private ModelProfileRequest request(String name, String executable, String provider, String baseUrl,
             String wireApi, Integer timeout, Integer maxRuntime) {
-        return new ModelProfileRequest(name, true, executable, provider, baseUrl, "model", wireApi,
-                null, false, timeout, maxRuntime, Set.of());
+        return new ModelProfileRequest(name, true, "codex".equals(executable) ? null : executable, provider, baseUrl, "model", wireApi,
+                null,  false,  timeout,  maxRuntime,  Set.of());
     }
 
     private ModelProfileService service() {
-        return new ModelProfileService(repository, cipher(), new ObjectMapper(), probeService, agentRuntimeRepository, agentRuntimeService);
+        ModelProfileService instance = new ModelProfileService(repository, cipher(), new ObjectMapper(), probeService, agentRuntimeRepository, agentRuntimeService);
+        instance.setConfigurationAccess(org.mockito.Mockito.mock(ModelConfigurationAccess.class));
+        return instance;
     }
 
     private ModelProfileService service(DirectExecutorService executor, UUID fixedRunId) {
-        return new ModelProfileService(repository, cipher(), new ObjectMapper(), probeService, agentRuntimeRepository,
+        ModelProfileService instance = new ModelProfileService(repository, cipher(), new ObjectMapper(), probeService, agentRuntimeRepository,
                 agentRuntimeService, executor) {
             @Override
             UUID newRunId() {
                 return fixedRunId;
             }
         };
+        instance.setConfigurationAccess(org.mockito.Mockito.mock(ModelConfigurationAccess.class));
+        return instance;
     }
 
     private CredentialCipher cipher() {

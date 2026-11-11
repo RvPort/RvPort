@@ -17,6 +17,7 @@ public record AutomatedTestInput(
         String workingDirectory,
         Integer timeoutSeconds,
         Map<String, String> environmentVariables,
-        List<AutomatedTestReportTarget> reportTargets
+        List<AutomatedTestReportTarget> reportTargets,
+        UUID configurationUserId
 ) {
 }

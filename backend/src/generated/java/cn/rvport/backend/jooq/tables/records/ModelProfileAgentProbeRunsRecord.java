@@ -184,6 +184,22 @@ public class ModelProfileAgentProbeRunsRecord extends UpdatableRecordImpl<ModelP
         return (OffsetDateTime) get(10);
     }
 
+    /**
+     * Setter for
+     * <code>public.model_profile_agent_probe_runs.owner_user_id</code>.
+     */
+    public void setOwnerUserId(UUID value) {
+        set(11, value);
+    }
+
+    /**
+     * Getter for
+     * <code>public.model_profile_agent_probe_runs.owner_user_id</code>.
+     */
+    public UUID getOwnerUserId() {
+        return (UUID) get(11);
+    }
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -207,7 +223,7 @@ public class ModelProfileAgentProbeRunsRecord extends UpdatableRecordImpl<ModelP
     /**
      * Create a detached, initialised ModelProfileAgentProbeRunsRecord
      */
-    public ModelProfileAgentProbeRunsRecord(UUID id, UUID modelProfileId, String status, JSONB selectedAgentRuntimeIds, JSONB selectedAgentRuntimes, String message, UUID createdBy, OffsetDateTime startedAt, OffsetDateTime finishedAt, OffsetDateTime createdAt, OffsetDateTime updatedAt) {
+    public ModelProfileAgentProbeRunsRecord(UUID id, UUID modelProfileId, String status, JSONB selectedAgentRuntimeIds, JSONB selectedAgentRuntimes, String message, UUID createdBy, OffsetDateTime startedAt, OffsetDateTime finishedAt, OffsetDateTime createdAt, OffsetDateTime updatedAt, UUID ownerUserId) {
         super(ModelProfileAgentProbeRuns.MODEL_PROFILE_AGENT_PROBE_RUNS);
 
         setId(id);
@@ -221,6 +237,7 @@ public class ModelProfileAgentProbeRunsRecord extends UpdatableRecordImpl<ModelP
         setFinishedAt(finishedAt);
         setCreatedAt(createdAt);
         setUpdatedAt(updatedAt);
+        setOwnerUserId(ownerUserId);
         resetTouchedOnNotNull();
     }
 }

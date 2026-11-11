@@ -24,14 +24,14 @@ def refresh():
 
 
 def start(profile, agents):
-    return call('POST', 'admin/model-profiles/' + profile + ':test-agents',
+    return call('POST', 'me/model-profiles/' + profile + ':test-agents',
                 {'agentRuntimeIds': [runtime_ids[agent] for agent in agents]})['id']
 
 
 def wait(run):
     deadline = time.monotonic() + 100
     while time.monotonic() < deadline:
-        result = call('GET', 'admin/model-profile-agent-test-runs/' + run)
+        result = call('GET', 'me/model-profile-agent-test-runs/' + run)
         if result['finishedAt']:
             return result
         time.sleep(.3)
@@ -49,7 +49,7 @@ refresh()
 baseline = json.loads(Path('/tmp/agent-api-acceptance.json').read_text())
 runtime_ids = baseline['runtime_ids']
 profile = baseline['second']
-path = 'admin/model-profiles/' + profile
+path = 'me/model-profiles/' + profile
 state_path = Path('/tmp/probe-recovery-acceptance.json')
 state = json.loads(state_path.read_text()) if state_path.exists() else {}
 phase = sys.argv[1]
@@ -81,18 +81,18 @@ elif phase == 'check-disabled':
 elif phase == 'queue-restart':
     call('PATCH', path, {'enabled': True, 'timeoutSeconds': 2})
     state['beforeRestartProfileAt'] = call('GET', path)['lastTestedAt']
-    state['beforeRestartRuntimeAt'] = call('GET', 'admin/agent-runtimes/' + runtime_ids['CODEX'])['lastProbeAt']
+    state['beforeRestartRuntimeAt'] = call('GET', 'me/agent-runtimes/' + runtime_ids['CODEX'])['lastProbeAt']
     state['restartRun'] = start(profile, ['CODEX'])
     time.sleep(1)
 elif phase == 'check-restart':
     result = wait(state['restartRun'])
     assert result['status'] == 'FAILED' and not result['results'][0]['agentCompatible'], result
     summary = call('GET', path)
-    runtime = call('GET', 'admin/agent-runtimes/' + runtime_ids['CODEX'])
+    runtime = call('GET', 'me/agent-runtimes/' + runtime_ids['CODEX'])
     assert summary['lastTestStatus'] == 'FAILED', summary
-    assert runtime['lastProbeStatus'] == 'FAILED', runtime
+    assert runtime['lastProbeStatus'] is None, runtime
     assert summary['lastTestedAt'] != state['beforeRestartProfileAt'], 'profile summary did not advance'
-    assert runtime['lastProbeAt'] != state['beforeRestartRuntimeAt'], 'runtime summary did not advance'
+    assert runtime['lastProbeAt'] is None and state['beforeRestartRuntimeAt'] is None, 'personal probe leaked shared state'
     assert summary['lastTestDetails']['errorCode'] == 'AGENT_PROBE_WORKER_TIMED_OUT', summary
     state['restartResult'] = result
     state['restartSummary'] = {'profile': summary['lastTestStatus'], 'runtime': runtime['lastProbeStatus']}

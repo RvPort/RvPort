@@ -296,19 +296,19 @@ MVP 浏览器登录态 SHALL 使用 Spring Security Session、Spring Session Red
 - **THEN** E2E SHALL 使用 `/api/test-support/session`
 
 ### Requirement: Codex Provider 配置实现必须覆盖三类测试
-模型 profile 和 `TEST_LOG_COMPARE` 阶段绑定实现 SHALL 配套单元测试和必要的 API E2E 测试，并 SHALL 覆盖正常流程、异常流程和 edge case。
+个人模型 profile 和两个受控阶段绑定实现 SHALL 配套独立单元测试与本地隔离 Compose API 验收，覆盖正常流程、异常流程和 edge case；MUST NOT 因此恢复已退役的 E2E 设施。
 
 #### Scenario: 覆盖正常流程
-- **WHEN** 超级管理员创建、查询、更新并测试模型 profile
+- **WHEN** 普通用户或 admin 创建、查询、更新并测试本人的模型 profile
 - **THEN** 测试 SHALL 验证普通配置写入 `model_profiles`
 - **AND** 测试 SHALL 验证 API key 加密保存且查询响应只返回遮蔽摘要
 - **AND** 测试 SHALL 验证测试接口返回脱敏后的成功或失败摘要
-- **AND** 测试 SHALL 验证 `TEST_LOG_COMPARE` 阶段绑定能解析到已启用模型 profile
+- **AND** 测试 SHALL 验证 TEST_LOG_COMPARE 和 KB_AI_EXTENSION 个人阶段绑定能解析到本人已启用模型 profile
 
 #### Scenario: 覆盖异常流程
-- **WHEN** 非超级管理员访问模型 profile 或阶段绑定 API
-- **THEN** 测试 SHALL 验证请求被拒绝
-- **WHEN** 请求包含非法 `baseUrl`、非法 `modelProviderType`、非法 `wireApi`、空 `model`、重复 profile 名称、非 `TEST_LOG_COMPARE` 阶段或越界超时参数
+- **WHEN** 用户访问他人模型 profile、probe run 或绑定目标
+- **THEN** 测试 SHALL 验证越权资源返回 404、跨用户绑定整体拒绝且零上游调用
+- **WHEN** 请求包含非法 `baseUrl`、非法 `modelProviderType`、非法 `wireApi`、空 `model`、同一所有者内重复 profile 名称、两个受控阶段以外的阶段或越界超时参数
 - **THEN** 测试 SHALL 验证 API 返回参数校验错误
 - **WHEN** Codex executable 不存在、profile 配置不完整、阶段未绑定或绑定 profile 已禁用
 - **THEN** 测试 SHALL 验证接口或阶段解析返回受控失败且不泄漏 secret
@@ -322,6 +322,11 @@ MVP 浏览器登录态 SHALL 使用 Spring Security Session、Spring Session Red
 - **THEN** 测试 SHALL 验证响应和持久化摘要均已脱敏
 - **WHEN** 删除已被阶段绑定的模型 profile
 - **THEN** 测试 SHALL 验证删除被拒绝
+
+#### Scenario: 删除旧接口的回归测试
+- **WHEN** 使用认证用户与有效 CSRF 请求旧 admin 模型相关 API
+- **THEN** 测试 SHALL 验证全部旧路由不存在且返回 404，业务服务零调用，不以 401/403 替代删除证据
+- **AND** SHALL 验证普通用户、admin 个人权限隔离，以及未登录、禁用账号、强制改密码和敏感响应禁止缓存规则
 
 ### Requirement: 自动化测试运行时必须覆盖三类测试
 自动化测试运行时实现 SHALL 配套单元测试、轻量集成测试和必要的独立 API E2E 测试，并 SHALL 覆盖正常流程、异常流程和 edge case。

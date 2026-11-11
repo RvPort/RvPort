@@ -94,6 +94,11 @@ public class ModelStageAssignments extends TableImpl<ModelStageAssignmentsRecord
      */
     public final TableField<ModelStageAssignmentsRecord, UUID> AGENT_RUNTIME_ID = createField(DSL.name("agent_runtime_id"), SQLDataType.UUID.nullable(false), this, "");
 
+    /**
+     * The column <code>public.model_stage_assignments.owner_user_id</code>.
+     */
+    public final TableField<ModelStageAssignmentsRecord, UUID> OWNER_USER_ID = createField(DSL.name("owner_user_id"), SQLDataType.UUID.nullable(false), this, "");
+
     private ModelStageAssignments(Name alias, Table<ModelStageAssignmentsRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
     }
@@ -175,7 +180,20 @@ public class ModelStageAssignments extends TableImpl<ModelStageAssignmentsRecord
 
     @Override
     public List<ForeignKey<ModelStageAssignmentsRecord, ?>> getReferences() {
-        return Arrays.asList(Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_AGENT_RUNTIME_FK, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_MODEL_PROFILE_ID_FKEY, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_UPDATED_BY_FKEY);
+        return Arrays.asList(Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_ASSIGNMENTS_OWNER_PROFILE_FK, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_AGENT_RUNTIME_FK, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_MODEL_PROFILE_ID_FKEY, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_OWNER_USER_ID_FKEY, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_UPDATED_BY_FKEY);
+    }
+
+    private transient ModelProfilesPath _modelAssignmentsOwnerProfileFk;
+
+    /**
+     * Get the implicit join path to the <code>public.model_profiles</code>
+     * table, via the <code>model_assignments_owner_profile_fk</code> key.
+     */
+    public ModelProfilesPath modelAssignmentsOwnerProfileFk() {
+        if (_modelAssignmentsOwnerProfileFk == null)
+            _modelAssignmentsOwnerProfileFk = new ModelProfilesPath(this, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_ASSIGNMENTS_OWNER_PROFILE_FK, null);
+
+        return _modelAssignmentsOwnerProfileFk;
     }
 
     private transient AgentRuntimesPath _agentRuntimes;
@@ -191,29 +209,44 @@ public class ModelStageAssignments extends TableImpl<ModelStageAssignmentsRecord
         return _agentRuntimes;
     }
 
-    private transient ModelProfilesPath _modelProfiles;
+    private transient ModelProfilesPath _modelStageAssignmentsModelProfileIdFkey;
 
     /**
      * Get the implicit join path to the <code>public.model_profiles</code>
-     * table.
+     * table, via the <code>model_stage_assignments_model_profile_id_fkey</code>
+     * key.
      */
-    public ModelProfilesPath modelProfiles() {
-        if (_modelProfiles == null)
-            _modelProfiles = new ModelProfilesPath(this, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_MODEL_PROFILE_ID_FKEY, null);
+    public ModelProfilesPath modelStageAssignmentsModelProfileIdFkey() {
+        if (_modelStageAssignmentsModelProfileIdFkey == null)
+            _modelStageAssignmentsModelProfileIdFkey = new ModelProfilesPath(this, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_MODEL_PROFILE_ID_FKEY, null);
 
-        return _modelProfiles;
+        return _modelStageAssignmentsModelProfileIdFkey;
     }
 
-    private transient UsersPath _users;
+    private transient UsersPath _modelStageAssignmentsOwnerUserIdFkey;
 
     /**
-     * Get the implicit join path to the <code>public.users</code> table.
+     * Get the implicit join path to the <code>public.users</code> table, via
+     * the <code>model_stage_assignments_owner_user_id_fkey</code> key.
      */
-    public UsersPath users() {
-        if (_users == null)
-            _users = new UsersPath(this, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_UPDATED_BY_FKEY, null);
+    public UsersPath modelStageAssignmentsOwnerUserIdFkey() {
+        if (_modelStageAssignmentsOwnerUserIdFkey == null)
+            _modelStageAssignmentsOwnerUserIdFkey = new UsersPath(this, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_OWNER_USER_ID_FKEY, null);
 
-        return _users;
+        return _modelStageAssignmentsOwnerUserIdFkey;
+    }
+
+    private transient UsersPath _modelStageAssignmentsUpdatedByFkey;
+
+    /**
+     * Get the implicit join path to the <code>public.users</code> table, via
+     * the <code>model_stage_assignments_updated_by_fkey</code> key.
+     */
+    public UsersPath modelStageAssignmentsUpdatedByFkey() {
+        if (_modelStageAssignmentsUpdatedByFkey == null)
+            _modelStageAssignmentsUpdatedByFkey = new UsersPath(this, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_UPDATED_BY_FKEY, null);
+
+        return _modelStageAssignmentsUpdatedByFkey;
     }
 
     @Override

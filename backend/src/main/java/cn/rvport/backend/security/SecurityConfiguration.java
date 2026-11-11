@@ -43,11 +43,7 @@ public class SecurityConfiguration {
                                 "/api/auth/password-resets/confirm").permitAll()
                         .requestMatchers("/api/admin/users", "/api/admin/users/**",
                                 "/api/admin/configs", "/api/admin/configs/**",
-                                "/api/admin/agent-runtimes", "/api/admin/agent-runtimes/**",
-                                "/api/admin/workers", "/api/admin/workers/**",
-                                "/api/admin/model-profiles", "/api/admin/model-profiles/**",
-                                "/api/admin/model-profile-agent-test-runs", "/api/admin/model-profile-agent-test-runs/**",
-                                "/api/admin/model-stage-assignments").hasAuthority("SUPER_ADMIN")
+                                "/api/admin/workers", "/api/admin/workers/**").hasAuthority("SUPER_ADMIN")
                         .anyRequest().authenticated())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())

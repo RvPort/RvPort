@@ -376,7 +376,7 @@ class AutomatedTestHandlerTests {
     private static AutomatedTestInput input(UUID runId, Map<String, String> environment, String workingDirectory,
                                             List<AutomatedTestReportTarget> targets) {
         return new AutomatedTestInput(PROJECT_ID, runId, UUID.randomUUID(), REVISION_ID, ENVIRONMENT_ID, 1L,
-                UUID.randomUUID(), TestBatchRole.SOURCE, "make test", workingDirectory, 300, environment, targets);
+                UUID.randomUUID(), TestBatchRole.SOURCE, "make test", workingDirectory, 300, environment, targets, null);
     }
 
     private static TaskView task() {

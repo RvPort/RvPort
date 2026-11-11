@@ -48,7 +48,7 @@ public record ModelProfileResponse(
                 record.getId(),
                 record.getName(),
                 Boolean.TRUE.equals(record.getEnabled()),
-                record.getExecutablePath(),
+                null,
                 record.getModelProviderType(),
                 record.getBaseUrl(),
                 record.getModel(),

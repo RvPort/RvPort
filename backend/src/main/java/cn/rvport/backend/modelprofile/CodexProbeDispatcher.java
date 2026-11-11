@@ -26,6 +26,10 @@ public class CodexProbeDispatcher {
     private final ObjectMapper json;
     private final CodexProviderProbeService probes;
     private final RabbitTemplate rabbit;
+    private ModelConfigurationAccess configurationAccess;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setConfigurationAccess(ModelConfigurationAccess access) { this.configurationAccess = access; }
 
     public CodexProbeDispatcher(CodexProbeJobRepository jobs, ModelProfileRepository profiles,
             AgentRuntimeService runtimes, CredentialCipher cipher, ObjectMapper json,
@@ -34,12 +38,12 @@ public class CodexProbeDispatcher {
         this.json=json; this.probes=probes; this.rabbit=rabbit;
     }
 
-    public CodexProviderTestResult execute(UUID runId, UUID profileId, UUID runtimeId,
+    public CodexProviderTestResult execute(UUID runId, UUID profileId, UUID runtimeId, UUID configurationUserId,
             CodexProviderResolvedConfig override, int timeoutSeconds) {
         CodexProbeJobRepository.Job job = null;
         try {
             String encrypted = override == null ? null : json.writeValueAsString(cipher.encrypt(json.writeValueAsBytes(override)));
-            job = jobs.create(UUID.randomUUID(),runId,profileId,runtimeId,encrypted,
+            job = jobs.create(UUID.randomUUID(),runId,profileId,runtimeId,configurationUserId,encrypted,
                     OffsetDateTime.now().plusSeconds(3L*timeoutSeconds));
             publish(job.id());
             while (OffsetDateTime.now().isBefore(job.deadline())) {
@@ -107,7 +111,12 @@ public class CodexProbeDispatcher {
     }
 
     private CodexProviderTestResult run(CodexProbeJobRepository.Job job) throws Exception {
-        var profile = profiles.findEnabledById(job.profileId()).orElseThrow();
+        configurationAccess.requireActive(job.configurationUserId());
+        var profile = profiles.findEnabledById(job.profileId(), job.configurationUserId()).orElseThrow();
+        if (job.runId() != null) {
+            var run = profiles.findProbeRun(job.runId(), job.configurationUserId()).orElseThrow();
+            if (!job.profileId().equals(run.getModelProfileId())) { throw ModelExecutionSelection.missing(); }
+        }
         var runtime = runtimes.requireEnabled(job.runtimeId());
         if (!"CODEX".equals(runtime.getAgentType())) { throw new IllegalArgumentException("CODEX_REQUIRED"); }
         CodexProviderResolvedConfig config;
@@ -122,7 +131,8 @@ public class CodexProbeDispatcher {
                     CodexProviderWireApi.valueOf(profile.getWireApi()),key,profile.getTimeoutSeconds(),profile.getMaxRuntimeSeconds());
         }
         if (OffsetDateTime.now().isAfter(job.deadline())) { return failure(job.runtimeId(),"AGENT_PROBE_WORKER_TIMEOUT"); }
-        return probes.test(config,runtime);
+        return new ModelExecutionSelection(job.configurationUserId(), job.profileId(), job.runtimeId())
+                .auditProbe(probes.test(config,runtime), new cn.rvport.backend.agentruntime.AgentModelRuntimeConfig(runtime, profile, config));
     }
 
     static CodexProviderTestResult failure(UUID runtimeId,String code) {

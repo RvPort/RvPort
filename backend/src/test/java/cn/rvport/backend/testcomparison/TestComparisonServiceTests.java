@@ -38,6 +38,7 @@ import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
 class TestComparisonServiceTests {
+    private static final UUID OWNER_ID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
 
     @Mock private TestComparisonRepository repository;
     @Mock private AutomatedTestRepository automatedTestRepository;
@@ -69,6 +70,12 @@ class TestComparisonServiceTests {
         when(automatedTestRepository.findBatchPeer(target, TestBatchRole.SOURCE)).thenReturn(Optional.of(source));
         when(repository.createIfAbsent(projectId, batchId, source.id(), target.id())).thenReturn(pending);
         when(taskService.getInternal(source.taskId())).thenReturn(taskView(source.taskId(), projectId, creatorId));
+        when(taskService.getInternal(target.taskId())).thenReturn(taskView(target.taskId(), projectId, creatorId));
+        when(taskService.configurationUserId(source.taskId())).thenReturn(creatorId);
+        when(taskService.configurationUserId(target.taskId())).thenReturn(creatorId);
+        var profile = new cn.rvport.backend.jooq.tables.records.ModelProfilesRecord(); profile.setId(UUID.randomUUID());
+        var runtime = new cn.rvport.backend.jooq.tables.records.AgentRuntimesRecord(); runtime.setId(UUID.randomUUID());
+        when(agentRuntime.resolveRunnableConfig(creatorId)).thenReturn(new cn.rvport.backend.agentruntime.AgentModelRuntimeConfig(runtime, profile, null));
         when(taskService.create(any())).thenReturn(task(projectId));
         when(repository.findById(pending.id())).thenReturn(Optional.of(queued));
 
@@ -105,8 +112,42 @@ class TestComparisonServiceTests {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"missing", "different", "legacy", "peer-legacy", "source-project", "target-project", "deleted", "no-actor"})
+    void inconsistentOrLegacyBatchIdentityNeverCallsModel(String scenario) {
+        UUID projectId = UUID.randomUUID(), batchId = UUID.randomUUID();
+        var source = testRun(projectId, batchId, TestBatchRole.SOURCE, TaskStatus.SUCCEEDED);
+        var target = testRun(projectId, batchId, TestBatchRole.TARGET, TaskStatus.SUCCEEDED);
+        var pending = comparison(projectId, batchId, source.id(), target.id(), TestComparisonStatus.PENDING, null);
+        var unavailable = comparison(projectId, batchId, source.id(), target.id(), TestComparisonStatus.UNAVAILABLE, null);
+        when(automatedTestRepository.findById(source.id())).thenReturn(Optional.of(source));
+        when(automatedTestRepository.findBatchPeer(source, TestBatchRole.TARGET)).thenReturn(Optional.of(target));
+        if (scenario.equals("deleted")) {
+            when(taskService.getInternal(source.taskId())).thenThrow(new ApiException(HttpStatus.NOT_FOUND,"TASK_NOT_FOUND","missing"));
+        } else {
+            when(taskService.getInternal(source.taskId())).thenReturn(scenario.equals("missing") ? null :
+                    taskView(source.taskId(), scenario.equals("source-project") ? UUID.randomUUID() : projectId,
+                            scenario.equals("no-actor") ? null : OWNER_ID));
+            when(taskService.getInternal(target.taskId())).thenReturn(taskView(target.taskId(),
+                    scenario.equals("target-project") ? UUID.randomUUID() : projectId,
+                    scenario.equals("different") ? UUID.randomUUID() : OWNER_ID));
+        }
+        if (scenario.equals("legacy") || scenario.equals("peer-legacy")) {
+            when(taskService.configurationUserId(source.taskId())).thenReturn(scenario.equals("legacy") ? null : OWNER_ID);
+            if (scenario.equals("peer-legacy")) { when(taskService.configurationUserId(target.taskId())).thenReturn(null); }
+        }
+        when(repository.createIfAbsent(projectId, batchId, source.id(), target.id())).thenReturn(pending);
+        when(repository.findById(pending.id())).thenReturn(Optional.of(unavailable));
+        service.onAutomatedTestFinished(source.id());
+        verify(repository).markUnavailable(org.mockito.ArgumentMatchers.eq(pending.id()),
+                org.mockito.ArgumentMatchers.eq("TEST_COMPARE_MODEL_NOT_CONFIGURED"), org.mockito.ArgumentMatchers.contains("Trusted model execution identity"));
+        org.mockito.Mockito.verifyNoInteractions(agentRuntime);
+        verify(taskService, org.mockito.Mockito.never()).create(any());
+        verify(automatedTestRepository, org.mockito.Mockito.never()).updateStats(any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.EnumSource(value = TestComparisonStatus.class,
-            names = {"SUCCEEDED", "RUNNING", "QUEUED"})
+            names = {"SUCCEEDED", "RUNNING", "QUEUED", "FAILED", "CANCELLED", "TIMEOUT", "UNAVAILABLE"})
     void finishedHookDoesNotRedispatchAnExistingComparison(TestComparisonStatus status) {
         UUID projectId = UUID.randomUUID();
         UUID batchId = UUID.randomUUID();
@@ -115,7 +156,10 @@ class TestComparisonServiceTests {
         TestComparisonRunView existing = comparison(projectId, batchId, source.id(), target.id(), status, UUID.randomUUID());
         when(automatedTestRepository.findById(source.id())).thenReturn(Optional.of(source));
         when(automatedTestRepository.findBatchPeer(source, TestBatchRole.TARGET)).thenReturn(Optional.of(target));
-        when(taskService.getInternal(source.taskId())).thenReturn(taskView(source.taskId(), projectId, UUID.randomUUID()));
+        when(taskService.getInternal(source.taskId())).thenReturn(taskView(source.taskId(), projectId, OWNER_ID));
+        when(taskService.getInternal(target.taskId())).thenReturn(taskView(target.taskId(), projectId, OWNER_ID));
+        when(taskService.configurationUserId(source.taskId())).thenReturn(OWNER_ID);
+        when(taskService.configurationUserId(target.taskId())).thenReturn(OWNER_ID);
         when(repository.createIfAbsent(projectId, batchId, source.id(), target.id())).thenReturn(existing);
 
         service.onAutomatedTestFinished(source.id());
@@ -136,9 +180,12 @@ class TestComparisonServiceTests {
         TestComparisonRunView unavailable = comparison(projectId, batchId, source.id(), target.id(), TestComparisonStatus.UNAVAILABLE, null);
         when(automatedTestRepository.findById(source.id())).thenReturn(Optional.of(source));
         when(automatedTestRepository.findBatchPeer(source, TestBatchRole.TARGET)).thenReturn(Optional.of(target));
-        when(taskService.getInternal(source.taskId())).thenReturn(taskView(source.taskId(), projectId, UUID.randomUUID()));
+        when(taskService.getInternal(source.taskId())).thenReturn(taskView(source.taskId(), projectId, OWNER_ID));
+        when(taskService.getInternal(target.taskId())).thenReturn(taskView(target.taskId(), projectId, OWNER_ID));
+        when(taskService.configurationUserId(source.taskId())).thenReturn(OWNER_ID);
+        when(taskService.configurationUserId(target.taskId())).thenReturn(OWNER_ID);
         when(repository.createIfAbsent(projectId, batchId, source.id(), target.id())).thenReturn(pending);
-        when(agentRuntime.resolveRunnableConfig()).thenThrow(new ApiException(HttpStatus.BAD_REQUEST, "NO_MODEL", "未配置模型"));
+        when(agentRuntime.resolveRunnableConfig(org.mockito.ArgumentMatchers.any())).thenThrow(new ApiException(HttpStatus.BAD_REQUEST, "NO_MODEL", "未配置模型"));
         when(repository.findById(pending.id())).thenReturn(Optional.of(unavailable));
 
         service.onAutomatedTestFinished(source.id());

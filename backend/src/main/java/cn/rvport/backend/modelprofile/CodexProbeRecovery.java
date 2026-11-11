@@ -29,9 +29,9 @@ public class CodexProbeRecovery {
     @org.springframework.transaction.annotation.Transactional
     public void recover() {
         for (var job : jobs.recoverable()) {
-            var run = profiles.findProbeRun(job.runId());
-            if (run.isEmpty()) { continue; }
-            if (profiles.listProbeResultsByRun(job.runId()).stream()
+            var run = profiles.findProbeRun(job.runId(), job.configurationUserId());
+            if (run.isEmpty() || !job.profileId().equals(run.get().getModelProfileId())) { continue; }
+            if (profiles.listProbeResultsByRun(job.runId(), job.configurationUserId()).stream()
                     .anyMatch(result -> job.runtimeId().equals(result.getAgentRuntimeId()))) { continue; }
             CodexProviderTestResult result;
             // 恢复的是既有终态；不能以恢复时刻把历史失败伪装为最新测试。
@@ -57,9 +57,8 @@ public class CodexProbeRecovery {
                         Duration.between(started, finished).toMillis());
                 var tested = OffsetDateTime.ofInstant(testedAt, java.time.ZoneOffset.UTC);
                 var details = JSONB.valueOf(json.writeValueAsString(result.details()));
-                runtimes.updateProbeResult(job.runtimeId(), result.status(), result.message(), details, tested);
                 profiles.updateTestResult(job.profileId(), result.status(), result.message(), tested, "CODEX",
-                        result.basicAvailable(), result.agentCompatible(), details, run.get().getCreatedBy());
+                        result.basicAvailable(), result.agentCompatible(), details, job.configurationUserId());
             } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
                 throw new IllegalStateException("PROBE_RESULT_SERIALIZATION_FAILED", ex);
             }
