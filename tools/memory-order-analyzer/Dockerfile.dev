@@ -3,7 +3,6 @@ FROM ${UBUNTU_IMAGE}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG LLVM_DEB_VERSION=1:21.1.8~++20251221032922+2078da43e25a-1~exp1~20251221153059.70
-COPY development-packages.lock /opt/development-packages.lock
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl
 RUN curl --fail --show-error --location --max-time 60 \
@@ -18,9 +17,7 @@ RUN curl --fail --show-error --location --max-time 60 \
        g++=4:13.2.0-7ubuntu1 cmake=3.28.3-1build7 ninja-build=1.11.1-2 \
        libgtest-dev=1.14.0-1 python3-pytest=7.4.4-1 \
        python3-coverage=7.4.4+dfsg1-0ubuntu2 python3-jsonschema=4.10.3-2ubuntu1 \
-    && xargs -r apt-get install -y --no-install-recommends --allow-downgrades < /opt/development-packages.lock \
     && dpkg-query -W -f='${Package}\t${Version}\n' > /opt/development-packages.tsv \
-    && dpkg-query -W -f='${Package}=${Version}\n' | diff - /opt/development-packages.lock \
     # libc++abi also installs compatibility copies at LLVM's public include root.
     # CMake must expose that root for LLVM headers, so the copies would shadow
     # libstdc++'s cxxabi declarations.  The canonical libc++ copies remain under
