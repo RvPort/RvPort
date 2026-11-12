@@ -78,7 +78,9 @@ ARG LLVM_DEB_VERSION=1:21.1.8~++20251221032922+2078da43e25a-1~exp1~2025122115305
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl python3 python3-venv \
        cmake ninja-build g++ libgtest-dev zlib1g-dev libzstd-dev libedit-dev libcurl4-openssl-dev libxml2-dev \
-    && curl --fail --show-error --location --max-time 60 https://apt.llvm.org/llvm-snapshot.gpg.key -o /usr/share/keyrings/llvm.asc \
+    && curl --fail --show-error --location --max-time 60 \
+       --retry 5 --retry-delay 3 --retry-connrefused --retry-all-errors \
+       https://apt.llvm.org/llvm-snapshot.gpg.key -o /usr/share/keyrings/llvm.asc \
     && echo '8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /usr/share/keyrings/llvm.asc' | sha256sum -c - \
     && echo 'deb [signed-by=/usr/share/keyrings/llvm.asc] https://apt.llvm.org/noble/ llvm-toolchain-noble-21 main' > /etc/apt/sources.list.d/llvm.list \
     && apt-get update && apt-get install -y --no-install-recommends \
@@ -148,7 +150,9 @@ RUN --mount=type=cache,target=/root/.npm \
         xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl --fail --show-error --location --max-time 60 https://apt.llvm.org/llvm-snapshot.gpg.key -o /usr/share/keyrings/llvm.asc \
+RUN curl --fail --show-error --location --max-time 60 \
+       --retry 5 --retry-delay 3 --retry-connrefused --retry-all-errors \
+       https://apt.llvm.org/llvm-snapshot.gpg.key -o /usr/share/keyrings/llvm.asc \
     && echo '8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /usr/share/keyrings/llvm.asc' | sha256sum -c - \
     && echo 'deb [signed-by=/usr/share/keyrings/llvm.asc] https://apt.llvm.org/noble/ llvm-toolchain-noble-21 main' > /etc/apt/sources.list.d/llvm.list \
     && apt-get update && apt-get install -y --no-install-recommends \
