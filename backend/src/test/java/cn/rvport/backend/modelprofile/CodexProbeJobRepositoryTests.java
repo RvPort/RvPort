@@ -10,21 +10,22 @@ import org.jooq.impl.DSL;
 import org.junit.jupiter.api.Test;
 
 class CodexProbeJobRepositoryTests {
+    private static final UUID OWNER_ID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
     final UUID id=UUID.randomUUID(), run=UUID.randomUUID(), profile=UUID.randomUUID(), runtime=UUID.randomUUID(), owner=UUID.randomUUID();
     final OffsetDateTime deadline=OffsetDateTime.now().plusSeconds(10);
     final Field<?>[] fields={DSL.field("id",UUID.class),DSL.field("run_id",UUID.class),
             DSL.field("profile_id",UUID.class),DSL.field("runtime_id",UUID.class),DSL.field("payload_encrypted",String.class),
-            DSL.field("status",String.class),DSL.field("owner_id",UUID.class),DSL.field("deadline",OffsetDateTime.class),DSL.field("result_json",JSONB.class),DSL.field("finished_at",OffsetDateTime.class)};
+            DSL.field("status",String.class),DSL.field("owner_id",UUID.class),DSL.field("deadline",OffsetDateTime.class),DSL.field("result_json",JSONB.class),DSL.field("finished_at",OffsetDateTime.class), DSL.field("configuration_user_id",UUID.class)};
 
     @Test void recordsMapAndCreateIsIdempotent() throws Exception {
         try(var db=new JooqMockDatabase()) {
             var repo=new CodexProbeJobRepository(db.dsl());
-            var rows=db.result(fields,new Object[]{id,run,profile,runtime,"cipher","DONE",owner,deadline,JSONB.valueOf("{}"),deadline});
+            var rows=db.result(fields,new Object[]{id,run,profile,runtime,"cipher","DONE",owner,deadline,JSONB.valueOf("{}"),deadline,OWNER_ID});
             db.enqueueRows(1).enqueueResult(rows).enqueueRows(0).enqueueResult(rows).enqueueResult(db.result(fields));
-            var created=repo.create(id,null,profile,runtime,"cipher",deadline);
+            var created=repo.create(id, null, profile, runtime, OWNER_ID, "cipher", deadline);
             assertThat(created.result()).isEqualTo("{}");
             assertThat(created.finishedAt()).isEqualTo(deadline);
-            assertThat(repo.create(id,run,profile,runtime,"cipher",deadline).runId()).isEqualTo(run);
+            assertThat(repo.create(id, run, profile, runtime, OWNER_ID, "cipher", deadline).runId()).isEqualTo(run);
             assertThat(repo.find(id)).isEmpty();
             assertThat(db.executions().getFirst().normalizedSql().toLowerCase(java.util.Locale.ROOT))
                     .contains("?::timestamptz", "on conflict do nothing");
@@ -34,7 +35,7 @@ class CodexProbeJobRepositoryTests {
     @Test void ownershipDeadlineAndSecretRemovalAreEnforcedInMutations() throws Exception {
         try(var db=new JooqMockDatabase()) {
             var repo=new CodexProbeJobRepository(db.dsl());
-            db.enqueueResult(db.result(fields,new Object[]{id,run,profile,runtime,"cipher","RUNNING",owner,deadline,null,null}));
+            db.enqueueResult(db.result(fields,new Object[]{id,run,profile,runtime,"cipher","RUNNING",owner,deadline,null,null,OWNER_ID}));
             db.enqueueResult(db.result(fields)).enqueueRows(1).enqueueRows(0).enqueueRows(1).enqueueRows(1).enqueueRows(1);
             assertThat(repo.claim(id,owner).orElseThrow().result()).isNull();
             assertThat(repo.claim(id,owner)).isEmpty();
@@ -51,7 +52,7 @@ class CodexProbeJobRepositoryTests {
         try(var db=new JooqMockDatabase()) {
             var repo=new CodexProbeJobRepository(db.dsl());
             db.enqueueResult(db.result(new Field<?>[]{DSL.field("id",UUID.class)},new Object[]{id}));
-            db.enqueueResult(db.result(fields,new Object[]{id,run,profile,runtime,null,"DONE",owner,deadline,JSONB.valueOf("{}"),deadline}));
+            db.enqueueResult(db.result(fields,new Object[]{id,run,profile,runtime,null,"DONE",owner,deadline,JSONB.valueOf("{}"),deadline,OWNER_ID}));
             db.enqueueRows(1);
             assertThat(repo.publications()).containsExactly(id);
             assertThat(repo.recoverable()).hasSize(1);

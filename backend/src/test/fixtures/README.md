@@ -46,6 +46,16 @@ java -cp '/tmp/acceptance-java/classes:/tmp/acceptance-java/test-classes:/tmp/ac
 
 1. 停止本轮 worker，在 API 中执行 `offline`，验证混合 runtime 部分成功及旧同步入口有界失败。
 2. worker 仍停止时执行 `queue-disabled`，启动 worker 后执行 `check-disabled`，断言领取时禁用 profile 不产生上游调用。
-3. 再次停止本轮 worker，执行 `queue-restart`；强制结束仅本轮 API 进程以模拟中断，启动 worker 等待 job 过期，再启动 API，执行 `check-restart` 检查 run 与 profile/runtime 摘要。
+3. 再次停止本轮 worker，执行 `queue-restart`；强制结束仅本轮 API 进程以模拟中断，启动 worker 等待 job 过期，再启动 API，执行 `check-restart` 检查 run 与个人 profile 摘要；共享 runtime 不包含个人测试摘要。
+
+## 个人模型隔离验收
+
+`personal_model_acceptance.py serve` 在本轮独立网络以 `personal-model-mock` 别名运行模拟模型，`api` 在本轮 API 容器执行。它创建 alice/bob，验证与 admin 的个人 CRUD、绑定、run、结果隔离，真实 Codex CHAT 并发、原生 RESPONSES、DeepSeek Harness/OpenCode、禁用账号及零越权上游调用。假密钥只在本地模拟端比较，报告不保存实际密钥。`queue-disabled`/`check-disabled` 和 `queue-restart`/`check-restart` 分别配合仅本轮 worker/API 停启验证恢复。
+
+默认单 worker 的 probe listener 串行消费。验证实际 CLI 并行时，以同一服务镜像和本轮网络/卷临时运行第二个 worker（独立 instance ID，不发布端口、不增加生产 Compose 服务），待启动后执行 `concurrent`。该阶段除了检查账号地址/密钥，还要求两个账号的实际请求时间区间重叠；完成后删除临时 worker，再进行停机恢复场景。
+
+`PersonalModelBusinessAcceptanceMain` 使用当前应用 classpath 在本轮 API 容器运行，要求 `RVPORT_ACCEPTANCE_PROJECT=rvport-personal-model`。它创建本地源码及已完成测试夹具，经真实服务派发 KB AI 和自动比较，由本轮 worker 实际执行模型；不会运行环境收集、构建或自动测试 SSH 命令。检查 admin 手动重触发使用自己的 profile、历史项目结果可见、自动派生沿用原用户及重复完成不重跑。原始结果写 `/tmp/personal-business-acceptance.json`。
+
+随后停止本轮 worker，执行该 Java 入口的 `queue-retry` 参数；它创建 Alice 的任务，改绑到另一 profile 并禁用原 profile。启动本轮 worker 后执行 `check-retry`，检查实际自动重试次数、原主体和固定引用，以及零上游调用。业务成功路径也逐次检查模拟端收到的地址和假密钥属于预期触发者。
 
 只停启本轮容器；不重启 Docker 引擎、不触及其他项目。结束后导出报告，清理本轮容器、网络、卷和运行凭据。完整执行记录放在私有 `.migration-reports/`，不得提交真实配置、凭据或运行日志。

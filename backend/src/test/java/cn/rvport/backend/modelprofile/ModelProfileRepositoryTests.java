@@ -22,6 +22,7 @@ import org.jooq.Result;
 import org.junit.jupiter.api.Test;
 
 class ModelProfileRepositoryTests {
+    private static final UUID OWNER_ID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
     private static final UUID PROFILE_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID RUN_ID = UUID.fromString("20000000-0000-0000-0000-000000000002");
     private static final UUID RUNTIME_ID = UUID.fromString("30000000-0000-0000-0000-000000000003");
@@ -39,10 +40,10 @@ class ModelProfileRepositoryTests {
             assertThat(repository.create(PROFILE_ID, "DeepSeek", true, "codex", "OPENAI_COMPATIBLE",
                     "https://llm.example/v1", "deepseek", "RESPONSES", "cipher", 30, 600, ACTOR_ID))
                     .isNotNull();
-            assertThat(repository.findById(PROFILE_ID)).contains(profile);
-            assertThat(repository.findEnabledById(PROFILE_ID)).contains(profile);
-            assertThat(repository.nameExists("DEEPSEEK", null)).isTrue();
-            assertThat(repository.nameExists("DeepSeek", PROFILE_ID)).isFalse();
+            assertThat(repository.findById(PROFILE_ID, ACTOR_ID)).contains(profile);
+            assertThat(repository.findEnabledById(PROFILE_ID, ACTOR_ID)).contains(profile);
+            assertThat(repository.nameExists("DEEPSEEK",  null, ACTOR_ID)).isTrue();
+            assertThat(repository.nameExists("DeepSeek",  PROFILE_ID, ACTOR_ID)).isFalse();
             assertThat(database.executions().get(3).normalizedSql()).contains("lower(model_profiles.name) = ?");
             assertThat(database.executions().get(4).normalizedSql()).contains("model_profiles.id <>");
             database.verifyComplete();
@@ -60,11 +61,11 @@ class ModelProfileRepositoryTests {
             for (String sort : sorts) {
                 var request = new ModelProfileListRequest(2, 5, true, " OPENAI_COMPATIBLE ", " PASSED ",
                         " deep ", sort, "asc");
-                assertThat(repository.list(request)).hasSize(1);
+                assertThat(repository.list(request, ACTOR_ID)).hasSize(1);
             }
             database.enqueueResult(database.result(new Field<?>[]{org.jooq.impl.DSL.count()}, new Object[]{6L}));
             assertThat(repository.count(new ModelProfileListRequest(null, null, null, null, null,
-                    null, null, null))).isEqualTo(6);
+                    null, null, null), ACTOR_ID)).isEqualTo(6);
             assertThat(database.executions().getFirst().normalizedSql()).contains("enabled = ?", "model_provider_type = ?",
                     "last_test_status = ?", "lower(model_profiles.name) like ?", "fetch next ? rows only",
                     "offset ? rows", "name asc nulls last");
@@ -122,8 +123,8 @@ class ModelProfileRepositoryTests {
 
             assertThat(repository.createProbeRun(RUN_ID, PROFILE_ID, JSONB.valueOf("[]"), JSONB.valueOf("[]"), ACTOR_ID))
                     .isNotNull();
-            assertThat(repository.findProbeRun(RUN_ID)).contains(run);
-            assertThat(repository.findActiveProbeRun(PROFILE_ID)).contains(run);
+            assertThat(repository.findProbeRun(RUN_ID, ACTOR_ID)).contains(run);
+            assertThat(repository.findActiveProbeRun(PROFILE_ID, ACTOR_ID)).contains(run);
             assertThat(database.lastExecution().normalizedSql()).contains("status in", "created_at desc", "fetch next ? rows only");
             repository.updateProbeRunStatus(RUN_ID, AgentProbeRunStatus.RUNNING, "started", NOW, null);
             assertThat(database.lastExecution().normalizedSql()).contains("started_at = cast(").doesNotContain("finished_at = cast(");
@@ -149,8 +150,8 @@ class ModelProfileRepositoryTests {
             assertThat(repository.createProbeResult(newest.getId(), RUN_ID, PROFILE_ID, RUNTIME_ID, AgentType.CODEX.name(),
                     "COMPATIBLE", true, true, JSONB.valueOf("[]"), JSONB.valueOf("{}"), null, "ok",
                     NOW, NOW.plusSeconds(1), 1000L)).isNotNull();
-            assertThat(repository.listProbeResultsByRun(RUN_ID)).hasSize(3);
-            assertThat(repository.listLatestProbeResults(PROFILE_ID)).containsExactly(newest, other);
+            assertThat(repository.listProbeResultsByRun(RUN_ID, ACTOR_ID)).hasSize(3);
+            assertThat(repository.listLatestProbeResults(PROFILE_ID, ACTOR_ID)).containsExactly(newest, other);
             assertThat(database.lastExecution().normalizedSql()).contains("agent_runtime_id asc", "created_at desc");
             database.verifyComplete();
         }
@@ -165,16 +166,16 @@ class ModelProfileRepositoryTests {
                     .enqueueResult(assignmentResult(database, false, false))
                     .enqueueRows(1).enqueueRows(1);
 
-            assertThat(repository.isAssigned(PROFILE_ID)).isTrue();
-            var assigned = repository.listAssignments().getFirst();
+            assertThat(repository.isAssigned(PROFILE_ID, ACTOR_ID)).isTrue();
+            var assigned = repository.listAssignments(ACTOR_ID).getFirst();
             assertThat(assigned.profile()).isNotNull();
             assertThat(assigned.agentRuntime()).isNotNull();
-            var missing = repository.findAssignment(ModelProfileStage.TEST_LOG_COMPARE).orElseThrow();
+            var missing = repository.findAssignment(ModelProfileStage.TEST_LOG_COMPARE, ACTOR_ID).orElseThrow();
             assertThat(missing.profile()).isNull();
             assertThat(missing.agentRuntime()).isNull();
             repository.upsertAssignment(ModelProfileStage.TEST_LOG_COMPARE, PROFILE_ID, RUNTIME_ID, ACTOR_ID);
-            assertThat(database.lastExecution().normalizedSql()).contains("on conflict (stage)", "do update");
-            repository.delete(PROFILE_ID);
+            assertThat(database.lastExecution().normalizedSql()).contains("on conflict (owner_user_id, stage)", "do update");
+            repository.delete(PROFILE_ID, ACTOR_ID);
             assertThat(database.lastExecution().normalizedSql()).contains("delete from model_profiles", "model_profiles.id = cast(");
             database.verifyComplete();
         }
@@ -185,7 +186,7 @@ class ModelProfileRepositoryTests {
         try (JooqMockDatabase database = new JooqMockDatabase()) {
             ModelProfileRepository repository = new ModelProfileRepository(database.dsl());
             database.enqueueFailure(new SQLException("database unavailable"));
-            assertThatThrownBy(() -> repository.findById(PROFILE_ID))
+            assertThatThrownBy(() -> repository.findById(PROFILE_ID, ACTOR_ID))
                     .isInstanceOf(org.jooq.exception.DataAccessException.class)
                     .hasMessageContaining("database unavailable");
             database.verifyComplete();
@@ -193,15 +194,15 @@ class ModelProfileRepositoryTests {
     }
 
     private static ModelProfilesRecord profile() {
-        return new ModelProfilesRecord(PROFILE_ID, "DeepSeek", true, "codex", "OPENAI_COMPATIBLE",
-                "https://llm.example/v1", "deepseek", "RESPONSES", "cipher", 30, 600,
-                "COMPATIBLE", "ok", NOW, ACTOR_ID, ACTOR_ID, NOW, NOW, AgentType.CODEX.name(),
-                true, true, JSONB.valueOf("{}"), "SUCCEEDED", "reachable", JSONB.valueOf("{}"), NOW, 100L);
+        return new ModelProfilesRecord(PROFILE_ID,  "DeepSeek",  true,  "codex",  "OPENAI_COMPATIBLE",
+                "https://llm.example/v1",  "deepseek",  "RESPONSES",  "cipher",  30,  600,
+                "COMPATIBLE",  "ok",  NOW,  ACTOR_ID,  ACTOR_ID,  NOW,  NOW,  AgentType.CODEX.name(),
+                true,  true,  JSONB.valueOf("{}"),  "SUCCEEDED",  "reachable",  JSONB.valueOf("{}"),  NOW,  100L, ACTOR_ID);
     }
 
     private static ModelProfileAgentProbeRunsRecord probeRun() {
-        return new ModelProfileAgentProbeRunsRecord(RUN_ID, PROFILE_ID, AgentProbeRunStatus.PENDING.name(),
-                JSONB.valueOf("[]"), JSONB.valueOf("[]"), null, ACTOR_ID, null, null, NOW, NOW);
+        return new ModelProfileAgentProbeRunsRecord(RUN_ID,  PROFILE_ID,  AgentProbeRunStatus.PENDING.name(),
+                JSONB.valueOf("[]"),  JSONB.valueOf("[]"),  null,  ACTOR_ID,  null,  null,  NOW,  NOW, ACTOR_ID);
     }
 
     private static ModelProfileAgentProbeResultsRecord probeResult(UUID runtimeId, OffsetDateTime createdAt) {

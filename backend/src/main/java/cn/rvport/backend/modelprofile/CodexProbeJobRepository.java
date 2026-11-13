@@ -17,14 +17,14 @@ public class CodexProbeJobRepository {
     public CodexProbeJobRepository(DSLContext dsl) { this.dsl = dsl; }
 
     public record Job(UUID id, UUID runId, UUID profileId, UUID runtimeId, String payload,
-                      String status, UUID owner, OffsetDateTime deadline, String result, OffsetDateTime finishedAt) { }
+                      String status, UUID owner, OffsetDateTime deadline, String result, OffsetDateTime finishedAt, UUID configurationUserId) { }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Job create(UUID id, UUID runId, UUID profileId, UUID runtimeId, String encrypted, OffsetDateTime deadline) {
+    public Job create(UUID id, UUID runId, UUID profileId, UUID runtimeId, UUID configurationUserId, String encrypted, OffsetDateTime deadline) {
         dsl.execute("""
-                INSERT INTO codex_probe_jobs(id,run_id,profile_id,runtime_id,payload_encrypted,deadline)
-                VALUES (?,?,?,?,?,?::timestamptz) ON CONFLICT DO NOTHING
-                """, id, runId, profileId, runtimeId, encrypted, deadline);
+                INSERT INTO codex_probe_jobs(id,run_id,profile_id,runtime_id,configuration_user_id,payload_encrypted,deadline)
+                VALUES (?,?,?,?,?,?,?::timestamptz) ON CONFLICT DO NOTHING
+                """, id, runId, profileId, runtimeId, configurationUserId, encrypted, deadline);
         return runId == null ? find(id).orElseThrow() : map(dsl.fetchOne(
                 "SELECT * FROM codex_probe_jobs WHERE run_id=? AND runtime_id=?", runId, runtimeId));
     }
@@ -76,7 +76,7 @@ public class CodexProbeJobRepository {
         return dsl.fetch("""
                 SELECT j.* FROM codex_probe_jobs j
                 JOIN model_profile_agent_probe_runs r ON r.id=j.run_id
-                WHERE r.status IN ('PENDING','RUNNING')
+                WHERE r.status IN ('PENDING','RUNNING') AND j.configuration_user_id=r.owner_user_id AND j.profile_id=r.model_profile_id
                 AND j.status IN ('DONE','TIMED_OUT','CANCELLED')
                 AND EXISTS (SELECT 1 FROM agent_runtimes a WHERE a.id=j.runtime_id)
                 ORDER BY j.created_at LIMIT 100
@@ -109,6 +109,6 @@ public class CodexProbeJobRepository {
                 record.get("profile_id",UUID.class), record.get("runtime_id",UUID.class),
                 record.get("payload_encrypted",String.class), record.get("status",String.class),
                 record.get("owner_id",UUID.class), record.get("deadline",OffsetDateTime.class),
-                result == null ? null : result.data(), record.get("finished_at", OffsetDateTime.class));
+                result == null ? null : result.data(), record.get("finished_at", OffsetDateTime.class), record.get("configuration_user_id", UUID.class));
     }
 }

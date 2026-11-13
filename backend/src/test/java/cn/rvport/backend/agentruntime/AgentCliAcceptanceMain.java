@@ -62,6 +62,8 @@ public final class AgentCliAcceptanceMain {
                     System.getenv("RVPORT_DB_USER"), System.getenv("RVPORT_DB_PASSWORD")) : null;
             var repository = database ? new cn.rvport.backend.modelprofile.ModelProfileRepository(
                     org.jooq.impl.DSL.using(connection, org.jooq.SQLDialect.POSTGRES)) : null;
+            UUID configurationUserId = database ? org.jooq.impl.DSL.using(connection, org.jooq.SQLDialect.POSTGRES)
+                    .fetchOne("SELECT id FROM users WHERE username='admin'").get("id", UUID.class) : UUID.randomUUID();
             var cipher = database ? new cn.rvport.backend.security.CredentialCipher(
                     new cn.rvport.backend.config.CredentialCryptoProperties(System.getenv("RVPORT_CREDENTIAL_MASTER_KEY"),
                             System.getenv("RVPORT_CREDENTIAL_KEY_ID"))) : null;
@@ -69,15 +71,20 @@ public final class AgentCliAcceptanceMain {
             runtime.setId(UUID.randomUUID()); runtime.setAgentType("CODEX"); runtime.setExecutablePath(executable);
             var stages = new java.util.HashSet<cn.rvport.backend.modelprofile.ModelProfileStage>();
             var profiles = new cn.rvport.backend.modelprofile.ModelProfileService(repository, cipher, json, null, null, null) {
-                @Override public AgentModelRuntimeConfig resolveAgentForStage(cn.rvport.backend.modelprofile.ModelProfileStage stage) {
+                @Override public AgentModelRuntimeConfig resolveAgentForStage(cn.rvport.backend.modelprofile.ModelProfileStage stage, UUID actorUserId) {
                     stages.add(stage);
-                    var resolved = database ? super.resolveAgentForStage(stage) : new AgentModelRuntimeConfig(runtime, null, config);
+                    var resolved = database ? super.resolveAgentForStage(stage, actorUserId) : new AgentModelRuntimeConfig(runtime, null, config);
                     if (database && (resolved.modelProfile() == null || !resolved.model().baseUrl().equals(args[2]))) {
                         throw new AssertionError("API stage assignment was not resolved from database");
                     }
                     return resolved;
                 }
             };
+            if (database) {
+                org.springframework.test.util.ReflectionTestUtils.setField(profiles, "configurationAccess",
+                        new cn.rvport.backend.modelprofile.ModelConfigurationAccess(new cn.rvport.backend.user.UserRepository(
+                                org.jooq.impl.DSL.using(connection, org.jooq.SQLDialect.POSTGRES)), null));
+            }
             var registry = new AgentRuntimeAdapterRegistry(List.of(new CodexAgentRuntimeAdapter(runner)));
             Path source = Files.createTempDirectory("rvport-business-source-");
             Path kbWorkspace = null;
@@ -85,7 +92,7 @@ public final class AgentCliAcceptanceMain {
                 Files.writeString(source.resolve("main.c"), "int main(void) { return 0; }\n");
                 var finding = UUID.randomUUID().toString();
                 var kb = new cn.rvport.backend.kb.ai.KbAiExtensionAgentRuntime(profiles, registry, json)
-                        .run(source, List.of(), List.of(java.util.Map.of("findingId", finding)));
+                        .run(source,  List.of(),  List.of(java.util.Map.of("findingId", finding)), profiles.resolveAgentForStage(cn.rvport.backend.modelprofile.ModelProfileStage.KB_AI_EXTENSION, configurationUserId));
                 kbWorkspace = kb.workspace();
                 if (kb.rawRows().size() != 1 || !finding.equals(kb.rawRows().getFirst().get("findingId"))
                         || !Files.readString(kb.outputFile()).contains("rvport-probe-ok")) {
@@ -93,7 +100,7 @@ public final class AgentCliAcceptanceMain {
                 }
                 var comparison = new cn.rvport.backend.testcomparison.runtime.TestComparisonAgentRuntime(profiles, registry, json)
                         .run(new cn.rvport.backend.testcomparison.runtime.TestComparisonInputBundle(
-                                java.util.Map.of("source", java.util.Map.of(), "target", java.util.Map.of()), false, java.util.Map.of()));
+                                java.util.Map.of("source", java.util.Map.of(), "target", java.util.Map.of()), false, java.util.Map.of()), profiles.resolveAgentForStage(cn.rvport.backend.modelprofile.ModelProfileStage.TEST_LOG_COMPARE, configurationUserId));
                 if (!"DIFFERENT_BLOCKING".equals(comparison.overallStatus().name()) || comparison.findings().size() != 1
                         || !"comparison-result.json".equals(comparison.agentOutput().get("parseSource"))
                         || stages.size() != 2) { throw new AssertionError("Business comparison mismatch"); }

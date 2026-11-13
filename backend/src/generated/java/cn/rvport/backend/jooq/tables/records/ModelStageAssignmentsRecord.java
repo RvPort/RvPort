@@ -9,7 +9,7 @@ import cn.rvport.backend.jooq.tables.ModelStageAssignments;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-import org.jooq.Record1;
+import org.jooq.Record2;
 import org.jooq.impl.UpdatableRecordImpl;
 
 
@@ -105,13 +105,27 @@ public class ModelStageAssignmentsRecord extends UpdatableRecordImpl<ModelStageA
         return (UUID) get(5);
     }
 
+    /**
+     * Setter for <code>public.model_stage_assignments.owner_user_id</code>.
+     */
+    public void setOwnerUserId(UUID value) {
+        set(6, value);
+    }
+
+    /**
+     * Getter for <code>public.model_stage_assignments.owner_user_id</code>.
+     */
+    public UUID getOwnerUserId() {
+        return (UUID) get(6);
+    }
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
 
     @Override
-    public Record1<String> key() {
-        return (Record1) super.key();
+    public Record2<UUID, String> key() {
+        return (Record2) super.key();
     }
 
     // -------------------------------------------------------------------------
@@ -128,7 +142,7 @@ public class ModelStageAssignmentsRecord extends UpdatableRecordImpl<ModelStageA
     /**
      * Create a detached, initialised ModelStageAssignmentsRecord
      */
-    public ModelStageAssignmentsRecord(String stage, UUID modelProfileId, UUID updatedBy, OffsetDateTime createdAt, OffsetDateTime updatedAt, UUID agentRuntimeId) {
+    public ModelStageAssignmentsRecord(String stage, UUID modelProfileId, UUID updatedBy, OffsetDateTime createdAt, OffsetDateTime updatedAt, UUID agentRuntimeId, UUID ownerUserId) {
         super(ModelStageAssignments.MODEL_STAGE_ASSIGNMENTS);
 
         setStage(stage);
@@ -137,6 +151,7 @@ public class ModelStageAssignmentsRecord extends UpdatableRecordImpl<ModelStageA
         setCreatedAt(createdAt);
         setUpdatedAt(updatedAt);
         setAgentRuntimeId(agentRuntimeId);
+        setOwnerUserId(ownerUserId);
         resetTouchedOnNotNull();
     }
 }

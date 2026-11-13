@@ -102,7 +102,7 @@ public class KbAiExtensionService {
         if (findingCount <= 0) {
             throw badRequest("KB_AI_EXTENSION_FINDINGS_EMPTY", "知识库扫描没有可扩展的 finding");
         }
-        AgentModelRuntimeConfig config = agentRuntime.resolveRunnableConfig();
+        AgentModelRuntimeConfig config = agentRuntime.resolveRunnableConfig(actorUserId);
         KbAiExtensionRunView pending = repository.createRun(
                 projectId,
                 scan.sourceRevisionId(),
@@ -112,6 +112,7 @@ public class KbAiExtensionService {
                 actorUserId
         );
         Map<String, Object> inputSnapshot = new LinkedHashMap<>();
+        inputSnapshot.put("modelExecution", cn.rvport.backend.modelprofile.ModelExecutionSelection.from(actorUserId, config));
         inputSnapshot.put("projectId", projectId);
         inputSnapshot.put("scanRunId", scan.id());
         inputSnapshot.put("extensionRunId", pending.id());
@@ -159,7 +160,7 @@ public class KbAiExtensionService {
         boolean modelConfigured = true;
         Map<String, Object> model = new LinkedHashMap<>();
         try {
-            AgentModelRuntimeConfig config = agentRuntime.resolveRunnableConfig();
+            AgentModelRuntimeConfig config = agentRuntime.resolveRunnableConfig(actorUserId);
             model.put("modelProfileId", config.modelProfile().getId());
             model.put("agentRuntimeId", config.runtime().getId());
             model.put("agentType", config.runtime().getAgentType());
@@ -212,6 +213,9 @@ public class KbAiExtensionService {
         context.progress(5, "准备知识库 AI 扩展输入");
         KbAiExtensionAgentResult result = null;
         try {
+            AgentModelRuntimeConfig config = agentRuntime.resolveExecution(input.modelExecution(), context.task().createdBy(), run.projectId());
+            if (!Objects.equals(run.taskId(), context.task().id()) || !Objects.equals(run.modelProfileId(), config.modelProfile().getId()) || !Objects.equals(run.agentRuntimeId(), config.runtime().getId())) { throw cn.rvport.backend.modelprofile.ModelExecutionSelection.missing(); }
+            context.log(cn.rvport.backend.task.TaskLogType.TOOL, input.modelExecution().attemptAudit(config));
             List<FindingView> findings = kbScanRepository.listAllFindingViews(run.kbScanRunId());
             SourceRevisionView revision = sourceRepository.findById(run.sourceRevisionId())
                     .orElseThrow(() -> new TaskExecutionException(TaskErrorCode.RESOURCE_NOT_FOUND, "源码版本不存在", null));
@@ -221,7 +225,7 @@ public class KbAiExtensionService {
             }
             List<Map<String, Object>> exportRows = exportRows(sourceRoot, findings);
             context.progress(20, "调用 AI agent 扩展知识库扫描结果");
-            result = agentRuntime.run(sourceRoot, findings, exportRows);
+            result = agentRuntime.run(sourceRoot, findings, exportRows, config);
             context.progress(75, "解析并保存 AI 扩展结果");
             PersistedResult persisted = persistResult(run, context, exportRows, result);
             context.publish(() -> {

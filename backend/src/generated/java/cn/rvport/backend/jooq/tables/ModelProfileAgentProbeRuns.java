@@ -7,6 +7,7 @@ package cn.rvport.backend.jooq.tables;
 import cn.rvport.backend.jooq.Indexes;
 import cn.rvport.backend.jooq.Keys;
 import cn.rvport.backend.jooq.Public;
+import cn.rvport.backend.jooq.tables.CodexProbeJobs.CodexProbeJobsPath;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeResults.ModelProfileAgentProbeResultsPath;
 import cn.rvport.backend.jooq.tables.ModelProfiles.ModelProfilesPath;
 import cn.rvport.backend.jooq.tables.Users.UsersPath;
@@ -125,6 +126,12 @@ public class ModelProfileAgentProbeRuns extends TableImpl<ModelProfileAgentProbe
      */
     public final TableField<ModelProfileAgentProbeRunsRecord, OffsetDateTime> UPDATED_AT = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "");
 
+    /**
+     * The column
+     * <code>public.model_profile_agent_probe_runs.owner_user_id</code>.
+     */
+    public final TableField<ModelProfileAgentProbeRunsRecord, UUID> OWNER_USER_ID = createField(DSL.name("owner_user_id"), SQLDataType.UUID.nullable(false), this, "");
+
     private ModelProfileAgentProbeRuns(Name alias, Table<ModelProfileAgentProbeRunsRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
     }
@@ -206,46 +213,107 @@ public class ModelProfileAgentProbeRuns extends TableImpl<ModelProfileAgentProbe
     }
 
     @Override
+    public List<UniqueKey<ModelProfileAgentProbeRunsRecord>> getUniqueKeys() {
+        return Arrays.asList(Keys.MODEL_PROBE_RUN_OWNER_ID_PROFILE_UNIQUE, Keys.MODEL_PROBE_RUN_PROFILE_UNIQUE);
+    }
+
+    @Override
     public List<ForeignKey<ModelProfileAgentProbeRunsRecord, ?>> getReferences() {
-        return Arrays.asList(Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROFILE_AGENT_PROBE_RUNS_CREATED_BY_FKEY, Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROFILE_AGENT_PROBE_RUNS_MODEL_PROFILE_ID_FKEY);
+        return Arrays.asList(Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROBE_RUN_OWNER_PROFILE_FK, Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROFILE_AGENT_PROBE_RUNS_CREATED_BY_FKEY, Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROFILE_AGENT_PROBE_RUNS_MODEL_PROFILE_ID_FKEY, Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROFILE_AGENT_PROBE_RUNS_OWNER_USER_ID_FKEY);
     }
 
-    private transient UsersPath _users;
-
-    /**
-     * Get the implicit join path to the <code>public.users</code> table.
-     */
-    public UsersPath users() {
-        if (_users == null)
-            _users = new UsersPath(this, Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROFILE_AGENT_PROBE_RUNS_CREATED_BY_FKEY, null);
-
-        return _users;
-    }
-
-    private transient ModelProfilesPath _modelProfiles;
+    private transient ModelProfilesPath _modelProbeRunOwnerProfileFk;
 
     /**
      * Get the implicit join path to the <code>public.model_profiles</code>
-     * table.
+     * table, via the <code>model_probe_run_owner_profile_fk</code> key.
      */
-    public ModelProfilesPath modelProfiles() {
-        if (_modelProfiles == null)
-            _modelProfiles = new ModelProfilesPath(this, Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROFILE_AGENT_PROBE_RUNS_MODEL_PROFILE_ID_FKEY, null);
+    public ModelProfilesPath modelProbeRunOwnerProfileFk() {
+        if (_modelProbeRunOwnerProfileFk == null)
+            _modelProbeRunOwnerProfileFk = new ModelProfilesPath(this, Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROBE_RUN_OWNER_PROFILE_FK, null);
 
-        return _modelProfiles;
+        return _modelProbeRunOwnerProfileFk;
     }
 
-    private transient ModelProfileAgentProbeResultsPath _modelProfileAgentProbeResults;
+    private transient UsersPath _modelProfileAgentProbeRunsCreatedByFkey;
+
+    /**
+     * Get the implicit join path to the <code>public.users</code> table, via
+     * the <code>model_profile_agent_probe_runs_created_by_fkey</code> key.
+     */
+    public UsersPath modelProfileAgentProbeRunsCreatedByFkey() {
+        if (_modelProfileAgentProbeRunsCreatedByFkey == null)
+            _modelProfileAgentProbeRunsCreatedByFkey = new UsersPath(this, Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROFILE_AGENT_PROBE_RUNS_CREATED_BY_FKEY, null);
+
+        return _modelProfileAgentProbeRunsCreatedByFkey;
+    }
+
+    private transient ModelProfilesPath _modelProfileAgentProbeRunsModelProfileIdFkey;
+
+    /**
+     * Get the implicit join path to the <code>public.model_profiles</code>
+     * table, via the
+     * <code>model_profile_agent_probe_runs_model_profile_id_fkey</code> key.
+     */
+    public ModelProfilesPath modelProfileAgentProbeRunsModelProfileIdFkey() {
+        if (_modelProfileAgentProbeRunsModelProfileIdFkey == null)
+            _modelProfileAgentProbeRunsModelProfileIdFkey = new ModelProfilesPath(this, Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROFILE_AGENT_PROBE_RUNS_MODEL_PROFILE_ID_FKEY, null);
+
+        return _modelProfileAgentProbeRunsModelProfileIdFkey;
+    }
+
+    private transient UsersPath _modelProfileAgentProbeRunsOwnerUserIdFkey;
+
+    /**
+     * Get the implicit join path to the <code>public.users</code> table, via
+     * the <code>model_profile_agent_probe_runs_owner_user_id_fkey</code> key.
+     */
+    public UsersPath modelProfileAgentProbeRunsOwnerUserIdFkey() {
+        if (_modelProfileAgentProbeRunsOwnerUserIdFkey == null)
+            _modelProfileAgentProbeRunsOwnerUserIdFkey = new UsersPath(this, Keys.MODEL_PROFILE_AGENT_PROBE_RUNS__MODEL_PROFILE_AGENT_PROBE_RUNS_OWNER_USER_ID_FKEY, null);
+
+        return _modelProfileAgentProbeRunsOwnerUserIdFkey;
+    }
+
+    private transient CodexProbeJobsPath _codexProbeJobs;
 
     /**
      * Get the implicit to-many join path to the
-     * <code>public.model_profile_agent_probe_results</code> table
+     * <code>public.codex_probe_jobs</code> table
      */
-    public ModelProfileAgentProbeResultsPath modelProfileAgentProbeResults() {
-        if (_modelProfileAgentProbeResults == null)
-            _modelProfileAgentProbeResults = new ModelProfileAgentProbeResultsPath(this, null, Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROFILE_AGENT_PROBE_RESULTS_RUN_ID_FKEY.getInverseKey());
+    public CodexProbeJobsPath codexProbeJobs() {
+        if (_codexProbeJobs == null)
+            _codexProbeJobs = new CodexProbeJobsPath(this, null, Keys.CODEX_PROBE_JOBS__CODEX_PROBE_OWNER_RUN_PROFILE_FK.getInverseKey());
 
-        return _modelProfileAgentProbeResults;
+        return _codexProbeJobs;
+    }
+
+    private transient ModelProfileAgentProbeResultsPath _modelProbeResultRunProfileFk;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.model_profile_agent_probe_results</code> table, via the
+     * <code>model_probe_result_run_profile_fk</code> key
+     */
+    public ModelProfileAgentProbeResultsPath modelProbeResultRunProfileFk() {
+        if (_modelProbeResultRunProfileFk == null)
+            _modelProbeResultRunProfileFk = new ModelProfileAgentProbeResultsPath(this, null, Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROBE_RESULT_RUN_PROFILE_FK.getInverseKey());
+
+        return _modelProbeResultRunProfileFk;
+    }
+
+    private transient ModelProfileAgentProbeResultsPath _modelProfileAgentProbeResultsRunIdFkey;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.model_profile_agent_probe_results</code> table, via the
+     * <code>model_profile_agent_probe_results_run_id_fkey</code> key
+     */
+    public ModelProfileAgentProbeResultsPath modelProfileAgentProbeResultsRunIdFkey() {
+        if (_modelProfileAgentProbeResultsRunIdFkey == null)
+            _modelProfileAgentProbeResultsRunIdFkey = new ModelProfileAgentProbeResultsPath(this, null, Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROFILE_AGENT_PROBE_RESULTS_RUN_ID_FKEY.getInverseKey());
+
+        return _modelProfileAgentProbeResultsRunIdFkey;
     }
 
     @Override

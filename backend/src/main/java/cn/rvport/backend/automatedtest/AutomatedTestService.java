@@ -140,6 +140,7 @@ public class AutomatedTestService {
                 ? inferBatchRole(projectId, buildRun.environmentId())
                 : request.testBatchRole();
         inputSnapshot.put("testBatchId", testBatchId);
+        inputSnapshot.put("configurationUserId", actorUserId);
         inputSnapshot.put("testBatchRole", testBatchRole == null ? null : testBatchRole.name());
         inputSnapshot.put("command", request.command());
         inputSnapshot.put("workingDirectory", workingDirectory);
@@ -168,7 +169,8 @@ public class AutomatedTestService {
                 workingDirectory,
                 timeout,
                 envVars,
-                reportTargets
+                reportTargets,
+                actorUserId
         );
         UUID testRunId = repository.createPending(runInput, task.id());
         auditLogService.record(projectId, actorUserId, "automated-test.create", "test_run", testRunId,

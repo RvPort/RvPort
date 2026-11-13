@@ -29,6 +29,10 @@ public class SecurityErrorWriter {
             String message
     ) throws IOException {
         response.setStatus(status.value());
+        // 账号状态过滤器可能在 HeaderWriterFilter 前终止请求。
+        response.setHeader("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setDateHeader("Expires", 0);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         ApiErrorResponse body = new ApiErrorResponse(

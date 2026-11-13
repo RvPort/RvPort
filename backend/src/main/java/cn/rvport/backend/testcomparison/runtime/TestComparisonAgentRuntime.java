@@ -8,6 +8,8 @@ import cn.rvport.backend.codexprovider.CodexProviderResolvedConfig;
 import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.modelprofile.ModelProfileService;
 import cn.rvport.backend.modelprofile.ModelProfileStage;
+import cn.rvport.backend.modelprofile.ModelExecutionSelection;
+import java.util.UUID;
 import cn.rvport.backend.testcomparison.TestComparisonOverallStatus;
 import cn.rvport.backend.testcomparison.TestComparisonParsedFinding;
 import cn.rvport.backend.testcomparison.TestComparisonRiskLevel;
@@ -54,8 +56,12 @@ public class TestComparisonAgentRuntime {
         this.objectMapper = objectMapper;
     }
 
-    public AgentModelRuntimeConfig resolveRunnableConfig() {
-        AgentModelRuntimeConfig resolved = modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE);
+    public AgentModelRuntimeConfig resolveRunnableConfig(UUID actorUserId) {
+        AgentModelRuntimeConfig resolved = modelProfileService.resolveAgentForStage(ModelProfileStage.TEST_LOG_COMPARE, actorUserId);
+        return validate(resolved);
+    }
+
+    private AgentModelRuntimeConfig validate(AgentModelRuntimeConfig resolved) {
         CodexProviderResolvedConfig config = resolved.model();
         if (!config.enabled() || isBlank(config.apiKey()) || isBlank(config.baseUrl()) || isBlank(config.model())
                 || resolved.runtime() == null || isBlank(resolved.runtime().getExecutablePath())) {
@@ -64,8 +70,14 @@ public class TestComparisonAgentRuntime {
         return resolved;
     }
 
-    public TestComparisonAgentResult run(TestComparisonInputBundle input) {
-        AgentModelRuntimeConfig resolved = resolveRunnableConfig();
+    public AgentModelRuntimeConfig resolveExecution(ModelExecutionSelection selection, UUID actor, UUID projectId) {
+        if (selection == null) { throw ModelExecutionSelection.missing(); }
+        selection.requireActor(actor);
+        AgentModelRuntimeConfig resolved = modelProfileService.resolveExecution(actor, projectId,
+                selection.modelProfileId(), selection.agentRuntimeId());
+        return validate(resolved);
+    }
+    public TestComparisonAgentResult run(TestComparisonInputBundle input, AgentModelRuntimeConfig resolved) {
         CodexProviderResolvedConfig config = resolved.model();
         AgentRuntimeAdapter adapter = adapterRegistry.get(resolved.runtime().getAgentType());
         Path tempDir = null;

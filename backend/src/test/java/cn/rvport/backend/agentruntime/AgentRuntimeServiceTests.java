@@ -26,8 +26,9 @@ class AgentRuntimeServiceTests {
 
         assertThat(service.list()).singleElement().satisfies(response -> {
             assertThat(response.agentType()).isEqualTo("CODEX");
-            assertThat(response.defaultArgs()).containsExactly("exec");
-            assertThat(response.config()).containsEntry("sandbox", "read-only");
+            assertThat(response.defaultArgs()).isEmpty();
+            assertThat(response.executablePath()).isNull();
+            assertThat(response.config()).isEmpty();
         });
         assertThat(service.get(record.getId()).id()).isEqualTo(record.getId());
     }
@@ -87,7 +88,7 @@ class AgentRuntimeServiceTests {
     }
 
     @Test
-    void blankAndMalformedProbeDetailsFallBackWhileValidDetailsArePreserved() {
+    void sharedProbeDetailsAreNeverExposed() {
         AgentRuntimesRecord blank = runtime(true);
         blank.setDefaultArgs(JSONB.valueOf(" "));
         blank.setConfig(null);
@@ -100,11 +101,11 @@ class AgentRuntimeServiceTests {
         assertThat(responses.get(0).defaultArgs()).isEmpty();
         assertThat(responses.get(0).config()).isEmpty();
         assertThat(responses.get(0).lastProbeDetails()).isEmpty();
-        assertThat(responses.get(1).lastProbeDetails()).containsEntry("workspace", true);
+        assertThat(responses.get(1).lastProbeDetails()).isEmpty();
     }
 
     @Test
-    void jsonLiteralNullCurrentlyProducesNullCollections() {
+    void jsonLiteralNullDoesNotLeakSharedConfiguration() {
         AgentRuntimesRecord record = runtime(true);
         JSONB nullData = JSONB.valueOf(null);
         record.setDefaultArgs(nullData);
@@ -113,9 +114,9 @@ class AgentRuntimeServiceTests {
         when(repository.list()).thenReturn(List.of(record));
 
         AgentRuntimeResponse response = service.list().getFirst();
-        assertThat(response.defaultArgs()).isNull();
-        assertThat(response.config()).isNull();
-        assertThat(response.lastProbeDetails()).isNull();
+        assertThat(response.defaultArgs()).isEmpty();
+        assertThat(response.config()).isEmpty();
+        assertThat(response.lastProbeDetails()).isEmpty();
     }
 
     private static AgentRuntimesRecord runtime(boolean enabled) {

@@ -7,6 +7,7 @@ public record KbAiExtensionTaskInput(
         UUID scanRunId,
         UUID extensionRunId,
         UUID sourceRevisionId,
-        String note
+        String note,
+        cn.rvport.backend.modelprofile.ModelExecutionSelection modelExecution
 ) {
 }

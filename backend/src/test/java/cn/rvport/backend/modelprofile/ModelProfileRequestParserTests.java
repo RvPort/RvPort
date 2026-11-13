@@ -18,7 +18,7 @@ class ModelProfileRequestParserTests {
     void parsesEveryAllowedFieldAndTracksApiKeyPresence() throws Exception {
         UUID runtimeId = UUID.randomUUID();
         ModelProfileRequest request = parser.parse(node("""
-                {"name":"model","enabled":true,"executablePath":"codex","modelProviderType":"OPENAI_COMPATIBLE",
+                {"name":"model","enabled":true,"modelProviderType":"OPENAI_COMPATIBLE",
                  "baseUrl":"https://example.test/v1","model":"demo","wireApi":"responses","apiKey":"secret",
                  "agentRuntimeId":"%s","timeoutSeconds":30,"maxRuntimeSeconds":300}
                 """.formatted(runtimeId)));
@@ -46,6 +46,9 @@ class ModelProfileRequestParserTests {
 
     @Test
     void rejectsNonObjectAndUnknownFields() throws Exception {
+        for (String key : java.util.List.of("ownerUserId", "configurationUserId", "executablePath", "executable_path", "command")) {
+            assertInvalid(node("{\"" + key + "\":null}"), "请求包含不可写字段: " + key);
+        }
         assertInvalid(null, "请求体必须是 JSON object");
         assertInvalid(node("[]"), "请求体必须是 JSON object");
         assertInvalid(node("{\"id\":\"forbidden\"}"), "请求包含不可写字段: id");

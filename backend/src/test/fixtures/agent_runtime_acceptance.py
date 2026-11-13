@@ -14,6 +14,9 @@ class MockModel(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass
 
+    def expected_api_key(self):
+        return "local-dummy-key-two" if self.path.startswith("/two/") else "local-dummy-key"
+
     def do_GET(self):
         if self.path != '/__metrics':
             self.send_error(404)
@@ -57,7 +60,7 @@ class MockModel(BaseHTTPRequestHandler):
             return  # 断流以及缺少 DONE 均不伪装为完成。
         request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.server.requests.append(request)
-        expected_key = "local-dummy-key-two" if self.path.startswith("/two/") else "local-dummy-key"
+        expected_key = self.expected_api_key()
         assert self.headers.get("Authorization") == "Bearer " + expected_key
         native = self.path.endswith("/responses")
         history = request.get("input", []) if native else request["messages"]
@@ -82,6 +85,7 @@ class MockModel(BaseHTTPRequestHandler):
             command = "cat probe-input.json"
             if business == "kb":
                 script = ('import json,pathlib; row=json.loads(pathlib.Path("input/findings-0001.jsonl").read_text()); '
+                          'row={"findingId":row["findingId"]}; '
                           'row.update(aiSummary="rvport-probe-ok",aiSuggestion="review",confidence=0.9,actionType="REVIEW"); '
                           'pathlib.Path("output/results-0001.jsonl").write_text(json.dumps(row)+"\\n"); print("rvport-probe-ok")')
                 command = 'python3 -c ' + shlex.quote(script)

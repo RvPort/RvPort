@@ -41,7 +41,7 @@ class AutomatedTestRepositoryTests {
             database.enqueueResult(database.result(new Field<?>[]{TEST_RUNS.ID}, new Object[]{ID}));
             AutomatedTestInput input = new AutomatedTestInput(
                     PROJECT_ID, ID, BUILD_ID, REVISION_ID, ENVIRONMENT_ID, 4L, BATCH_ID, TestBatchRole.SOURCE,
-                    "ctest", "  /work  ", 300, Map.of(), List.of());
+                    "ctest", "  /work  ", 300, Map.of(), List.of(), null);
 
             assertThat(repository.createPending(input, TASK_ID)).isEqualTo(ID);
             assertThat(database.lastExecution().bindings()).contains("/work", TestBatchRole.SOURCE.name());

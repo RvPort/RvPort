@@ -59,6 +59,8 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 @ExtendWith(MockitoExtension.class)
 class KbAiExtensionServiceTests {
+    private static final UUID PROFILE_ID = UUID.randomUUID(), RUNTIME_ID = UUID.randomUUID();
+    private static final UUID OWNER_ID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
 
     @Mock
     private KbAiExtensionRepository repository;
@@ -95,7 +97,7 @@ class KbAiExtensionServiceTests {
         KbScanView scan = scan(projectId, scanId, sourceRevisionId, TaskStatus.SUCCEEDED);
         when(kbScanRepository.findById(scanId)).thenReturn(Optional.of(scan));
         when(kbScanRepository.countFindings(eq(scanId), any(FindingListRequest.class))).thenReturn(2L);
-        when(agentRuntime.resolveRunnableConfig()).thenReturn(agentConfig());
+        when(agentRuntime.resolveRunnableConfig(org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig());
         when(repository.createRun(eq(projectId), eq(sourceRevisionId), eq(scanId), any(), any(), eq(actorId)))
                 .thenReturn(extensionRun(projectId, runId, scanId, sourceRevisionId, null, KbAiExtensionStatus.PENDING));
         when(taskService.create(any())).thenReturn(task(taskId, projectId));
@@ -124,7 +126,7 @@ class KbAiExtensionServiceTests {
         UUID sourceRevisionId = UUID.randomUUID();
         when(kbScanRepository.findById(scanId)).thenReturn(Optional.of(scan(projectId, scanId, sourceRevisionId, TaskStatus.SUCCEEDED)));
         when(kbScanRepository.countFindings(eq(scanId), any(FindingListRequest.class))).thenReturn(1L);
-        when(agentRuntime.resolveRunnableConfig()).thenThrow(new ApiException(HttpStatus.BAD_REQUEST,
+        when(agentRuntime.resolveRunnableConfig(org.mockito.ArgumentMatchers.any())).thenThrow(new ApiException(HttpStatus.BAD_REQUEST,
                 "MODEL_ASSIGNMENT_MISSING", "知识库 AI 扩展阶段未绑定模型 profile"));
 
         KbAiExtensionReadinessResponse response = service().readiness(projectId, scanId, actorId, false);
@@ -170,7 +172,7 @@ class KbAiExtensionServiceTests {
         when(kbScanRepository.countFindings(eq(failedId), any())).thenReturn(1L);
         when(kbScanRepository.countFindings(eq(emptyId), any())).thenReturn(0L);
         when(kbScanRepository.countFindings(eq(readyId), any())).thenReturn(2L);
-        when(agentRuntime.resolveRunnableConfig()).thenReturn(agentConfig());
+        when(agentRuntime.resolveRunnableConfig(org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig());
 
         assertThat(service().readiness(projectId, failedId, actorId, false).reason())
                 .isEqualTo("KB_SCAN_NOT_SUCCEEDED");
@@ -250,13 +252,13 @@ class KbAiExtensionServiceTests {
                 .isInstanceOf(cn.rvport.backend.task.TaskExecutionException.class)
                 .extracting("errorCode").isEqualTo("TASK_INPUT_INVALID");
         assertThatThrownBy(() -> service().execute(new FakeContext(task,
-                new KbAiExtensionTaskInput(projectId, UUID.randomUUID(), null, UUID.randomUUID(), null))))
+                new KbAiExtensionTaskInput(projectId,  UUID.randomUUID(),  null,  UUID.randomUUID(),  null, null))))
                 .isInstanceOf(cn.rvport.backend.task.TaskExecutionException.class)
                 .extracting("errorCode").isEqualTo("TASK_INPUT_INVALID");
 
         UUID missingRunId = UUID.randomUUID();
         assertThatThrownBy(() -> service().execute(new FakeContext(task,
-                new KbAiExtensionTaskInput(projectId, UUID.randomUUID(), missingRunId, UUID.randomUUID(), null))))
+                new KbAiExtensionTaskInput(projectId,  UUID.randomUUID(),  missingRunId,  UUID.randomUUID(),  null, null))))
                 .isInstanceOf(cn.rvport.backend.task.TaskExecutionException.class)
                 .extracting("errorCode").isEqualTo("TASK_RESOURCE_NOT_FOUND");
 
@@ -265,14 +267,34 @@ class KbAiExtensionServiceTests {
                 UUID.randomUUID(), taskId, KbAiExtensionStatus.QUEUED);
         when(repository.findById(foreignRunId)).thenReturn(Optional.of(foreign));
         assertThatThrownBy(() -> service().execute(new FakeContext(task,
-                new KbAiExtensionTaskInput(projectId, foreign.kbScanRunId(), foreignRunId,
-                        foreign.sourceRevisionId(), null))))
+                new KbAiExtensionTaskInput(projectId,  foreign.kbScanRunId(),  foreignRunId,
+                        foreign.sourceRevisionId(),  null, null))))
                 .isInstanceOf(cn.rvport.backend.task.TaskExecutionException.class)
                 .extracting("errorCode").isEqualTo("TASK_PROJECT_MISMATCH");
     }
 
     private void assertCode(org.assertj.core.api.ThrowableAssert.ThrowingCallable action, String code) {
         assertThatThrownBy(action).isInstanceOf(ApiException.class).extracting("code").isEqualTo(code);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"task", "profile", "runtime"})
+    void mismatchedExecutionReferencesFailBeforeReadingSourceOrCallingAgent(String mismatch) throws Exception {
+        UUID projectId = UUID.randomUUID(), taskId = UUID.randomUUID(), runId = UUID.randomUUID();
+        var run = new KbAiExtensionRunView(runId, projectId, UUID.randomUUID(), UUID.randomUUID(),
+                mismatch.equals("task") ? UUID.randomUUID() : taskId,
+                mismatch.equals("profile") ? UUID.randomUUID() : PROFILE_ID,
+                mismatch.equals("runtime") ? UUID.randomUUID() : RUNTIME_ID,
+                KbAiExtensionStatus.QUEUED, Map.of(), null, null, null, OWNER_ID, null, null,
+                OffsetDateTime.now(), OffsetDateTime.now());
+        when(repository.findById(runId)).thenReturn(Optional.of(run));
+        when(agentRuntime.resolveExecution(eq(selection()), eq(OWNER_ID), eq(projectId))).thenReturn(agentConfig());
+        assertThatThrownBy(() -> service().execute(new FakeContext(taskView(taskId, projectId),
+                new KbAiExtensionTaskInput(projectId, run.kbScanRunId(), runId, run.sourceRevisionId(), null, selection()))))
+                .isInstanceOf(cn.rvport.backend.task.TaskExecutionException.class)
+                .hasRootCauseMessage("缺少可信模型执行身份，请重新触发 / Trusted model execution identity missing; trigger again");
+        org.mockito.Mockito.verifyNoInteractions(sourceRepository, kbScanRepository, storedArtifactService);
+        verify(agentRuntime, org.mockito.Mockito.never()).run(any(), any(), any(), any());
     }
 
     @Test
@@ -306,7 +328,8 @@ class KbAiExtensionServiceTests {
         when(kbScanRepository.listAllFindingViews(scanId)).thenReturn(List.of(
                 finding(projectId, scanId, sourceRevisionId, findingId), noEvidence, blankPath, noLine, missingFile));
         when(sourceRepository.findById(sourceRevisionId)).thenReturn(Optional.of(sourceRevision(projectId, sourceRevisionId, tempDir.resolve("source"))));
-        when(agentRuntime.run(any(), any(), any())).thenReturn(new KbAiExtensionAgentResult(workspace, input, output, List.of(
+        when(agentRuntime.resolveExecution(eq(selection()), eq(OWNER_ID), eq(projectId))).thenReturn(agentConfig());
+        when(agentRuntime.run(any(), any(), any(), org.mockito.ArgumentMatchers.any())).thenReturn(new KbAiExtensionAgentResult(workspace, input, output, List.of(
                 Map.of("findingId", findingId.toString(), "aiSummary", "ok", "aiSuggestion", "review", "confidence", 0.8, "actionType", "REVIEW"),
                 Map.of("findingId", missingConfidenceId.toString()),
                 Map.of("findingId", negativeConfidenceId.toString(), "confidence", -0.1),
@@ -329,7 +352,7 @@ class KbAiExtensionServiceTests {
         when(storedArtifactRepository.findById(outputArtifact.id())).thenReturn(Optional.of(outputArtifact));
         when(storedArtifactRepository.findById(agentArtifact.id())).thenReturn(Optional.of(agentArtifact));
 
-        service().execute(new FakeContext(taskView(taskId, projectId), new KbAiExtensionTaskInput(projectId, scanId, runId, sourceRevisionId, null)));
+        service().execute(new FakeContext(taskView(taskId, projectId), new KbAiExtensionTaskInput(projectId, scanId, runId, sourceRevisionId, null, selection())));
 
         ArgumentCaptor<List<KbAiExtensionRepository.KbAiExtensionResultInput>> results = ArgumentCaptor.forClass(List.class);
         verify(repository).replaceResults(eq(runId), results.capture());
@@ -353,11 +376,12 @@ class KbAiExtensionServiceTests {
         when(repository.findById(runId)).thenReturn(Optional.of(run));
         when(kbScanRepository.listAllFindingViews(scanId)).thenReturn(List.of(finding(projectId, scanId, sourceRevisionId, UUID.randomUUID())));
         when(sourceRepository.findById(sourceRevisionId)).thenReturn(Optional.of(sourceRevision(projectId, sourceRevisionId, tempDir.resolve("source"))));
-        when(agentRuntime.run(any(), any(), any())).thenReturn(new KbAiExtensionAgentResult(
+        when(agentRuntime.resolveExecution(eq(selection()), eq(OWNER_ID), eq(projectId))).thenReturn(agentConfig());
+        when(agentRuntime.run(any(), any(), any(), org.mockito.ArgumentMatchers.any())).thenReturn(new KbAiExtensionAgentResult(
                 tempDir.resolve("workspace"), tempDir.resolve("input.jsonl"), tempDir.resolve("output.jsonl"),
                 List.of(Map.of("findingId", UUID.randomUUID().toString(), "aiSummary", "unknown")), Map.of()));
 
-        assertThatThrownBy(() -> service().execute(new FakeContext(taskView(taskId, projectId), new KbAiExtensionTaskInput(projectId, scanId, runId, sourceRevisionId, null))))
+        assertThatThrownBy(() -> service().execute(new FakeContext(taskView(taskId, projectId), new KbAiExtensionTaskInput(projectId, scanId, runId, sourceRevisionId, null, selection()))))
                 .hasMessage("知识库 AI 扩展未产生有效结果");
         verify(repository).markFinished(eq(runId), eq(KbAiExtensionStatus.FAILED), any(), eq(null), eq(null), eq(null));
     }
@@ -415,7 +439,7 @@ class KbAiExtensionServiceTests {
     }
 
     private KbAiExtensionRunView extensionRun(UUID projectId, UUID runId, UUID scanId, UUID sourceRevisionId, UUID taskId, KbAiExtensionStatus status) {
-        return new KbAiExtensionRunView(runId, projectId, sourceRevisionId, scanId, taskId, UUID.randomUUID(), UUID.randomUUID(),
+        return new KbAiExtensionRunView(runId, projectId, sourceRevisionId, scanId, taskId, PROFILE_ID, RUNTIME_ID,
                 status, Map.of(), null, null, null, UUID.randomUUID(), null, null, OffsetDateTime.now(), OffsetDateTime.now());
     }
 
@@ -426,7 +450,7 @@ class KbAiExtensionServiceTests {
 
     private TaskView taskView(UUID taskId, UUID projectId) {
         return new TaskView(taskId, projectId, RvPortTaskTypes.KB_AI_EXTENSION, TaskStatus.RUNNING, 0, "",
-                UUID.randomUUID(), OffsetDateTime.now(), OffsetDateTime.now(), OffsetDateTime.now(), null, 1800, null, null, 0);
+                OWNER_ID, OffsetDateTime.now(), OffsetDateTime.now(), OffsetDateTime.now(), null, 1800, null, null, 0);
     }
 
     private SourceRevisionView sourceRevision(UUID projectId, UUID sourceRevisionId, Path workingCopy) {
@@ -452,11 +476,15 @@ class KbAiExtensionServiceTests {
                 12, "0".repeat(64), Map.of(), OffsetDateTime.now());
     }
 
+    private cn.rvport.backend.modelprofile.ModelExecutionSelection selection() {
+        return new cn.rvport.backend.modelprofile.ModelExecutionSelection(OWNER_ID, PROFILE_ID, RUNTIME_ID);
+    }
+
     private AgentModelRuntimeConfig agentConfig() {
         ModelProfilesRecord profile = new ModelProfilesRecord();
-        profile.setId(UUID.randomUUID());
+        profile.setId(PROFILE_ID);
         AgentRuntimesRecord runtime = new AgentRuntimesRecord();
-        runtime.setId(UUID.randomUUID());
+        runtime.setId(RUNTIME_ID);
         runtime.setAgentType("CODEX");
         runtime.setExecutablePath("codex");
         runtime.setDefaultArgs(JSONB.valueOf("[]"));

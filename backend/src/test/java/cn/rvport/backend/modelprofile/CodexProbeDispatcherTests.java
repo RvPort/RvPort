@@ -20,6 +20,7 @@ import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 class CodexProbeDispatcherTests {
+    private static final UUID OWNER_ID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
     final UUID id=UUID.randomUUID(), profileId=UUID.randomUUID(), runtimeId=UUID.randomUUID();
     final CodexProbeJobRepository jobs=mock(CodexProbeJobRepository.class);
     final ModelProfileRepository profiles=mock(ModelProfileRepository.class);
@@ -31,24 +32,25 @@ class CodexProbeDispatcherTests {
     final CodexProbeDispatcher dispatcher=new CodexProbeDispatcher(jobs,profiles,runtimes,cipher,json,probes,rabbit);
     final AtomicReference<CodexProbeJobRepository.Job> owned=new AtomicReference<>();
 
+    @org.junit.jupiter.api.BeforeEach void configureAccess() { dispatcher.setConfigurationAccess(mock(ModelConfigurationAccess.class)); }
     @AfterEach void clearInterrupt() { Thread.interrupted(); }
 
     CodexProbeJobRepository.Job job(String status, String payload, String result, OffsetDateTime deadline) {
-        return new CodexProbeJobRepository.Job(id,null,profileId,runtimeId,payload,status,null,deadline,result,null);
+        return new CodexProbeJobRepository.Job(id, null, profileId, runtimeId, payload, status, null, deadline, result, null, OWNER_ID);
     }
     CodexProviderResolvedConfig config() {
         return new CodexProviderResolvedConfig(true,"codex",CodexProviderType.OPENAI_COMPATIBLE,
                 "http://model/v1","dynamic",CodexProviderWireApi.CHAT,"private-key",1,60);
     }
     void create(CodexProbeJobRepository.Job job) {
-        when(jobs.create(any(),any(),eq(profileId),eq(runtimeId),any(),any())).thenReturn(job);
+        when(jobs.create(any(), any(), eq(profileId), eq(runtimeId), org.mockito.ArgumentMatchers.any(), any(), any())).thenReturn(job);
         when(jobs.find(id)).thenReturn(Optional.of(job));
     }
 
     @Test void boundedWaitReturnsStoredResultAndOnlyPublishesId() throws Exception {
         var result=CodexProbeDispatcher.failure(runtimeId,"SAMPLE");
         create(job("DONE",null,json.writeValueAsString(result),OffsetDateTime.now().plusSeconds(1)));
-        assertThat(dispatcher.execute(null,profileId,runtimeId,null,1)).isEqualTo(result);
+        assertThat(dispatcher.execute(null, profileId, runtimeId, OWNER_ID, null, 1)).isEqualTo(result);
         verify(rabbit).convertAndSend("",CodexProbeDispatcher.QUEUE,id.toString());
         verify(jobs).cancel(id);
         verifyNoInteractions(probes);
@@ -58,26 +60,26 @@ class CodexProbeDispatcherTests {
         var encrypted=new CredentialCipher.EncryptedSecret("a","b","c","d");
         when(cipher.encrypt(any())).thenReturn(encrypted);
         create(job("CANCELLED",null,null,OffsetDateTime.now().plusSeconds(1)));
-        assertThat(dispatcher.execute(null,profileId,runtimeId,config(),1).success()).isFalse();
-        verify(jobs).create(any(),isNull(),eq(profileId),eq(runtimeId),
-                eq(json.writeValueAsString(encrypted)),any());
+        assertThat(dispatcher.execute(null, profileId, runtimeId, OWNER_ID, config(), 1).success()).isFalse();
+        verify(jobs).create(any(), isNull(), eq(profileId), eq(runtimeId), org.mockito.ArgumentMatchers.any(),
+                eq(json.writeValueAsString(encrypted)), any());
         verify(cipher).encrypt(argThat(bytes -> new String(bytes,java.nio.charset.StandardCharsets.UTF_8).contains("private-key")));
         verifyNoInteractions(profiles);
     }
 
     @Test void deadlineMissingRecordAndCorruptResultConverge() {
         create(job("QUEUED",null,null,OffsetDateTime.now().minusSeconds(1)));
-        assertThat(dispatcher.execute(null,profileId,runtimeId,null,1).details()).containsEntry("errorCode","AGENT_PROBE_WORKER_TIMEOUT");
+        assertThat(dispatcher.execute(null, profileId, runtimeId, OWNER_ID, null, 1).details()).containsEntry("errorCode","AGENT_PROBE_WORKER_TIMEOUT");
         create(job("DONE",null,"bad-json",OffsetDateTime.now().plusSeconds(1)));
-        assertThat(dispatcher.execute(null,profileId,runtimeId,null,1).details()).containsEntry("errorCode","AGENT_PROBE_DISPATCH_FAILED");
-        when(jobs.create(any(),any(),any(),any(),any(),any())).thenThrow(new IllegalStateException("private-key"));
-        assertThat(dispatcher.execute(null,profileId,runtimeId,null,1).message()).doesNotContain("private-key");
+        assertThat(dispatcher.execute(null, profileId, runtimeId, OWNER_ID, null, 1).details()).containsEntry("errorCode","AGENT_PROBE_DISPATCH_FAILED");
+        when(jobs.create(any(), any(), any(), any(), org.mockito.ArgumentMatchers.any(), any(), any())).thenThrow(new IllegalStateException("private-key"));
+        assertThat(dispatcher.execute(null, profileId, runtimeId, OWNER_ID, null, 1).message()).doesNotContain("private-key");
     }
 
     @Test void interruptionCancelsWaitingJobAndPreservesInterruptFlag() {
         create(job("RUNNING",null,null,OffsetDateTime.now().plusSeconds(2)));
         Thread.currentThread().interrupt();
-        assertThat(dispatcher.execute(null,profileId,runtimeId,null,1).details()).containsEntry("errorCode","AGENT_PROBE_INTERRUPTED");
+        assertThat(dispatcher.execute(null, profileId, runtimeId, OWNER_ID, null, 1).details()).containsEntry("errorCode","AGENT_PROBE_INTERRUPTED");
         assertThat(Thread.interrupted()).isTrue();
         verify(jobs).cancel(id);
     }
@@ -92,8 +94,8 @@ class CodexProbeDispatcherTests {
 
     void prepareWorker(String payload) throws Exception {
         when(jobs.claim(eq(id),any())).thenAnswer(call -> {
-            var value=new CodexProbeJobRepository.Job(id,null,profileId,runtimeId,payload,"RUNNING",
-                    call.getArgument(1),OffsetDateTime.now().plusSeconds(3),null,null);
+            var value=new CodexProbeJobRepository.Job(id, null, profileId, runtimeId, payload, "RUNNING",
+                    call.getArgument(1), OffsetDateTime.now().plusSeconds(3), null, null, OWNER_ID);
             owned.set(value);
             return Optional.of(value);
         });
@@ -101,7 +103,7 @@ class CodexProbeDispatcherTests {
         var profile=new ModelProfilesRecord();
         profile.setModelProviderType("OPENAI_COMPATIBLE"); profile.setWireApi("CHAT"); profile.setModel("dynamic");
         profile.setBaseUrl("http://model/v1"); profile.setTimeoutSeconds(1); profile.setMaxRuntimeSeconds(60);
-        when(profiles.findEnabledById(profileId)).thenReturn(Optional.of(profile));
+        when(profiles.findEnabledById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(Optional.of(profile));
         var runtime=new AgentRuntimesRecord(); runtime.setId(runtimeId); runtime.setAgentType("CODEX"); runtime.setExecutablePath("codex");
         when(runtimes.requireEnabled(runtimeId)).thenReturn(runtime);
         when(probes.test(any(),eq(runtime))).thenReturn(CodexProbeDispatcher.failure(runtimeId,"EXPECTED"));
@@ -115,6 +117,34 @@ class CodexProbeDispatcherTests {
         verify(jobs).expire();
     }
 
+    @Test void disabledConfigurationUserCannotDecryptOrCallUpstreamAfterClaim() throws Exception {
+        prepareWorker(null);
+        var access = mock(ModelConfigurationAccess.class);
+        dispatcher.setConfigurationAccess(access);
+        doThrow(new cn.rvport.backend.common.error.ApiException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                "MODEL_CONFIGURATION_USER_UNAVAILABLE", "disabled")).when(access).requireActive(OWNER_ID);
+        dispatcher.process(id);
+        verifyNoInteractions(probes, cipher);
+        verify(profiles, never()).findEnabledById(any(), any());
+        verify(jobs).finish(eq(id), any(), contains("AGENT_PROBE_WORKER_FAILED"));
+    }
+
+    @Test void foreignProbeRunCannotUseOwnedProfileToCallUpstream() throws Exception {
+        prepareWorker(null);
+        UUID runId = UUID.randomUUID();
+        when(jobs.claim(eq(id), any())).thenAnswer(call -> {
+            var value = new CodexProbeJobRepository.Job(id, runId, profileId, runtimeId, null, "RUNNING",
+                    call.getArgument(1), OffsetDateTime.now().plusSeconds(3), null, null, OWNER_ID);
+            owned.set(value);
+            return Optional.of(value);
+        });
+        var foreign = new ModelProfileAgentProbeRunsRecord(); foreign.setModelProfileId(UUID.randomUUID());
+        when(profiles.findProbeRun(runId, OWNER_ID)).thenReturn(Optional.of(foreign));
+        dispatcher.process(id);
+        verifyNoInteractions(probes, cipher);
+        verify(jobs).finish(eq(id), any(), contains("AGENT_PROBE_WORKER_FAILED"));
+    }
+
     @Test void workerDecryptsOverridesAndSavedKey() throws Exception {
         var encrypted=new CredentialCipher.EncryptedSecret("a","b","c","d");
         prepareWorker(json.writeValueAsString(encrypted));
@@ -123,7 +153,7 @@ class CodexProbeDispatcherTests {
         verify(probes).test(eq(config()),any());
         reset(probes);
         prepareWorker(null);
-        profiles.findEnabledById(profileId).orElseThrow().setApiKeyEncrypted(json.writeValueAsString(encrypted));
+        profiles.findEnabledById(profileId, OWNER_ID).orElseThrow().setApiKeyEncrypted(json.writeValueAsString(encrypted));
         when(cipher.decrypt(encrypted)).thenReturn("updated-key".getBytes());
         dispatcher.process(id);
         verify(probes).test(argThat(config -> config.apiKey().equals("updated-key")),any());
@@ -134,7 +164,7 @@ class CodexProbeDispatcherTests {
         dispatcher.process(id);
         verifyNoInteractions(probes);
         prepareWorker(null);
-        when(profiles.findEnabledById(profileId)).thenReturn(Optional.empty());
+        when(profiles.findEnabledById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(Optional.empty());
         dispatcher.process(id);
         verify(jobs).finish(eq(id),any(),contains("AGENT_PROBE_WORKER_FAILED"));
         prepareWorker(null);

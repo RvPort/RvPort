@@ -36,6 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class KbAiExtensionAgentRuntimeTests {
+    private static final UUID OWNER_ID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
 
     @Mock
     private ModelProfileService modelProfileService;
@@ -45,7 +46,7 @@ class KbAiExtensionAgentRuntimeTests {
 
     @Test
     void writesInputCopiesSourceAndReadsAgentJsonlOutput() throws Exception {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         Path source = Files.createDirectories(tempDir.resolve("source"));
         Files.createDirectories(source.resolve("src"));
         Files.createDirectories(source.resolve("build"));
@@ -57,8 +58,8 @@ class KbAiExtensionAgentRuntimeTests {
                 new ObjectMapper()
         );
 
-        KbAiExtensionAgentResult result = runtime.run(source, List.of(finding(source)),
-                List.of(Map.of("findingId", "00000000-0000-0000-0000-000000000001", "title", "probe")));
+        KbAiExtensionAgentResult result = runtime.run(source,  List.of(finding(source)),
+                List.of(Map.of("findingId", "00000000-0000-0000-0000-000000000001", "title", "probe")), runtime.resolveRunnableConfig(OWNER_ID));
 
         assertThat(result.inputFile()).exists();
         assertThat(result.outputFile()).exists();
@@ -73,22 +74,22 @@ class KbAiExtensionAgentRuntimeTests {
 
     @Test
     void rejectsMissingResultFile() throws Exception {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         KbAiExtensionAgentRuntime runtime = new KbAiExtensionAgentRuntime(
                 modelProfileService,
                 new AgentRuntimeAdapterRegistry(List.of(new FakeAdapter(false))),
                 new ObjectMapper()
         );
 
-        assertThatThrownBy(() -> runtime.run(tempDir, List.of(finding(tempDir)),
-                List.of(Map.of("findingId", "00000000-0000-0000-0000-000000000001"))))
+        assertThatThrownBy(() -> runtime.run(tempDir,  List.of(finding(tempDir)),
+                List.of(Map.of("findingId", "00000000-0000-0000-0000-000000000001")), runtime.resolveRunnableConfig(OWNER_ID)))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("知识库 AI 扩展结果文件不存在");
     }
 
     @Test
     void rejectsIncompleteModelConfig() {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION)).thenReturn(agentConfig(new CodexProviderResolvedConfig(
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(new CodexProviderResolvedConfig(
                 true,
                 "codex",
                 CodexProviderType.OPENAI_COMPATIBLE,
@@ -105,7 +106,7 @@ class KbAiExtensionAgentRuntimeTests {
                 new ObjectMapper()
         );
 
-        assertThatThrownBy(runtime::resolveRunnableConfig)
+        assertThatThrownBy(() -> runtime.resolveRunnableConfig(OWNER_ID))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("知识库 AI 扩展模型配置不完整");
     }
@@ -121,8 +122,8 @@ class KbAiExtensionAgentRuntimeTests {
                 new AgentModelRuntimeConfig(null, null, config()),
                 new AgentModelRuntimeConfig(runtimeRecord(" "), null, config()));
         for (AgentModelRuntimeConfig value : invalid) {
-            when(modelProfileService.resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION)).thenReturn(value);
-            assertThatThrownBy(runtime::resolveRunnableConfig)
+            when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(value);
+            assertThatThrownBy(() -> runtime.resolveRunnableConfig(OWNER_ID))
                     .isInstanceOf(ApiException.class)
                     .hasMessage("知识库 AI 扩展模型配置不完整");
         }
@@ -130,30 +131,30 @@ class KbAiExtensionAgentRuntimeTests {
 
     @Test
     void reportsAgentTimeoutAndNonZeroExitWithoutCallingExternalServices() {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         KbAiExtensionAgentRuntime timeout = new KbAiExtensionAgentRuntime(modelProfileService,
                 new AgentRuntimeAdapterRegistry(List.of(new ResultAdapter(
                         new CodexProcessResult(0, true, null, null)))), new ObjectMapper());
-        assertThatThrownBy(() -> timeout.run(null, List.of(), List.of()))
+        assertThatThrownBy(() -> timeout.run(null,  List.of(),  List.of(), modelProfileService.resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION, OWNER_ID)))
                 .isInstanceOf(ApiException.class).extracting("code")
                 .isEqualTo("KB_AI_EXTENSION_AGENT_TIMEOUT");
 
         KbAiExtensionAgentRuntime failed = new KbAiExtensionAgentRuntime(modelProfileService,
                 new AgentRuntimeAdapterRegistry(List.of(new ResultAdapter(
                         new CodexProcessResult(7, false, null, null)))), new ObjectMapper());
-        assertThatThrownBy(() -> failed.run(tempDir.resolve("missing"), List.of(), List.of()))
+        assertThatThrownBy(() -> failed.run(tempDir.resolve("missing"),  List.of(),  List.of(), modelProfileService.resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION, OWNER_ID)))
                 .isInstanceOf(ApiException.class).extracting("code")
                 .isEqualTo("KB_AI_EXTENSION_AGENT_FAILED");
     }
 
     @Test
     void normalizesNullAgentStreamsAndIgnoresBlankJsonlLines() throws Exception {
-        when(modelProfileService.resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION)).thenReturn(agentConfig(config()));
+        when(modelProfileService.resolveAgentForStage(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(agentConfig(config()));
         KbAiExtensionAgentRuntime runtime = new KbAiExtensionAgentRuntime(modelProfileService,
                 new AgentRuntimeAdapterRegistry(List.of(new ResultAdapter(
                         new CodexProcessResult(0, false, null, null)))), new ObjectMapper());
 
-        KbAiExtensionAgentResult result = runtime.run(null, List.of(), List.of());
+        KbAiExtensionAgentResult result = runtime.run(null,  List.of(),  List.of(), runtime.resolveRunnableConfig(OWNER_ID));
 
         assertThat(result.rawRows()).hasSize(1);
         assertThat(result.agentOutput()).containsEntry("stdout", "").containsEntry("stderr", "")

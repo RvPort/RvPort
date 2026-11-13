@@ -23,6 +23,11 @@ TBD - created by archiving change add-task-runtime. Update Purpose after archive
 - **THEN** 响应 SHALL 返回 `taskId`、任务类型和当前状态
 - **AND** 响应 MUST NOT 返回完整输入快照、明文凭据或服务器本地路径
 
+#### Scenario: 个人 AI 执行身份持久化
+- **WHEN** 创建 AI 任务或可能自动派生 AI 比较的测试批次
+- **THEN** SHALL 持久化认证触发者或可信父任务继承的配置主体、源任务或批次关联；AI 任务同时保存已选 profile/runtime 引用
+- **AND** 明确系统执行上下文 MUST NOT 退化为任意服务账号或 admin 凭据兜底，不能用客户端传入身份替代认证
+
 ### Requirement: 任务运行时必须先持久化再投递队列
 任务运行时 SHALL 以 PostgreSQL 任务记录作为事实来源，并在任务持久化后投递 RabbitMQ。
 
@@ -389,6 +394,15 @@ Worker SHALL 使用 PostgreSQL 原子状态变更认领任务，并 SHALL 在处
 - **WHEN** handler 启动本地进程或远程命令
 - **THEN** handler SHALL 通过执行上下文登记对应 runtime handle 信息
 - **AND** handler MUST NOT 将明文凭据或完整命令输入写入 runtime handle 明文字段
+
+#### Scenario: 无请求会话下恢复个人任务
+- **WHEN** worker 重启恢复或自动重试个人 AI 任务
+- **THEN** 执行上下文 SHALL 从持久化记录恢复原配置主体和引用，复核账号与项目权限后传递给 handler
+- **AND** MUST NOT 依赖 ThreadLocal、当前查看者或共享默认配置；归属不符 SHALL 在上游调用前失败
+
+#### Scenario: 手动重试建立新执行
+- **WHEN** 当前认证用户手动重新触发已有 AI 任务
+- **THEN** SHALL 使用新触发者创建新执行，而不改写原任务配置主体；系统自动重试 SHALL 保持原主体与已选引用
 
 ### Requirement: 执行上下文必须统一写入任务进度事件
 任务执行上下文 SHALL 提供进度更新能力，并 SHALL 保证任务进度、展示消息和持久化事件一致。

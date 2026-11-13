@@ -404,6 +404,20 @@ public class ModelProfilesRecord extends UpdatableRecordImpl<ModelProfilesRecord
         return (Long) get(26);
     }
 
+    /**
+     * Setter for <code>public.model_profiles.owner_user_id</code>.
+     */
+    public void setOwnerUserId(UUID value) {
+        set(27, value);
+    }
+
+    /**
+     * Getter for <code>public.model_profiles.owner_user_id</code>.
+     */
+    public UUID getOwnerUserId() {
+        return (UUID) get(27);
+    }
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -427,7 +441,7 @@ public class ModelProfilesRecord extends UpdatableRecordImpl<ModelProfilesRecord
     /**
      * Create a detached, initialised ModelProfilesRecord
      */
-    public ModelProfilesRecord(UUID id, String name, Boolean enabled, String executablePath, String modelProviderType, String baseUrl, String model, String wireApi, String apiKeyEncrypted, Integer timeoutSeconds, Integer maxRuntimeSeconds, String lastTestStatus, String lastTestMessage, OffsetDateTime lastTestedAt, UUID createdBy, UUID updatedBy, OffsetDateTime createdAt, OffsetDateTime updatedAt, String lastTestAgentType, Boolean lastTestBasicAvailable, Boolean lastTestAgentCompatible, JSONB lastTestDetails, String lastConnectivityStatus, String lastConnectivityMessage, JSONB lastConnectivityDetails, OffsetDateTime lastConnectivityTestedAt, Long lastConnectivityDurationMs) {
+    public ModelProfilesRecord(UUID id, String name, Boolean enabled, String executablePath, String modelProviderType, String baseUrl, String model, String wireApi, String apiKeyEncrypted, Integer timeoutSeconds, Integer maxRuntimeSeconds, String lastTestStatus, String lastTestMessage, OffsetDateTime lastTestedAt, UUID createdBy, UUID updatedBy, OffsetDateTime createdAt, OffsetDateTime updatedAt, String lastTestAgentType, Boolean lastTestBasicAvailable, Boolean lastTestAgentCompatible, JSONB lastTestDetails, String lastConnectivityStatus, String lastConnectivityMessage, JSONB lastConnectivityDetails, OffsetDateTime lastConnectivityTestedAt, Long lastConnectivityDurationMs, UUID ownerUserId) {
         super(ModelProfiles.MODEL_PROFILES);
 
         setId(id);
@@ -457,6 +471,7 @@ public class ModelProfilesRecord extends UpdatableRecordImpl<ModelProfilesRecord
         setLastConnectivityDetails(lastConnectivityDetails);
         setLastConnectivityTestedAt(lastConnectivityTestedAt);
         setLastConnectivityDurationMs(lastConnectivityDurationMs);
+        setOwnerUserId(ownerUserId);
         resetTouchedOnNotNull();
     }
 }

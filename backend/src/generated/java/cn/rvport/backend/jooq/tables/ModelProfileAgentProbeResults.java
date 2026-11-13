@@ -244,7 +244,21 @@ public class ModelProfileAgentProbeResults extends TableImpl<ModelProfileAgentPr
 
     @Override
     public List<ForeignKey<ModelProfileAgentProbeResultsRecord, ?>> getReferences() {
-        return Arrays.asList(Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROFILE_AGENT_PROBE_RESULTS_AGENT_RUNTIME_ID_FKEY, Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROFILE_AGENT_PROBE_RESULTS_MODEL_PROFILE_ID_FKEY, Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROFILE_AGENT_PROBE_RESULTS_RUN_ID_FKEY);
+        return Arrays.asList(Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROBE_RESULT_RUN_PROFILE_FK, Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROFILE_AGENT_PROBE_RESULTS_AGENT_RUNTIME_ID_FKEY, Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROFILE_AGENT_PROBE_RESULTS_MODEL_PROFILE_ID_FKEY, Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROFILE_AGENT_PROBE_RESULTS_RUN_ID_FKEY);
+    }
+
+    private transient ModelProfileAgentProbeRunsPath _modelProbeResultRunProfileFk;
+
+    /**
+     * Get the implicit join path to the
+     * <code>public.model_profile_agent_probe_runs</code> table, via the
+     * <code>model_probe_result_run_profile_fk</code> key.
+     */
+    public ModelProfileAgentProbeRunsPath modelProbeResultRunProfileFk() {
+        if (_modelProbeResultRunProfileFk == null)
+            _modelProbeResultRunProfileFk = new ModelProfileAgentProbeRunsPath(this, Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROBE_RESULT_RUN_PROFILE_FK, null);
+
+        return _modelProbeResultRunProfileFk;
     }
 
     private transient AgentRuntimesPath _agentRuntimes;
@@ -273,17 +287,18 @@ public class ModelProfileAgentProbeResults extends TableImpl<ModelProfileAgentPr
         return _modelProfiles;
     }
 
-    private transient ModelProfileAgentProbeRunsPath _modelProfileAgentProbeRuns;
+    private transient ModelProfileAgentProbeRunsPath _modelProfileAgentProbeResultsRunIdFkey;
 
     /**
      * Get the implicit join path to the
-     * <code>public.model_profile_agent_probe_runs</code> table.
+     * <code>public.model_profile_agent_probe_runs</code> table, via the
+     * <code>model_profile_agent_probe_results_run_id_fkey</code> key.
      */
-    public ModelProfileAgentProbeRunsPath modelProfileAgentProbeRuns() {
-        if (_modelProfileAgentProbeRuns == null)
-            _modelProfileAgentProbeRuns = new ModelProfileAgentProbeRunsPath(this, Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROFILE_AGENT_PROBE_RESULTS_RUN_ID_FKEY, null);
+    public ModelProfileAgentProbeRunsPath modelProfileAgentProbeResultsRunIdFkey() {
+        if (_modelProfileAgentProbeResultsRunIdFkey == null)
+            _modelProfileAgentProbeResultsRunIdFkey = new ModelProfileAgentProbeRunsPath(this, Keys.MODEL_PROFILE_AGENT_PROBE_RESULTS__MODEL_PROFILE_AGENT_PROBE_RESULTS_RUN_ID_FKEY, null);
 
-        return _modelProfileAgentProbeRuns;
+        return _modelProfileAgentProbeResultsRunIdFkey;
     }
 
     @Override

@@ -28,6 +28,26 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @ExtendWith(MockitoExtension.class)
 class TaskServiceTests {
 
+    @Test void configurationIdentityRequiresExplicitSnapshotMatchingOriginalActor() {
+        UUID id = UUID.randomUUID(), actor = UUID.randomUUID();
+        TaskService service = service();
+        assertThat(service.configurationUserId(id)).isNull();
+        var record = new cn.rvport.backend.jooq.tables.records.TasksRecord();
+        record.setCreatedBy(actor);
+        when(taskRepository.findRecordById(id)).thenReturn(Optional.of(record));
+        assertThat(service.configurationUserId(id)).isNull();
+        for (String invalid : java.util.List.of("", "null", "{}", "{\"configurationUserId\":null}",
+                "{\"configurationUserId\":1}", "{\"configurationUserId\":\"invalid\"}", "[",
+                "{\"configurationUserId\":\"" + UUID.randomUUID() + "\"}")) {
+            record.setInputSnapshot(org.jooq.JSONB.valueOf(invalid));
+            assertThat(service.configurationUserId(id)).isNull();
+        }
+        record.setInputSnapshot(org.jooq.JSONB.valueOf("{\"configurationUserId\":\"" + actor + "\"}"));
+        assertThat(service.configurationUserId(id)).isEqualTo(actor);
+        record.setCreatedBy(null);
+        assertThat(service.configurationUserId(id)).isNull();
+    }
+
     @Mock
     private TaskRepository taskRepository;
 
