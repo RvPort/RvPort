@@ -82,9 +82,13 @@ public record RvPortProperties(
             Integer timeoutSeconds,
             Long maxOutputBytes,
             String language,
+            String sourceArch,
             String targetArch,
             Integer contextLines
     ) {
+        public KbScan {
+            sourceArch = Bitcode.defaultText(sourceArch, "x86");
+        }
     }
 
     public record Bitcode(

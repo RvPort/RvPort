@@ -1,3 +1,10 @@
+"""归一化事实（Fact）模型：normalizer 阶段的输出单元。
+
+NormalizedFact 把多条证据收敛为关于某个实体的一个规范取值，是后续
+detector/classifier 阶段的输入。每条事实必须有至少一条证据支撑，
+证据与上下文 ID 均去重排序后冻结。
+"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -8,11 +15,19 @@ from .metadata import JsonValue, freeze_metadata
 
 
 def _unique_sorted(values: tuple[str, ...]) -> tuple[str, ...]:
+    """去重并排序，保证 ID 集合的规范化表示（利于稳定比较）。"""
     return tuple(sorted(set(values)))
 
 
 @dataclass(frozen=True, slots=True)
 class NormalizedFact:
+    """事实：subject_id 实体具有规范取值 canonical_value（frozen 不可变）。
+
+    scope 表示事实生效的范围（如 translation-unit/global）；
+    evidence_ids 必须非空（无证据不成事实），context_ids 可选，
+    producers 记录产出该事实的分析器（溯源）。
+    """
+
     id: str
     kind: str
     subject_id: str

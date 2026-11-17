@@ -12,13 +12,14 @@
 
 - `generated/*.json` 是工具链结构定义的确定性输出。
 - `curated/x86-migration-semantics.json` 只含 accepted 条目；`curated/source-references.json` 保存闭合的权威引用。
+- `collected/arm64/*` 保存冻结的 ARM64 语料原件（Arm Architecture Reference Manual 人工提取）；`generated/arm64-collected-entries.json` 是其确定性转换产物，在 manifest 中以 `collected-v1` 类型登记——手册语料无精确 git revision，溯源采用语料原件 SHA-256 + 官方手册 URL + 采集日期。
 - `audit/candidate-decisions.json` 保存 generated/accepted/rejected/deferred 决策和理由，但 Provider 不加载它。`audit/candidate-inventory.json` 明确是非权威候选清单。
 
 知识 JSON 不携带 regex、operator、matcher、severity、blocking、reason、suggestion、message 或 readiness。如何匹配仍由 Python `DetectorDefinition` 管理；最终影响仍由后续分类阶段管理。
 
 ## Manifest 与兼容
 
-生产 manifest 已显式升级为 v2，可声明 `legacy-generated`、`generated-v2`、`curated-v1` 三类来源。Provider 仍严格接受原 v1 generated-only manifest，v1 继续拒绝 `curatedSets`。回滚时可用 `tests/fixtures/knowledge-production/v1-manifest.json` 替换生产 manifest，只加载两份旧事实。
+生产 manifest 已显式升级为 v2，可声明 `legacy-generated`、`generated-v2`、`curated-v1`、`collected-v1` 四类来源。Provider 仍严格接受原 v1 generated-only manifest，v1 继续拒绝 `curatedSets`。回滚时可用 `tests/fixtures/knowledge-production/v1-manifest.json` 替换生产 manifest，只加载两份旧事实。
 
 当前两份冻结文件的摘要如下。GCC 来源路径已脱敏为 `vendor/gcc/gcc/config/i386`，事实内容不变；历史报告摘要保留原版本，不回写。
 

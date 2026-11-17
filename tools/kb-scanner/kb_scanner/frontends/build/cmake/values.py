@@ -1,8 +1,15 @@
-"""Three-valued expressions. Unsupported syntax never becomes false."""
+"""Three-valued expressions. Unsupported syntax never becomes false.
+
+CMake 三值表达式层：真值恒为 True/False/None（unknown），不支持的
+语法一律归为 None，绝不臆断为 False。literal/expand 负责取字面量与
+变量展开，truth/matches/condition 实现 if() 条件的有界求值。
+"""
+
 import re
 
 
 def literal(token):
+    """提取 token 的字面文本：去引号/括号参数包裹；含转义或生成器表达式返回 None。"""
     text = token.text
     if text.startswith('"') and text.endswith('"'):
         text = text[1:-1]
@@ -17,6 +24,7 @@ def literal(token):
 
 
 def expand(token, variables, *, max_length=8192):
+    """展开 token 中的 ${VAR} 引用：缺变量或残留 $ 等情况返回 None。"""
     text = literal(token)
     if text is None:
         return None
@@ -35,18 +43,22 @@ def expand(token, variables, *, max_length=8192):
 
 
 def negate(value):
+    """三值取反：None 传播。"""
     return None if value is None else not value
 
 
 def both(a, b):
+    """三值 AND：任一 False→False，任一 None→None，否则 True。"""
     return False if a is False or b is False else None if a is None or b is None else True
 
 
 def either(a, b):
+    """三值 OR：任一 True→True，任一 None→None，否则 False。"""
     return True if a is True or b is True else None if a is None or b is None else False
 
 
 def truth(value):
+    """按 CMake 真值常量判定字符串真伪（1/ON/YES/... 为真）；不认识的形态返回 None。"""
     if value is None:
         return None
     upper = value.upper()

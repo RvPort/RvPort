@@ -170,6 +170,79 @@ class KnowledgeSchemaTests(unittest.TestCase):
             with self.assertRaises(ValidationError):
                 CandidateDecisionModel.model_validate_json(json.dumps(invalid))
 
+    def test_arm64_families_and_scopes_are_accepted_per_model_kind(self) -> None:
+        """架构族放宽后：arm64 + arm64-only/arm64-toolchain 在 v2/curated 事实合法。"""
+        fact = {"factKind": "platformMacros", "architectureFamily": "arm64",
+                "canonicalValue": "__ARM_NEON", "semanticScope": "arm64-only"}
+        model = GeneratedFactsV2Model.model_validate_json(json.dumps({
+            "schemaVersion": "2.0",
+            "source": {
+                "sourceId": "s", "officialUrl": "https://example.test", "release": "r",
+                "revision": "a" * 40, "license": "MIT", "collectedAt": "2026-10-28",
+                "inputPaths": ["a"], "inputSha256": [HASH],
+            },
+            "facts": [fact, fact | {"canonicalValue": "__ARM_FEATURE_SVE", "semanticScope": "arm64-toolchain"}],
+        }))
+        self.assertEqual(("arm64", "arm64"), tuple(item.architectureFamily for item in model.facts))
+        entry = {
+            "entryId": "e", "factKind": "cpuPlatformApis", "architectureFamily": "arm64",
+            "canonicalValue": "__builtin_aarch64_get_fpcr", "semanticScope": "arm64-only",
+            "referenceIds": ["ref"], "reviewStatus": "accepted",
+        }
+        curated = CuratedFactsModel.model_validate_json(json.dumps({
+            "schemaVersion": "1.0", "sourceId": "c", "reviewPolicy": "reviewed",
+            "reviewPolicyVersion": "1", "entries": [entry],
+        }))
+        self.assertEqual("arm64", curated.entries[0].architectureFamily)
+        # 未知族仍然拒绝（单条事实模型）。
+        from kb_scanner.knowledge.schema import GeneratedFactV2Model
+        for bad in (fact | {"architectureFamily": "sparc"}, fact | {"semanticScope": "sparc-only"}):
+            with self.subTest(bad=bad), self.assertRaises(ValidationError):
+                GeneratedFactV2Model.model_validate_json(json.dumps(bad))
+
+    def test_collected_payload_requires_single_family_and_unique_files(self) -> None:
+        """collected-v1 载荷：无 revision 溯源、单源单族、语料文件一一对应。"""
+        from kb_scanner.knowledge.schema import CollectedFactsModel, CollectedManifestSourceModel
+
+        valid = {
+            "schemaVersion": "1.0",
+            "source": {
+                "sourceId": "collected-arm64", "officialUrl": "https://developer.arm.com/documentation/ddi0487/latest",
+                "license": "Arm ARM", "collectedAt": "2026-10-28",
+                "inputFiles": ["collected/arm64/aarch64.opcode"], "inputSha256": [HASH],
+            },
+            "facts": [{"factKind": "assemblyInstructions", "architectureFamily": "arm64",
+                       "canonicalValue": "abs", "semanticScope": "arm64-only"}],
+        }
+        model = CollectedFactsModel.model_validate_json(json.dumps(valid))
+        self.assertEqual(1, len(model.facts))
+        for invalid in (
+            # 多族混装被拒（单源单族不变量）。
+            valid | {"facts": valid["facts"] + [valid["facts"][0] | {"architectureFamily": "x86"}]},
+            # 事实重复被拒。
+            valid | {"facts": [valid["facts"][0], valid["facts"][0]]},
+            # 文件与摘要数量不匹配。
+            valid | {"source": valid["source"] | {"inputSha256": []}},
+            # 语料文件名重复。
+            valid | {"source": valid["source"] | {"inputFiles": ["a", "a"], "inputSha256": [HASH, HASH]}},
+            # 路径越界。
+            valid | {"source": valid["source"] | {"inputFiles": ["../escape"]}},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
+                CollectedFactsModel.model_validate_json(json.dumps(invalid))
+        # 清单条目：collected-v1 需要 collectedFiles，至少一个。
+        manifest_entry = CollectedManifestSourceModel.model_validate_json(json.dumps({
+            "sourceId": "collected-arm64", "kind": "collected-v1",
+            "path": "generated/arm64.json", "sha256": HASH,
+            "collectedFiles": ["collected/arm64/aarch64.opcode"],
+        }))
+        self.assertEqual("collected-v1", manifest_entry.kind)
+        with self.assertRaises(ValidationError):
+            CollectedManifestSourceModel.model_validate_json(json.dumps({
+                "sourceId": "collected-arm64", "kind": "collected-v1",
+                "path": "generated/arm64.json", "sha256": HASH, "collectedFiles": [],
+            }))
+
 
 if __name__ == "__main__":
     unittest.main()

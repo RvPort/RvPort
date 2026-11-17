@@ -1,3 +1,9 @@
+"""知识包模型：knowledge 阶段加载的迁移知识条目与来源。
+
+KnowledgeSource 描述一个知识来源文件（含 SHA-256 溯源），KnowledgeEntry
+是"某架构家族下某类事实的规范取值"，供 detector 阶段匹配 x86 专有用法。
+"""
+
 from __future__ import annotations
 
 import re
@@ -17,6 +23,12 @@ def _unique_sorted(values: tuple[str, ...]) -> tuple[str, ...]:
 
 @dataclass(frozen=True, slots=True)
 class KnowledgeSource:
+    """知识来源：一个知识文件的可校验引用（frozen 不可变）。
+
+    logical_path 必须是包内相对路径（分隔符统一为 "/"，禁止 ".."），
+    sha256 是来源文件内容的摘要，用于加载时防篡改校验。
+    """
+
     id: str
     source_id: str
     kind: str
@@ -38,6 +50,11 @@ class KnowledgeSource:
 
 @dataclass(frozen=True, slots=True)
 class KnowledgeEntry:
+    """知识条目：某架构家族（如 x86）下 fact_kind 事实的规范取值。
+
+    source_ids 必须非空（溯源到 KnowledgeSource），去重排序后冻结。
+    """
+
     id: str
     fact_kind: str
     architecture_family: str

@@ -43,6 +43,8 @@ ARG BITCODE_LLVM_ARCHIVE=LLVM-21.1.8-Linux-X64.tar.xz
 ARG BITCODE_LLVM_SOURCE_SHA256=b3b7f2801d15d50736acea3c73982994d025b01c2f035b91ae3b49d1b575732b
 ARG BITCODE_LLVM_BUNDLE_SHA256=b456e58a78fc48d9f0cf3d767762840baf0346806f71d399d1dfffff58c5b489
 ARG BITCODE_LLVM_BASE_URL=https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8
+# aria2 不读取 http_proxy 环境变量；受限网络可将 BITCODE_LLVM_BASE_URL 指向
+# 预下载的本地镜像入口（例如宿主机 http 服务），sha256 校验仍按上游固定值执行。
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends aria2 ca-certificates xz-utils \
@@ -50,6 +52,7 @@ RUN apt-get update \
 
 RUN --mount=type=cache,target=/var/cache/rvport-toolchains \
     mkdir -p /opt/rvport/toolchains \
+    && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY no_proxy \
     && aria2c --allow-overwrite=true --auto-file-renaming=false --continue=true \
         --max-connection-per-server=16 --min-split-size=16M --split=16 \
         --connect-timeout=30 --timeout=60 --lowest-speed-limit=64K --max-tries=20 --retry-wait=2 \

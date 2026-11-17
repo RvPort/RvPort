@@ -76,7 +76,7 @@
       "additionalProperties": false,
       "required": ["domain", "targetArchitecture", "staticAnalysisOnly", "compiled", "linked", "testsExecuted"],
       "properties": {
-        "domain": {"const": "c-cpp-x86-to-riscv"},
+        "domain": {"enum": ["c-cpp-x86-to-riscv", "c-cpp-arm64-to-riscv"]},
         "targetArchitecture": {"enum": ["riscv32", "riscv64"]},
         "staticAnalysisOnly": {"const": true},
         "compiled": {"const": false},
@@ -90,7 +90,7 @@
       "required": ["id", "kind", "sha256"],
       "properties": {
         "id": {"$ref": "#/$defs/id"},
-        "kind": {"enum": ["compiler-derived", "curated"]},
+        "kind": {"enum": ["compiler-derived", "curated", "collected"]},
         "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
       }
     },
@@ -155,7 +155,7 @@
         "referenceSources": {"type": "integer", "minimum": 0},
         "references": {"type": "integer", "minimum": 0},
         "countUnit": {"const": "finding"},
-        "readiness": {"enum": ["x86_only", "provisional", "unknown", "ready"]},
+        "readiness": {"enum": ["x86_only", "arm64_only", "provisional", "unknown", "ready"]},
         "status": {"$ref": "#/$defs/completionStatus"},
         "reasonCodes": {"$ref": "#/$defs/reasonCodes"},
         "extensions": {"$ref": "#/$defs/extensions"}

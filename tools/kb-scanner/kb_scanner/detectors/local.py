@@ -17,7 +17,7 @@ from ..core import (
     StageResult,
     stable_id,
 )
-from .definitions import DEFAULT_DEFERRED_CAPABILITIES, DEFAULT_DEFINITIONS, DetectorDefinition
+from .definitions import DEFAULT_DEFERRED_CAPABILITIES, DEFAULT_DEFINITIONS, DEFINITIONS_BY_FAMILY, DetectorDefinition
 from .matchers import KnowledgeIndex, match_fact
 from ..core.candidate_contract import architecture_attribute
 from .candidate_coverage import covered_identifier_candidate
@@ -41,7 +41,10 @@ class LocalX86Detector:
         analysis: AnalysisSnapshot,
         knowledge: KnowledgeSnapshot,
     ) -> StageResult[DetectionSnapshot]:
-        del context
+        # context 缺省（部分单测直接传 None）时按 x86 源架构处理。
+        source_family = getattr(context, "source_arch", "x86")
+        # 显式注入过自定义定义时优先；默认按源架构族选择注册表（x86/arm64）。
+        definitions = DEFINITIONS_BY_FAMILY.get(source_family, self._definitions) if self._definitions is DEFAULT_DEFINITIONS else self._definitions
         evidence_ids = {item.id for item in facts.evidence}
         entity_ids = {item.id for item in facts.entities}
         knowledge_ids = {item.id for item in knowledge.entries}
@@ -110,7 +113,7 @@ class LocalX86Detector:
                 continue
             if fact.kind == "declaration_attribute" and not architecture_attribute(fact.canonical_value):
                 continue
-            matches = [(definition, match_fact(definition, fact, index)) for definition in self._definitions.values()]
+            matches = [(definition, match_fact(definition, fact, index, source_family)) for definition in definitions.values()]
             confirmed = any(match is not None and match.status == "confirmed_local" for _, match in matches)
             specific_attribute = fact.kind == "declaration_attribute" and any(match is not None and definition.observation_kind != "target_attribute_candidate" for definition, match in matches)
             for definition, match in matches:
@@ -118,7 +121,7 @@ class LocalX86Detector:
                     continue
                 if match is None:
                     continue
-                if definition.observation_kind == "architecture_identifier_candidate" and covered_identifier_candidate(fact, matches, entries):
+                if definition.observation_kind == "architecture_identifier_candidate" and covered_identifier_candidate(fact, matches, entries, source_family):
                     continue
                 if (confirmed or specific_attribute) and definition.observation_kind in {"inline_asm_candidate", "target_attribute_candidate"}:
                     continue
@@ -138,7 +141,7 @@ class LocalX86Detector:
                 branch_metadata = branch_cache[matched_relations]
                 candidate_metadata = {
                     "candidateBasis": match.basis,
-                    "architectureDisposition": "x86" if branch_metadata.get("branchRole") == "x86" else "unknown",
+                    "architectureDisposition": source_family if branch_metadata.get("branchRole") == source_family else "unknown",
                 } if match.status == "candidate" else {}
                 if definition.observation_kind in {"inline_asm_candidate", "target_attribute_candidate"}:
                     foreign = any(
@@ -150,7 +153,7 @@ class LocalX86Detector:
                         continue
                     candidate_metadata = {
                         "candidateBasis": "unclassified_inline_asm" if fact.kind == "inline_asm" else "architecture_attribute",
-                        "architectureDisposition": "x86" if branch_metadata.get("branchRole") == "x86" else "unknown",
+                        "architectureDisposition": source_family if branch_metadata.get("branchRole") == source_family else "unknown",
                     }
                 observation_evidence = fact.evidence_ids
                 if fact.kind in {"enum_member", "enum_reference"}:
@@ -181,7 +184,7 @@ class LocalX86Detector:
                     status=match.status,
                     metadata={
                         "basis": match.basis,
-                        **({"compilerFlagValue": fact.canonical_value} if definition.observation_kind == "x86_compiler_flag" else {}),
+                        **({"compilerFlagValue": fact.canonical_value} if definition.observation_kind in {"x86_compiler_flag", "arm64_compiler_flag"} else {}),
                         "factId": fact.id,
                         "factKind": fact.kind,
                         "subjectId": fact.subject_id,

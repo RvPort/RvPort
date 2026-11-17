@@ -7,7 +7,7 @@ from collections import Counter
 from pathlib import Path
 
 from kb_scanner.knowledge.production import lint_curated, lint_generated, render_model
-from kb_scanner.knowledge.schema import CuratedFactsModel, DecisionLedgerModel, GeneratedFactsV2Model, ReferenceRegistryModel
+from kb_scanner.knowledge.schema import CollectedFactsModel, CuratedFactsModel, DecisionLedgerModel, GeneratedFactsV2Model, ReferenceRegistryModel
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +21,8 @@ LEGACY_HASHES = {
     "generated/clang-x86-entries.json": "947e2ad0797248f8179f2bc29f4e7e0591bd7a14801ba819c9e56d31926e9a8c",
     "generated/gcc-x86-entries.json": "22d68c2ab3c8c40c8606451af2e5f493877661d031b6b2f379eff7886c23d191",
 }
+COLLECTED_PATH = "generated/arm64-collected-entries.json"
+COLLECTED_SHA256 = "4301bb10dd4ae3b035b9eda39caff01be7f52f4daaee55c33efae6917a7554f4"
 
 
 class KnowledgeProductionContractTests(unittest.TestCase):
@@ -81,6 +83,31 @@ class KnowledgeProductionContractTests(unittest.TestCase):
         for logical_path, digest in LEGACY_HASHES.items():
             with self.subTest(path=logical_path):
                 self.assertEqual(hashlib.sha256((RULES / logical_path).read_bytes()).hexdigest(), digest)
+
+    def test_collected_arm64_source_is_canonical_sorted_and_reproducible(self) -> None:
+        """arm64 语料产物：collected-v1 契约、确定性渲染、单源单族、计数与转换脚本一致。"""
+        path = RULES / COLLECTED_PATH
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), COLLECTED_SHA256)
+        model = CollectedFactsModel.model_validate_json(path.read_bytes())
+        self.assertEqual(render_model(model), path.read_bytes())
+        # 复用 v2 lint：事实按 (factKind, family, value) 排序且值已规范化。
+        from kb_scanner.knowledge.production import lint_generated as lint_v2
+        from kb_scanner.knowledge.provider import _collected_as_v2
+        self.assertEqual(lint_v2(_collected_as_v2(model)), ())
+        self.assertEqual({item.architectureFamily for item in model.facts}, {"arm64"})
+        counts = Counter(item.factKind for item in model.facts)
+        self.assertEqual(counts["assemblyInstructions"], 2161)
+        self.assertEqual(counts["platformMacros"], 121)
+        self.assertEqual(counts["headers"], 16)
+        self.assertEqual(counts["builtins"], 8)
+        # 语料原件登记齐备且哈希与规则包内文件一致。
+        self.assertEqual(len(model.source.inputFiles), len(model.source.inputSha256))
+        for name, digest in zip(model.source.inputFiles, model.source.inputSha256):
+            self.assertEqual(hashlib.sha256((RULES / name).read_bytes()).hexdigest(), digest)
+        # 转换脚本可再生成：collect() 与落盘产物逐字节一致。
+        from tools.collect_aarch64_entries import collect
+        regenerated, _ = collect(RULES)
+        self.assertEqual(render_model(regenerated), path.read_bytes())
 
     def test_runtime_data_contains_no_execution_or_classification_recipe(self) -> None:
         forbidden = {"regex", "operator", "pattern", "matcher", "severity", "blocking", "reason", "suggestion", "message", "readiness"}

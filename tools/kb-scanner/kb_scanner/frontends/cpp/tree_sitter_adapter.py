@@ -1,3 +1,11 @@
+"""tree-sitter 基线适配器：frontend 阶段的第一解析通道。
+
+对每个源文件用 tree-sitter（C/C++ 语法）做容错解析，产出预处理
+条件、宏定义/展开、包含、枚举、内联汇编、声明属性等基线证据
+（parse_mode=tree_sitter_baseline）。头文件同时按 C 与 C++ 两种
+语法各解析一遍，取错误数较少的候选。所有 native Node/Tree 都
+在本模块内转成标量，绝不进入下游阶段。
+"""
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -40,6 +48,11 @@ _IDENTIFIER = re.compile(rb"^[A-Za-z_][A-Za-z0-9_]*$")
 
 @dataclass(frozen=True, slots=True)
 class _ParseCandidate:
+    """单个语言候选（c 或 cpp）的一次解析结果，用于择优。
+
+    不可变（frozen）；error_count 是择优键（少者胜，平局偏向 cpp）。
+    """
+
     language: str
     language_source: str
     producer: str
@@ -49,6 +62,12 @@ class _ParseCandidate:
 
 
 class TreeSitterCppAdapter:
+    """tree-sitter 基线适配器：无状态（slots 为空），单文件单次调用。
+
+    不变量：每条证据的 parse_mode=tree_sitter_baseline；证据按稳定ID
+    去重；解析有错误节点时状态降为 PARTIAL 并附首个错误位置。
+    """
+
     __slots__ = ()
 
     def analyze_file(
@@ -59,6 +78,12 @@ class TreeSitterCppAdapter:
         entity: Entity,
         *, usage_selector=None, test_record_limit=10000,
     ) -> StageResult[tuple[Evidence, ...]]:
+        """解析单个文件：读源 → 选语言候选 → 逐候选解析择优。
+
+        usage_selector 可定制锚点选择策略（默认取枚举成员/宏展开等
+        证据作为后续使用清单的锚点）；文件不可读只降级 PARTIAL，
+        适配器初始化失败才算 FAILED。
+        """
         source_path = (workspace_root / relative_path).resolve()
         try:
             source = source_path.read_bytes()
@@ -99,6 +124,7 @@ class TreeSitterCppAdapter:
             )
             return StageResult(value=None, status=CompletionStatus.FAILED, diagnostics=(diagnostic,))
         selected = min(candidates, key=lambda item: (item.error_count, 0 if item.language == "cpp" else 1))
+        # 择优：错误数最少者胜；平局偏向 cpp（头文件默认按 C++ 解析）。
         status = CompletionStatus.PARTIAL if selected.error_count else CompletionStatus.COMPLETE
         return StageResult(value=selected.evidence, status=status, diagnostics=selected.diagnostics)
 
@@ -112,6 +138,13 @@ class TreeSitterCppAdapter:
         include_comments: bool,
         *, usage_selector=None, test_record_limit=10000,
     ) -> _ParseCandidate:
+        """按单一语言解析并产出该候选的全部证据与诊断。
+
+        顺序：解析树 → 收集错误区间 → 枚举证据（预处理器/调用/内联
+        汇编/属性）→ 宏定义附件 → 函数清单 → 使用清单（锚点驱动）→
+        测试内容清单 → 去重。宏调用 token 受扫描级预算
+        （100000 - 已用量）约束。
+        """
         grammar = tree_sitter_c if language == "c" else tree_sitter_cpp
         grammar_package = "tree-sitter-c" if language == "c" else "tree-sitter-cpp"
         producer = f"tree-sitter-{language}@{version(grammar_package)}"
@@ -145,6 +178,7 @@ class TreeSitterCppAdapter:
             # This substring check only diagnoses unknown grammar, never emits Evidence.
             if "asm" in node.type and kind != "inline_asm" and not _has_construct_ancestor(node, {"gnu_asm_expression"}):
                 unsupported_asm.add(str(node.type))
+            # 标识符若与已知宏名同名且不在宏定义体内，按宏展开记（tree-sitter 不展开宏）。
             if kind is None and node.type == "identifier":
                 identifier = source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
                 if identifier in macro_names and not _has_preprocessor_definition_ancestor(node):
@@ -157,6 +191,7 @@ class TreeSitterCppAdapter:
             span = _node_span(positions, node)
             structure = event_metadata(node, source, positions)
             if kind in {"inline_asm", "declaration_attribute", "preprocessor_condition", "macro_definition"}:
+                # structureComplete：相关区间（条件/名字/整个节点）是否与解析错误区间相交。
                 relevant = (node.child_by_field_name("condition") or node.child_by_field_name("name") or node) if kind == "preprocessor_condition" else node
                 structure["structureComplete"] = not any(
                     (start <= relevant.end_byte and end >= relevant.start_byte)
@@ -207,11 +242,13 @@ class TreeSitterCppAdapter:
                 evidence.extend(attachments)
                 unsupported_macro_semantics.update(unsupported)
         evidence = inventory(root, source, positions, entity.id, producer, language, evidence, errors)
+        # 锚点 = 已产出的枚举成员声明/引用与宏展开证据；可被 usage_selector 重选。
         anchors = tuple(item for item in evidence if item.kind in {
             "enum_member_declaration", "enum_member_reference", "macro_expansion"})
         if anchors and usage_selector is not None:
             anchors = usage_selector.select(entity, evidence)
         evidence = (*evidence, *collect_usage(root, source, positions, entity.id, producer, anchors))
+        # 测试内容锚点：调用/内联汇编/枚举引用，或选择器自定义的 test_anchors。
         test_anchors = usage_selector.test_anchors(evidence, anchors) if hasattr(usage_selector, "test_anchors") else tuple(
             item for item in evidence if item.kind in {"call_expression", "inline_asm", "enum_member_reference"})
         evidence = (*evidence, *collect_test_content(root, source, positions, entity.id, producer, test_anchors,
@@ -270,6 +307,12 @@ def _macro_attachments(
     partial_parse: bool,
     positions: SourceByteIndex | None = None,
 ) -> tuple[tuple[Evidence, ...], tuple[str, ...]]:
+    """展开宏定义节点：产出 macro_parameter 与 macro_replacement_token 附件证据。
+
+    思路：函数式宏在名字后按首个括号对定位参数表与替换体起点；替换体
+    用 _MACRO_TOKEN 正则逐 token 切分（跳过续行反斜杠）并判定角色。
+    ##/#/.../__VA_ARGS__ 记为不支持语义并降低置信度。
+    """
     positions = positions or SourceByteIndex.build(relative_path, source)
     name = node.child_by_field_name("name")
     if name is None:
@@ -354,6 +397,7 @@ def _macro_attachments(
 
 
 def _macro_token_role(raw: bytes, body: bytes, end: int, parameter_names: set[str]) -> str:
+    """判定替换 token 角色：注释 / 参数引用 / 调用候选（后跟 '('）/ 标识符 / 数字 / 字符串 / 操作符。"""
     text = raw.decode("utf-8", errors="replace")
     if raw.startswith((b'/*', b'//')):
         return 'comment'
@@ -369,6 +413,7 @@ def _macro_token_role(raw: bytes, body: bytes, end: int, parameter_names: set[st
 
 
 def _span_from_byte_range(relative_path: str, source: bytes, start: int, end: int) -> SourceSpan:
+    """便捷构造：为字节区间现建 SourceByteIndex 并取 SourceSpan。"""
     return SourceByteIndex.build(relative_path, source).span(start, end)
 
 
@@ -377,6 +422,12 @@ def _select_languages(
     context: ScanContext,
     workspace_root: Path,
 ) -> tuple[tuple[str, ...], str]:
+    """决定本文件的语言候选及判定来源。
+
+    优先级：后缀唯一确定（"suffix"）→ 编译上下文 -x/编译器名推断
+    （"compilation_context"）→ 头文件保持双候选（"ambiguous_header"，
+    两套语法都解析后择优）→ 兜底 cpp。
+    """
     candidates = language_candidates_for_path(relative_path, context.languages)
     if len(candidates) == 1:
         return candidates, "suffix"
@@ -395,6 +446,7 @@ def _select_languages(
 
 
 def _language_from_contexts(contexts: list) -> str | None:
+    """从编译参数推断语言：-x c/-x c++ 显式指定优先，其次看编译器名是否含 '++'。"""
     for context in contexts:
         tokens = context.tokens
         for index, token in enumerate(tokens):
@@ -409,6 +461,7 @@ def _language_from_contexts(contexts: list) -> str | None:
 
 
 def _walk(root):
+    """先序遍历语法树（栈实现，子节点倒序入栈以保持源码顺序）。"""
     stack = [root]
     while stack:
         node = stack.pop()
@@ -417,6 +470,11 @@ def _walk(root):
 
 
 def _node_kind(node, source: bytes, include_comments: bool) -> str | None:
+    """把 tree-sitter 节点类型映射到 CPP_EVIDENCE_KINDS；不产出证据的类型返回 None。
+
+    inline_asm / declaration_attribute 排除嵌套出现（外层已整体记录）；
+    comment 仅在启用注释提示时产出。
+    """
     if node.type in {"preproc_if", "preproc_ifdef", "preproc_ifndef", "preproc_elif"}:
         return "preprocessor_condition"
     if node.type == "preproc_else":
@@ -443,6 +501,7 @@ def _node_kind(node, source: bytes, include_comments: bool) -> str | None:
 
 
 def _has_construct_ancestor(node, kinds: set[str]) -> bool:
+    """向上查找是否存在任一指定类型的祖先节点。"""
     parent = node.parent
     while parent is not None:
         if parent.type in kinds:
@@ -452,6 +511,7 @@ def _has_construct_ancestor(node, kinds: set[str]) -> bool:
 
 
 def _node_value(node, source: bytes, kind: str) -> str:
+    """取证据值：优先按 kind 指定的字段取原文，include 去掉尖括号/引号，其余截断 512 字符。"""
     fields = {
         "preprocessor_condition": ("condition", "name"),
         "include": ("path",),
@@ -482,7 +542,17 @@ def _enum_evidence(
     language_source: str,
     partial_parse: bool,
 ) -> tuple[Evidence, ...]:
-    """Extract only declarations and references that can bind to a local enum member."""
+    """Extract only declarations and references that can bind to a local enum member.
+
+    只产出能绑定到本文件枚举成员的声明与引用。分三步：
+    (1) 遍历 enum_specifier 产出枚举声明与成员声明，建立
+        (枚举名,成员名) 与 (成员名) 两张索引及枚举字节区间表；
+    (2) 再遍历全树找引用——跳过位于枚举定义区间内的节点；限定名
+        按全名匹配，裸 identifier 仅当成员名唯一时绑定；switch/case、
+        if(含 constexpr) 条件中的引用额外记录守护区间；
+    (3) 把同一守护条件下的引用聚合为 selection_condition /
+        constexpr_condition 证据，绑定状态取成员中最保守者。
+    """
     common = {"language": language, "languageSource": language_source}
     declarations: list[Evidence] = []
     members: list[Evidence] = []
@@ -545,6 +615,7 @@ def _enum_evidence(
     guards: dict[tuple[str, str, int, int, int, int], dict[str, object]] = {}
     ordered_ranges = sorted(enum_ranges)
     range_starts = tuple(start for start, _ in ordered_ranges)
+    # 前缀最大值数组：二分定位节点起点所在枚举区间，跳过枚举定义内部的标识符。
     range_ends = tuple(accumulate((end for _, end in ordered_ranges), max))
     for node in _walk(root):
         containing = bisect_right(range_starts, node.start_byte) - 1
@@ -555,6 +626,7 @@ def _enum_evidence(
         target_node = node
         guard = _selection_guard(node, source)
         if node.type == "qualified_identifier":
+            # 限定名 EnumName::MEMBER：scope 末段即枚举名。
             scope_node = node.child_by_field_name("scope")
             name_node = node.child_by_field_name("name")
             if scope_node is None or name_node is None:
@@ -570,6 +642,7 @@ def _enum_evidence(
             continue
         if not candidates:
             continue
+        # 五态绑定：唯一候选且解析无错→complete；多候选→ambiguous；解析有错→partial。
         binding = "complete" if len(candidates) == 1 and not partial_parse else "ambiguous" if len(candidates) > 1 else "partial"
         qualified = f"{enum_name}::{member_name}" if enum_name else member_name or ""
         reference = make_evidence(
@@ -608,6 +681,7 @@ def _enum_evidence(
             snapshot["bindings"].add(binding)  # type: ignore[union-attr]
 
     conditions: list[Evidence] = []
+    # 同一守护（switch/case/if 条件）下的引用聚合为一条条件证据；绑定取最保守。
     for key, snapshot in sorted(guards.items()):
         kind, context, start, end, guard_start, guard_end = key
         bindings = snapshot["bindings"]
@@ -637,10 +711,12 @@ def _enum_evidence(
 
 
 def _text(source: bytes, node) -> str:
+    """取节点覆盖区间的原文（UTF-8 容错解码）。"""
     return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
 
 def _has_ancestor(node, kind: str) -> bool:
+    """向上查找是否存在指定类型的祖先节点。"""
     current = node.parent
     while current is not None:
         if current.type == kind:
@@ -650,6 +726,12 @@ def _has_ancestor(node, kind: str) -> bool:
 
 
 def _selection_guard(node, source: bytes) -> tuple[str, str, int, int, int, int, str, bool] | None:
+    """若节点位于 switch case 值 / switch 条件 / if(含 constexpr) 条件内，返回守护描述。
+
+    返回 (证据kind, 上下文, 条件起止字节, 守护起止字节, 节点类型, 是否模板内)；
+    if 分支通过条件前缀是否为 "if constexpr" 区分 constexpr_condition。
+    非守护位置返回 None。
+    """
     current = node.parent
     while current is not None:
         if current.type == "case_statement":
@@ -698,10 +780,12 @@ def _selection_guard(node, source: bytes) -> tuple[str, str, int, int, int, int,
 
 
 def _node_span(positions: SourceByteIndex, node) -> SourceSpan:
+    """把节点字节区间换算为 SourceSpan。"""
     return positions.span(int(node.start_byte), int(node.end_byte))
 
 
 def _macro_names(nodes: Iterable[object], source: bytes) -> frozenset[str]:
+    """收集本文件中所有 #define 定义的宏名，用于把同名标识符识别为宏展开。"""
     names: set[str] = set()
     for node in nodes:
         if node.type not in {"preproc_def", "preproc_function_def"}:
@@ -713,6 +797,7 @@ def _macro_names(nodes: Iterable[object], source: bytes) -> frozenset[str]:
 
 
 def _has_preprocessor_definition_ancestor(node) -> bool:
+    """节点是否位于 #define 宏定义体内（其中的调用不应按普通调用记录）。"""
     current = node.parent
     while current is not None:
         if current.type in {"preproc_def", "preproc_function_def"}:

@@ -12,13 +12,14 @@ The runtime reads a scanner bundle. `scanner-manifest.json` pins the knowledge m
 
 - `generated/*.json` contains deterministic outputs from toolchain structure definitions.
 - `curated/x86-migration-semantics.json` contains accepted entries only; `curated/source-references.json` holds their complete authoritative references.
+- `collected/arm64/*` holds the frozen corpus files (ARM Architecture Reference Manual excerpts, collected manually). `generated/arm64-collected-entries.json` is their deterministic conversion output and is registered as a `collected-v1` manifest source: manual-manuscript corpora have no exact git revision, so provenance is the corpus files' SHA-256 digests plus the official manual URL and collection date.
 - `audit/candidate-decisions.json` records generated/accepted/rejected/deferred decisions and reasons, but the Provider never loads it. `audit/candidate-inventory.json` is explicitly non-authoritative.
 
 Knowledge JSON contains no regex, operator, matcher, severity, blocking, reason, suggestion, message, or readiness policy. Python `DetectorDefinition` objects still control matching, and downstream classification controls impact.
 
 ## Manifest and compatibility
 
-The production manifest is explicitly v2 and supports `legacy-generated`, `generated-v2`, and `curated-v1` sources. The Provider also strictly accepts the original v1 generated-only manifest; v1 continues to reject `curatedSets`. For rollback, `tests/fixtures/knowledge-production/v1-manifest.json` can replace the production manifest to load only the two legacy fact sets.
+The production manifest is explicitly v2 and supports `legacy-generated`, `generated-v2`, `curated-v1`, and `collected-v1` sources. The Provider also strictly accepts the original v1 generated-only manifest; v1 continues to reject `curatedSets`. For rollback, `tests/fixtures/knowledge-production/v1-manifest.json` can replace the production manifest to load only the two legacy fact sets.
 
 Current frozen file digests are:
 
@@ -41,6 +42,17 @@ The historical legacy CLI, `schemaVersion: "1.0"` result contract, Finding seman
 <a id="doc-knowledge-refresh-guide"></a>
 
 ## Refresh workflow
+
+### ARM64 collected corpus
+
+The arm64 corpus is converted by `tools/collect_aarch64_entries.py` (no network, no subprocess). It reads the frozen corpus files under `collected/arm64/` and writes `generated/arm64-collected-entries.json` deterministically. Mapping and cleaning rules are documented in the script header:
+
+- `aarch64.builtin` → `builtins` (complete `__builtin_aarch64_*` identifiers only)
+- `aarch64.intrinsics` → `headers` (ARM header file names)
+- `aarch64.macro` → `platformMacros` (complete identifier macros; truncated prefixes such as `__arm_` are dropped)
+- `aarch64.opcode` → `assemblyInstructions` (`#` comments skipped; manual table field names — the underscored `EXC_*`/`DSNP_*`/`SPSR_*` families — and punctuation outliers such as `M.A.A` are dropped; canonical values are lowercased)
+
+After regeneration, verify the output is byte-identical to the committed file (a contract test enforces this), then update the manifest digests as for other sources.
 
 ### Prerequisites
 

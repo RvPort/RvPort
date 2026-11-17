@@ -710,7 +710,7 @@ class KbScanRuntimeServiceTests {
                 new RvPortProperties(
                         null,
                         new RvPortProperties.KbScan("python", scannerRoot.toString(), "rulesets/riscv-porting",
-                                tempDir.resolve("runtime/kb-scans").toString(), timeout, 10_485_760L, "c,cpp", "riscv64", 20),
+                                tempDir.resolve("runtime/kb-scans").toString(), timeout, 10_485_760L, "c,cpp", "x86", "riscv64", 20),... feat(kb-scan): integrate ARM64 source architecture with collected-v1 knowledge channel / 接入 ARM64 源架构（collected-v1 知识通道）
                         new RvPortProperties.Worker(false)
                 ),
                 new ObjectMapper(),
@@ -754,7 +754,7 @@ class KbScanRuntimeServiceTests {
     }
 
     private KbScanInput input(UUID projectId, UUID sourceRevisionId) {
-        return new KbScanInput(projectId, null, sourceRevisionId, null, "c,cpp", "riscv64", Map.of("mode", "ALL"), List.of(".git"));
+        return new KbScanInput(projectId, null, sourceRevisionId, null, "c,cpp", "x86", "riscv64", Map.of("mode", "ALL"), List.of(".git"));
     }
 
     private KbScanView run(UUID scanId, UUID projectId, UUID taskId, UUID sourceRevisionId) {

@@ -107,6 +107,7 @@ public class KbScanService {
 
         String language = defaultText(request == null ? null : request.language(), defaultLanguage());
         String targetArch = defaultText(properties.kbScan() == null ? null : properties.kbScan().targetArch(), "riscv64");
+        String sourceArch = normalizeSourceArch(defaultText(request == null ? null : request.sourceArch(), defaultSourceArch()));
         String ruleVersion = blankToNull(request == null ? null : request.ruleVersion());
         Map<String, Object> scanScope = scanScope(request == null ? null : request.scanScope());
         List<String> excludePaths = excludePaths(request == null ? null : request.excludePaths());
@@ -116,6 +117,7 @@ public class KbScanService {
         inputSnapshot.put("sourceRevisionId", sourceRevision.id());
         inputSnapshot.put("ruleVersion", ruleVersion);
         inputSnapshot.put("language", language);
+        inputSnapshot.put("sourceArch", sourceArch);
         inputSnapshot.put("targetArch", targetArch);
         inputSnapshot.put("scanScope", scanScope);
         inputSnapshot.put("excludePaths", excludePaths);
@@ -129,7 +131,7 @@ public class KbScanService {
                 timeoutSeconds(),
                 "KB 扫描任务已创建"
         ));
-        KbScanInput runInput = new KbScanInput(projectId, null, sourceRevision.id(), ruleVersion, language, targetArch, scanScope, excludePaths, executionContext);
+        KbScanInput runInput = new KbScanInput(projectId, null, sourceRevision.id(), ruleVersion, language, sourceArch, targetArch, scanScope, excludePaths, executionContext);... feat(kb-scan): integrate ARM64 source architecture with collected-v1 knowledge channel / 接入 ARM64 源架构（collected-v1 知识通道）
         UUID runId = kbScanRepository.createRun(runInput, task.id());
         auditLogService.record(projectId, actorUserId, "kb.scan.create", "kb_scan_run", runId,
                 Map.of("taskId", task.id(), "sourceRevisionId", sourceRevision.id()), httpRequest);
@@ -404,6 +406,22 @@ public class KbScanService {
 
     private String defaultLanguage() {
         return defaultText(properties.kbScan() == null ? null : properties.kbScan().language(), "c,cpp");
+    }
+
+    private String defaultSourceArch() {
+        return defaultText(properties.kbScan() == null ? null : properties.kbScan().sourceArch(), "x86");
+    }
+
+    private String normalizeSourceArch(String value) {
+        // 项目侧架构名（x86_64/amd64/aarch64/arm64）归一化为扫描器的源架构族（x86/arm64）。
+        if (value == null) {
+            return "x86";
+        }
+        return switch (value.trim().toLowerCase()) {
+            case "x86", "x86_64", "amd64", "i386", "i686", "x64" -> "x86";
+            case "arm64", "aarch64", "arm" -> "arm64";
+            default -> "x86";
+        };
     }
 
     private String defaultText(String value, String fallback) {

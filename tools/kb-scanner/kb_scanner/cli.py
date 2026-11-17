@@ -1,3 +1,9 @@
+"""命令行入口：定义 scan / validate-rules / list-rules / version 子命令并分发。
+
+scan 子命令把 argparse 参数转换成 ScanRequest 交给默认流水线应用执行；
+validate-rules 与 list-rules 用于在发布前校验规则包（bundle）的完整性。
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -13,6 +19,10 @@ from .projection import DEFAULT_PROJECTION_POLICY
 
 
 def main(argv: list[str] | None = None) -> int:
+    """构建参数解析器并分发子命令。
+
+    argv 为 None 时读取 sys.argv；返回进程退出码（0 成功，非 0 失败）。
+    """
     parser = argparse.ArgumentParser(prog="kb-scanner")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -32,6 +42,10 @@ def main(argv: list[str] | None = None) -> int:
     scan.add_argument("--format", default="json,html")
     scan.add_argument("--context-infer", choices=["auto", "off"], default="auto")
     scan.add_argument("--target-arch", default="riscv64")
+    scan.add_argument(
+        "--source-arch", choices=["x86", "arm64"], default="x86",
+        help="源架构族：决定装载哪族知识词表与检测器定义；默认 x86",
+    )
     scan.add_argument("--include-inactive-branches", action="store_true")
     scan.add_argument("--no-comment-hints", action="store_true", help="关闭注释中的架构线索扫描")
     scan.add_argument("--locale", default="zh-CN")
@@ -62,11 +76,17 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_scan(args: argparse.Namespace) -> int:
+    """执行 scan 子命令：组装默认应用并运行扫描，返回退出码。"""
     result = create_default_application().run(scan_request_from_namespace(args))
     return result.exit_code
 
 
 def validate_rules(rule_dir: Path) -> int:
+    """校验规则包：清单结构、知识清单哈希、投影策略完整性。
+
+    依次执行：加载 bundle 描述符（含哈希校验）→ 构建 workspace 上下文 →
+    加载生成事实知识包 → 校验默认投影策略完整性；任一步失败即返回 1。
+    """
     try:
         descriptor = load_bundle_descriptor(rule_dir)
     except BundleError as exc:
@@ -91,6 +111,7 @@ def validate_rules(rule_dir: Path) -> int:
 
 
 def list_rules(rule_dir: Path) -> int:
+    """列出规则包内全部规则 ID（先经 validate_rules 校验通过才输出）。"""
     if validate_rules(rule_dir) != 0:
         return 1
     for rule_id in DEFAULT_PROJECTION_POLICY.rule_ids:

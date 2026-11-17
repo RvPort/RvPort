@@ -12,6 +12,10 @@ services:
         condition: service_healthy
     environment:
       API_UPSTREAM: http://backend:8080
+      http_proxy: ""
+      https_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
     ports:
       - "${FRONTEND_PORT:-8081}:80"
     networks:
@@ -130,6 +134,12 @@ services:
       minio:
         condition: service_healthy
     environment:
+      http_proxy: ""
+      https_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      no_proxy: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
+      NO_PROXY: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
       RVPORT_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-rvport}
       RVPORT_DB_USER: ${POSTGRES_USER:-rvport}
       RVPORT_DB_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
@@ -215,6 +225,12 @@ services:
       backend:
         condition: service_healthy
     environment:
+      http_proxy: ""
+      https_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      no_proxy: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
+      NO_PROXY: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
       RVPORT_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-rvport}
       RVPORT_DB_USER: ${POSTGRES_USER:-rvport}
       RVPORT_DB_PASSWORD: ${POSTGRES_PASSWORD:-change_me}

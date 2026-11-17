@@ -219,7 +219,7 @@ public class KbScanRuntimeService {
         } catch (Exception ex) {
             finishFailed(context, run.id(), toolRunId, TaskStatus.FAILED, phaseSummary(phase, "KB 扫描失败"));
             throw new TaskExecutionException(TaskErrorCode.HANDLER_FAILED, "KB 扫描失败", ex);
-        }
+            }
     }
 
     private ProcessResult runScanner(KbScanInput input, Path sourceRoot, Path outputDir, Path compileCommandsPath, TaskExecutionContext context) throws IOException, InterruptedException {
@@ -256,6 +256,8 @@ public class KbScanRuntimeService {
         command.add(DEFAULT_SCHEMA_VERSION);
         command.add("--language");
         command.add(defaultText(input.language(), defaultLanguage()));
+        command.add("--source-arch");
+        command.add(defaultText(input.sourceArch(), defaultSourceArch()));
         command.add("--target-arch");
         command.add(defaultText(input.targetArch(), defaultTargetArch()));
         command.add("--exclude");
@@ -761,6 +763,10 @@ public class KbScanRuntimeService {
 
     private String defaultTargetArch() {
         return properties.kbScan() == null ? "riscv64" : defaultText(properties.kbScan().targetArch(), "riscv64");
+    }
+
+    private String defaultSourceArch() {
+        return properties.kbScan() == null ? "x86" : defaultText(properties.kbScan().sourceArch(), "x86");
     }
 
     private int timeoutSeconds() {

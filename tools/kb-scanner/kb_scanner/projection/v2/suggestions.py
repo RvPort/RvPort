@@ -61,6 +61,10 @@ _DEPENDENCY_TYPES = frozenset({
     "x86_target_feature", "x86_architecture_alias", "architecture_enum_candidate",
     "architecture_identifier_candidate", "inline_asm_candidate", "target_attribute_candidate",
     "build_selected_x86_dependency", "riscv_test_blocker",
+    "arm64_header_reference", "arm64_intrinsic_reference", "arm64_builtin_reference",
+    "arm64_vector_type_reference", "arm64_platform_macro_reference", "arm64_compiler_flag",
+    "arm64_cpu_platform_api", "arm64_assembly_instruction", "arm64_register_reference",
+    "arm64_target_feature", "arm64_architecture_alias",
 })
 
 

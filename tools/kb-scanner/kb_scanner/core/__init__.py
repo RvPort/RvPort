@@ -1,3 +1,9 @@
+"""core 门面：集中 re-export 流水线各阶段共享的数据合同类型。
+
+这些类型（事实/证据/观察/发现、快照、稳定ID 等）是八个阶段之间的
+公共语言，全部为 frozen dataclass，保证跨阶段传递时不可变。
+"""
+
 from .context import CompilationUnitContext, ScanContext, ScanRequest
 from .classifications import Classification, IMPACT_CLASSES
 from .diagnostics import Diagnostic, DiagnosticSeverity, merge_diagnostics

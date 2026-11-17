@@ -1,3 +1,10 @@
+"""观察（Observation）与评定（Assessment）模型：detector/assessor 阶段输出。
+
+Observation 是 detector 从证据/关系图中识别出的"疑似迁移问题"候选；
+Assessment 是 assessor 阶段对发现的最终评定（引用分类、观察与证明路径）。
+两者均 frozen 不可变，所有引用 ID 均为稳定ID。
+"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -9,6 +16,12 @@ from .metadata import JsonValue, freeze_metadata
 
 @dataclass(frozen=True, slots=True)
 class Observation:
+    """观察：detector 产出的候选发现，由证据/关系集合支撑。
+
+    status 表征候选的确认状态（candidate 表示待后续阶段评定），
+    detector_id 标识产出它的检测器（溯源），knowledge_ids 去重排序。
+    """
+
     id: str
     detector_id: str
     kind: str
@@ -34,6 +47,12 @@ class Observation:
 
 @dataclass(frozen=True, slots=True)
 class Assessment:
+    """评定：assessor 阶段对某个发现的最终结论（state 为五态之一）。
+
+    汇聚引用 classification_ids（分类结论）、observation_ids（支撑观察）
+    与 proof_path_ids（证明路径），构成完整的溯源链条。
+    """
+
     id: str
     kind: str
     state: str

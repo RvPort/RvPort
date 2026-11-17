@@ -1,6 +1,11 @@
 """在 native tree 生命周期内提取有界、只含标量的局部使用语法。
 
 这里只采集结构，不凭名称决定用途，不生成迁移结论。
+
+frontend 阶段 tree-sitter 基线的局部使用清单：对包含锚点（枚举/
+宏展开等已有证据）的函数体做全量语法记录，交给 usage_bindings 做
+保守绑定后封装为 usage_scope 证据。预算耗尽时降级为 partial 并给出
+原因码，绝不静默丢节点。
 """
 from dataclasses import dataclass, replace
 import re
@@ -21,6 +26,12 @@ TEXT_KINDS = frozenset({"identifier", "type_identifier", "primitive_type",
 
 @dataclass(frozen=True)
 class InventoryBudget:
+    """使用清单的三重预算：文件节点数 / 单作用域节点数 / token 截取字节数。
+
+    不可变（frozen），且各值都有硬上限（100000 / 10000 / 256），
+    超过直接抛 ValueError——防止调用方用大预算绕过资源限制。
+    """
+
     file_nodes: int = 100000
     scope_nodes: int = 10000
     token_bytes: int = 256
@@ -33,6 +44,7 @@ class InventoryBudget:
 
 
 def _key(node):
+    """节点的标量键：(起始字节, 结束字节, 节点类型)，不保留 native 对象。"""
     return (int(node.start_byte), int(node.end_byte), str(node.type))
 
 
@@ -54,6 +66,11 @@ def collect(root, source, positions, subject_id, producer, anchors, budget=None)
 
     调用者保留旧事实原样。全部节点，包括未支持语法，都有记录或截断原因，
     因而后续白名单不能把遗漏语句当作不存在。
+
+    思路：先取锚点起始位置并排序；栈式遍历文件树（预算受限），遇
+    function_definition 用二分查找判断是否有锚点落入其区间，命中则调
+    _scope 展开该函数体。文件预算触发时统一把所有已收集作用域降级为
+    partial（延迟冻结，避免重复复制记录）。
     """
     budget = budget or InventoryBudget()
     anchor_positions = sorted({(e.location.start.line, e.location.start.column)
@@ -103,6 +120,13 @@ def collect(root, source, positions, subject_id, producer, anchors, budget=None)
 
 
 def _scope(root, source, positions, subject, producer, budget, unsupported_parent, file_remaining):
+    """展开单个函数体的语法记录：DFS 收集标量行 → bind 做保守绑定 → 组装 usageScope 元数据。
+
+    返回 (scope_id, location, metadata), consumed, limited；consumed 为
+    消耗的节点数（计入文件预算），limited 表示是否因文件预算截断。
+    enum_specifier 额外记录 scopedEnum（enum class/struct）供绑定阶段
+    判断成员是否泄漏到外层词法环境。
+    """
     stack, rows, reasons = [(root, None)], [], set()
     consumed = 0
     if unsupported_parent:

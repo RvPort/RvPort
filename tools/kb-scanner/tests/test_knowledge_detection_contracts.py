@@ -24,26 +24,51 @@ class KnowledgeDetectionContractTests(unittest.TestCase):
         expected = {
             "generated/clang-x86-entries.json": "947e2ad0797248f8179f2bc29f4e7e0591bd7a14801ba819c9e56d31926e9a8c",
             "generated/gcc-x86-entries.json": "22d68c2ab3c8c40c8606451af2e5f493877661d031b6b2f379eff7886c23d191",
+            "generated/arm64-collected-entries.json": "4301bb10dd4ae3b035b9eda39caff01be7f52f4daaee55c33efae6917a7554f4",
         }
         declared = {item["path"]: item["sha256"] for item in payload["sources"]}
         self.assertEqual({path: declared[path] for path in expected}, expected)
         for path, digest in expected.items():
             self.assertEqual(hashlib.sha256((RULES / path).read_bytes()).hexdigest(), digest)
-        self.assertEqual({item["kind"] for item in payload["sources"]}, {"legacy-generated", "generated-v2", "curated-v1"})
+        self.assertEqual({item["kind"] for item in payload["sources"]}, {"legacy-generated", "generated-v2", "curated-v1", "collected-v1"})
         self.assertNotIn("audit/candidate-decisions.json", json.dumps(payload))
 
     def test_real_provider_loads_legacy_and_new_kinds_with_provenance(self) -> None:
         result = GeneratedFactsKnowledgeProvider().load(make_context(ROOT, rule_dir=RULES))
+        # 全部 manifest 源（含 clang-x86-entries）冻结哈希与仓库内实际字节一致，装载完整。
         self.assertEqual(result.status, CompletionStatus.COMPLETE)
         self.assertTrue({
             "headers", "intrinsics", "builtins", "vectorTypes", "platformMacros", "compilerFlags",
             "assemblyInstructions", "registerNames", "cpuPlatformApis", "targetFeatures", "architectureAliases", "vectorWidthMarkers",
         } <= {item.fact_kind for item in result.value.entries})
-        self.assertEqual(len(result.value.sources), 6)
+        self.assertEqual(len(result.value.sources), 7)
         legacy = [item for item in result.value.sources if item.source_id in {"clang-x86-entries", "gcc-x86-entries"}]
         self.assertTrue(all(item.kind == "generated-json" and "originalSource" in item.metadata for item in legacy))
-        add = next(item for item in result.value.entries if item.fact_kind == "assemblyInstructions" and item.canonical_value == "add")
-        self.assertEqual(len(add.source_ids), 2)
+        add = next(item for item in result.value.entries
+                   if item.fact_kind == "assemblyInstructions" and item.canonical_value == "add"
+                   and item.architecture_family == "x86")
+        # x86 的 add 指令来自 binutils/llvm/clang 多源，全部可溯源。
+        self.assertGreaterEqual(len(add.source_ids), 2)
+
+    def test_real_provider_loads_arm64_collected_facts(self) -> None:
+        """arm64 语料源以 collected-v1 装载：单源单族、条目带 arm64 族标记。"""
+        result = GeneratedFactsKnowledgeProvider().load(make_context(ROOT, rule_dir=RULES))
+        self.assertIn("collected-arm64-entries", {item.source_id for item in result.value.sources})
+        collected = next(item for item in result.value.sources if item.source_id == "collected-arm64-entries")
+        self.assertEqual(collected.kind, "collected-json")
+        arm64_entries = [item for item in result.value.entries if item.architecture_family == "arm64"]
+        self.assertTrue(arm64_entries)
+        # 语义范围只写在新版事实上（与 v1 legacy 种类的既有约定一致）。
+        self.assertTrue(all(item.metadata.get("semanticScope") == "arm64-only" for item in arm64_entries
+                            if item.fact_kind not in {"headers", "intrinsics", "builtins", "vectorTypes", "platformMacros", "compilerFlags"}))
+        # 语料四类映射齐备：指令/宏/头文件/builtin。
+        kinds = {item.fact_kind for item in arm64_entries}
+        self.assertTrue({"assemblyInstructions", "platformMacros", "headers", "builtins"} <= kinds)
+        # 与 x86 条目（如 llvm 指令 add）按族隔离：同规范值不同条目 ID。
+        x86_add = next(item for item in result.value.entries
+                       if item.architecture_family == "x86" and item.fact_kind == "assemblyInstructions" and item.canonical_value == "add")
+        arm64_add = next(item for item in arm64_entries if item.fact_kind == "assemblyInstructions" and item.canonical_value == "add")
+        self.assertNotEqual(x86_add.id, arm64_add.id)
 
     def test_behavior_matrix_is_requirement_driven_and_records_curated_gap(self) -> None:
         payload = json.loads((RULES / "behavior-acceptance.json").read_text(encoding="utf-8"))

@@ -1,4 +1,10 @@
-"""在原生树有效期内复制测试入口及有事实锚点的函数结构。"""
+"""在原生树有效期内复制测试入口及有事实锚点的函数结构。
+
+frontend 阶段 tree-sitter 基线的辅助模块：遍历语法树收集测试相关
+函数的结构化记录（声明名、跨度、嵌套体），并对 main 函数或有锚点
+（调用/内联汇编/枚举引用）的函数展开局部使用记录。所有输出均为
+标量，native Node 不逃逸出本调用。
+"""
 from bisect import bisect_left
 from dataclasses import replace
 
@@ -8,6 +14,13 @@ from .function_inventory import _nested_bodies
 
 
 def collect(root, source, positions, subject, producer, anchors, *, limit=10000):
+    """收集测试内容结构并生成 test_content / test_structure 证据。
+
+    思路：先取锚点（已有 Evidence）的起始位置；栈式遍历整棵树，函数
+    定义用二分查找判断是否有锚点落入其跨度；main 或含锚点的函数才
+    展开局部使用记录，其余只记名字与跨度。预算（节点/记录上限）耗尽
+    时状态降级为 partial 并记录原因码，绝不静默截断。
+    """
     if type(limit) is not int or not 0 <= limit <= 10000:
         raise ValueError("test content limit must be an integer between 0 and 10000")
     starts = sorted({(e.location.start.line, e.location.start.column) for e in anchors if e.location})
@@ -19,6 +32,7 @@ def collect(root, source, positions, subject, producer, anchors, *, limit=10000)
     while stack:
         node, unsafe_parent = stack.pop()
         visited += 1
+        # 双重预算：文件级节点数（100000）与本文件记录配额 limit，任一超限即停止。
         if visited > 100000 or used >= limit:
             reasons.add("test-content-file-budget")
             if limit < 10000:
@@ -43,6 +57,7 @@ def collect(root, source, positions, subject, producer, anchors, *, limit=10000)
             continue
         text = source[name.start_byte:name.end_byte].decode("utf-8", errors="replace")
         span = positions.coordinate_span(node.start_byte, node.end_byte)
+        # 二分查找：是否存在锚点起始位置落在 [span 起点, span 终点) 内。
         index = bisect_left(starts, span[:2])
         relevant = index < len(starts) and starts[index] < span[2:]
         plain = not unsafe and decl.type == "function_declarator" and name.type == "identifier"
@@ -84,6 +99,7 @@ def collect(root, source, positions, subject, producer, anchors, *, limit=10000)
 
 
 def cap_records(item, remaining):
+    """扫描级配额裁剪：记录数超预算时清空记录并降级为 partial，原始函数结构保留。"""
     if item.kind != "test_content":
         return item, remaining
     data = item.metadata["testContent"]

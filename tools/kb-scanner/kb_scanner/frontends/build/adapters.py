@@ -1,3 +1,10 @@
+"""构建输入单文件解析适配器：shell / M4 / JSON 元数据 / RPM。
+
+frontend 阶段的分派层：把各类构建输入文本解析为一组 BuildRecord。
+shell 用 tree-sitter-bash + 行级正则，M4 用有界识别器，JSON 元数据
+（meson/ctest/compile_commands/CMake FileAPI）直接读取，RPM 委托
+rpm 子包。全程不执行项目命令。
+"""
 from __future__ import annotations
 
 import json
@@ -15,6 +22,8 @@ from .vocabulary import BuildRecord, record_for_token
 
 @dataclass(frozen=True, slots=True)
 class AdapterResult:
+    """单文件解析结果：记录元组 + 诊断字符串 + 是否部分完成（frozen 不可变）。"""
+
     records: tuple[BuildRecord, ...] = ()
     diagnostics: tuple[str, ...] = ()
     partial: bool = False
@@ -26,6 +35,14 @@ _GENERIC = re.compile(r"(?i)(?:generic|portable|scalar|fallback|default|\*)")
 
 
 def parse_shell(source: str, path: str, target_arch: str) -> AdapterResult:
+    """解析 configure 类 shell 脚本（行级识别，配合 tree-sitter 语法检查）。
+
+    识别四类事实：
+    - uname -m 探测：符号化求值为目标架构（build_arch_probe）；
+    - case 分支模式：按 x86/riscv/generic 角色判定选中状态（build_branch）；
+    - 变量赋值（build_assignment）；
+    - 不受支持的命令替换与危险构造（build_unsupported + 诊断）。
+    """
     tree = Parser(Language(tree_sitter_bash.language())).parse(source.encode("utf-8"))
     diagnostics = []
     if tree.root_node.has_error:
@@ -54,6 +71,12 @@ def parse_shell(source: str, path: str, target_arch: str) -> AdapterResult:
 
 
 def parse_m4(source: str, path: str, target_arch: str) -> AdapterResult:
+    """解析 .m4 / configure.ac：识别白名单 autoconf 宏与不支持的宏。
+
+    dnl 注释先剥离；白名单宏（AC_CANONICAL_HOST 等）记为 build_condition，
+    其余大写宏调用记为 build_unsupported 并附诊断；行内 unsafe_constructs
+    （syscmd/include 等）同样记为不支持。
+    """
     del target_arch
     records: list[BuildRecord] = []
     diagnostics: list[str] = []
@@ -77,6 +100,14 @@ def parse_m4(source: str, path: str, target_arch: str) -> AdapterResult:
 
 
 def parse_machine_json(source: str, path: str, input_kind: str, target_arch: str) -> AdapterResult:
+    """解析 JSON 元数据输入（meson intro / compile_commands / ctest / CMake FileAPI）。
+
+    思路：先判定整体 selectionStatus（文本含目标架构→selected，含
+    x86→inactive，否则 unknown），再产出一条 build_configuration 与
+    每个 target 条目的 build_target/build_source/build_argument/
+    build_dependency/build_artifact 记录；ctest 与显式 test 标记会
+    附加 testRole/testSuite 字段。
+    """
     if len(source.encode("utf-8")) > 4 * 1024 * 1024:
         return AdapterResult((), (f"{path}: machine metadata exceeds size budget",), True)
     try:
@@ -91,6 +122,8 @@ def parse_machine_json(source: str, path: str, input_kind: str, target_arch: str
     base = {"selectionStatus": status, "configuration": configuration, "schema": _schema(payload), "jsonPointer": "/"}
     records.append(BuildRecord("build_configuration", configuration, 1, 1, 1 + len(configuration), base, "high" if status != "unknown" else "medium"))
 
+    # 不同输入的 targets 取法不同：meson 可能是列表或 dict.targets，
+    # compile_commands 是列表，ctest 是 dict.tests，其余递归查找 targets 键。
     if input_kind == "meson":
         targets = payload if isinstance(payload, list) else payload.get("targets", []) if isinstance(payload, dict) else []
     elif input_kind == "compilation-database":
@@ -129,12 +162,14 @@ def parse_machine_json(source: str, path: str, input_kind: str, target_arch: str
 
 
 def parse_rpm(source: str, path: str, target_arch: str) -> AdapterResult:
+    """RPM spec 解析入口：委托 rpm.parser，有诊断即视为 partial。"""
     from .rpm.parser import parse
     records, diagnostics = parse(source, path, target_arch)
     return AdapterResult(records, diagnostics, bool(diagnostics))
 
 
 def _shell_unsafe(source: str) -> tuple[tuple[str, int, str], ...]:
+    """找出所有无法符号化求值的 shell 命令替换 $(...) / `...`。"""
     found = []
     for line, raw in enumerate(source.splitlines(), 1):
         for match in re.finditer(r"\$\(([^)]*)\)|`([^`]*)`", raw):
@@ -145,6 +180,7 @@ def _shell_unsafe(source: str) -> tuple[tuple[str, int, str], ...]:
 
 
 def _role(value: str) -> str:
+    """按文本内容判定架构角色：riscv / x86 / generic / unknown（按此优先级）。"""
     if _RISCV.search(value):
         return "riscv"
     if _X86.search(value):
@@ -155,6 +191,7 @@ def _role(value: str) -> str:
 
 
 def _branch_status(pattern: str, target_arch: str) -> str:
+    """由分支模式角色推导选中状态：riscv 且目标为 riscv→selected，x86→inactive，generic→selected，其余 unknown。"""
     role = _role(pattern)
     if role == "riscv":
         return "selected" if _RISCV.search(normalize_target_arch(target_arch)) else "inactive"
@@ -166,6 +203,7 @@ def _branch_status(pattern: str, target_arch: str) -> str:
 
 
 def _metadata_status(payload: Any, target_arch: str) -> str:
+    """把整个 JSON 序列化为文本后按架构关键词判定 selected/inactive/unknown。"""
     text = json.dumps(payload, sort_keys=True).lower()
     if target_arch in text or (target_arch == "riscv64" and "riscv" in text):
         return "selected"
@@ -175,12 +213,14 @@ def _metadata_status(payload: Any, target_arch: str) -> str:
 
 
 def _configuration_name(payload: Any) -> str:
+    """从元数据顶层取 name/configuration/kind 作为配置名，缺省 "observed"。"""
     if isinstance(payload, dict):
         return str(payload.get("name") or payload.get("configuration") or payload.get("kind") or "observed")
     return "observed"
 
 
 def _schema(payload: Any) -> str:
+    """提取元数据的生成器版本（version/cmake/meson_version）作为 schema 标识。"""
     if isinstance(payload, dict):
         version_value = payload.get("version") or payload.get("cmake") or payload.get("meson_version")
         return str(version_value)[:128] if version_value is not None else "unknown"
@@ -188,6 +228,7 @@ def _schema(payload: Any) -> str:
 
 
 def _find_targets(payload: Any) -> list[dict[str, Any]]:
+    """深度优先递归查找第一个 "targets" 列表（用于未知 schema 的 JSON）。"""
     if isinstance(payload, dict):
         if isinstance(payload.get("targets"), list):
             return [item for item in payload["targets"] if isinstance(item, dict)]
@@ -204,6 +245,7 @@ def _find_targets(payload: Any) -> list[dict[str, Any]]:
 
 
 def _strings(payload: Any, keys: tuple[str, ...]) -> tuple[str, ...]:
+    """按键名集合递归收集所有字符串值（保持出现顺序去重）。"""
     values: list[str] = []
     if isinstance(payload, dict):
         for key, value in payload.items():
@@ -218,10 +260,12 @@ def _strings(payload: Any, keys: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def _paths(payload: Any, keys: tuple[str, ...]) -> tuple[str, ...]:
+    """同 _strings，但过滤掉以 "-" 开头的编译选项，只留路径类值。"""
     return tuple(value for value in _strings(payload, keys) if not value.startswith("-"))
 
 
 def _flatten_strings(value: Any) -> list[str]:
+    """把标量/列表/dict（取 path/id/name/fragment 键）拍平为字符串列表。"""
     if isinstance(value, str):
         return [value]
     if isinstance(value, dict):
@@ -235,6 +279,7 @@ def _flatten_strings(value: Any) -> list[str]:
 
 
 def _stack_status(stack: list[bool | None]) -> str:
+    """把三值条件栈压缩为五态之一：含 False→inactive，含 None→unknown，否则 selected。"""
     if False in stack:
         return "inactive"
     if None in stack:
@@ -243,5 +288,6 @@ def _stack_status(stack: list[bool | None]) -> str:
 
 
 def _result(records: list[BuildRecord], diagnostics: list[str]) -> AdapterResult:
+    """收尾：按 (kind,line,col,value,metadata) 去重并按位置排序；有诊断即 partial。"""
     ordered = tuple(sorted({(item.kind, item.line, item.start_column, item.value, str(item.metadata)): item for item in records}.values(), key=lambda item: (item.line, item.start_column, item.kind, item.value)))
     return AdapterResult(ordered, tuple(dict.fromkeys(diagnostics)), bool(diagnostics))

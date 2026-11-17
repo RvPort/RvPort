@@ -26,17 +26,17 @@ class SchemaV2ReportProjector:
             validate_candidates(detections, classifications)
             source_context = SourceContextProjector(context.input_root)
             index = SnapshotIndex.build(knowledge, frontend, facts, analysis, detections, classifications, assessments)
-            chain = EvidenceChainBuilder(index, knowledge, source_context)
+            chain = EvidenceChainBuilder(index, knowledge, source_context, architecture_family=context.source_arch)
             usage = CandidateUsageProjection(index, source_context)
-            findings = V2FindingMapper(index, chain, source_context, usage).map(classifications)
+            findings = V2FindingMapper(index, chain, source_context, usage, architecture_family=context.source_arch).map(classifications)
             for finding in findings:
                 finding.conclusion.require_bilingual_suggestions()
             projected_diagnostics = V2DiagnosticProjector(source_context).project(tuple(diagnostics))
             input_complete = not any(item.affects_exit_code for item in diagnostics)
-            summary = V2SummaryReducer().reduce(workspace, findings, assessments, input_complete=input_complete)
-            sources = tuple(sorted((KnowledgeSourceView(id=item.source_id, kind="curated" if "curated" in item.kind else "compiler-derived", sha256=item.sha256) for item in knowledge.sources), key=lambda item: item.id))
+            summary = V2SummaryReducer(architecture_family=context.source_arch).reduce(workspace, findings, assessments, input_complete=input_complete)
+            sources = tuple(sorted((KnowledgeSourceView(id=item.source_id, kind="curated" if "curated" in item.kind else "collected" if "collected" in item.kind else "compiler-derived", sha256=item.sha256) for item in knowledge.sources), key=lambda item: item.id))
             report = SchemaV2Report(
-                scan=Scan(id=stable_view_id("scan", context.knowledge_id, workspace.files, context.target_arch), tool=Tool(version=context.scanner_version), scope=Scope(targetArchitecture=context.target_arch), knowledgeSources=sources),
+                scan=Scan(id=stable_view_id("scan", context.knowledge_id, workspace.files, context.target_arch), tool=Tool(version=context.scanner_version), scope=Scope(domain=f"c-cpp-{context.source_arch}-to-riscv", targetArchitecture=context.target_arch), knowledgeSources=sources),
                 project=Project(id=stable_view_id("project", context.input_root.name), name=context.input_root.name or "project", filesAnalyzed=len(workspace.files), status=summary.status, reasonCodes=summary.reasonCodes),
                 summary=summary, findings=findings, diagnostics=projected_diagnostics,
                 extensions={**(FamilyProjection(analysis.entities).report() or {}),

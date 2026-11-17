@@ -78,7 +78,7 @@ class ClassificationPolicy:
             return ClassificationDecision("guarded_inactive", "x86-path-statically-excluded", True)
         if confirmed_dependency(observation) and kind not in {"build_selected_x86_dependency", "riscv_test_blocker"} and not selected_reachable and not inactive_reachable:
             return ClassificationDecision("actionable_non_blocking", "confirmed-local-x86-dependency-target-unproven")
-        if kind == "x86_platform_macro_reference" and not selected_reachable and not inactive_reachable:
+        if kind in {"x86_platform_macro_reference", "arm64_platform_macro_reference"} and not selected_reachable and not inactive_reachable:
             return ClassificationDecision("unknown", "architecture-macro-use-unproven")
         if kind.endswith("unknown") or relation_unknown:
             return ClassificationDecision("unknown", "input-or-relation-unknown")
