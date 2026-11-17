@@ -46,6 +46,10 @@ SUGGESTIONS = MappingProxyType({
         "请核查目标架构的构建选择分支，按证据补齐 RISC-V 或通用选择路径；不能仅凭分支名称判断实现可用，真实构建需在后续阶段验证。",
         "Review the build-selection branches for the target architecture and use the evidence to add a RISC-V or generic selection path. Branch names alone do not establish implementation suitability; actual builds require later validation.",
     ),
+    "family_gap": Suggestion(
+        "构建已选中源架构家族成员且范围内未观察到 RISC-V 或通用实现，请按推导的目标路径补齐对应成员或确认其不需要；本结论限于授权文件清单，不代表全项目缺失，真实构建需在后续阶段验证。",
+        "The build selects a source-architecture family member while no RISC-V or portable member is observed in scope. Add the derived target member or confirm it is unnecessary. This conclusion is limited to the authorized file list and does not claim a project-wide absence; actual builds require later validation.",
+    ),
     "test_gap": Suggestion(
         "请核查 RISC-V 目标对应的测试资产、选择路径及其与实现的关联，补齐有证据支持的测试覆盖缺口；当前静态扫描不代表测试已经运行或通过。",
         "Review test assets, selection paths and their links to implementations for the RISC-V target, and address evidence-backed coverage gaps. This static scan does not mean tests have run or passed.",
@@ -85,12 +89,13 @@ def select_suggestion(impact: str, status: str, finding_type: str, *, confirmed_
         return SUGGESTIONS["hint"]
     if status != "complete":
         return SUGGESTIONS["unknown"]
-    if finding_type not in _DEPENDENCY_TYPES | {"missing_riscv_selection_path", "riscv_test_coverage_gap"}:
+    if finding_type not in _DEPENDENCY_TYPES | {"missing_riscv_selection_path", "missing_riscv_family_member", "riscv_test_coverage_gap"}:
         return SUGGESTIONS["unknown"]
     if impact == "blocking_issue":
         return SUGGESTIONS["blocking"]
     if impact == "actionable_non_blocking":
         key = {"missing_riscv_selection_path": "selection_gap",
+               "missing_riscv_family_member": "family_gap",
                "riscv_test_coverage_gap": "test_gap"}.get(finding_type, "local")
         return SUGGESTIONS[key]
     return SUGGESTIONS["unknown"]

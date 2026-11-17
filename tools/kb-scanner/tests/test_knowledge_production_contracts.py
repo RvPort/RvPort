@@ -23,6 +23,13 @@ LEGACY_HASHES = {
 }
 COLLECTED_PATH = "generated/arm64-collected-entries.json"
 COLLECTED_SHA256 = "4301bb10dd4ae3b035b9eda39caff01be7f52f4daaee55c33efae6917a7554f4"
+RISCV_COLLECTED_PATH = "generated/riscv-collected-entries.json"
+RISCV_COLLECTED_SHA256 = "ec18d767685bfe6956d3c36f848cea7cfcdf7358a4a460bfb22f43f884a75853"
+# 储备数据（不进 manifest、不进运行时）：仅钉哈希防漂移，启用路径待 Rust frontend 立项。
+RESERVE_SHA256 = {
+    "collected/reserve/rust_arch_functions.json": "7838018318ad9b7c81041af5c3bd35a64e9d55d4a1e4888aa547b50aaa7f8eea",
+    "collected/reserve/rust_arch_struct.json": "06ec9843517ba5e47c4015056df5971df00d9561e47bbf3ceda3440526002a84",
+}
 
 
 class KnowledgeProductionContractTests(unittest.TestCase):
@@ -108,6 +115,35 @@ class KnowledgeProductionContractTests(unittest.TestCase):
         from tools.collect_aarch64_entries import collect
         regenerated, _ = collect(RULES)
         self.assertEqual(render_model(regenerated), path.read_bytes())
+
+    def test_collected_riscv_source_is_canonical_sorted_and_reproducible(self) -> None:
+        """riscv 目标族语料产物：collected-v1 契约、确定性渲染、单源单族=riscv、目标侧语义范围。"""
+        path = RULES / RISCV_COLLECTED_PATH
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), RISCV_COLLECTED_SHA256)
+        model = CollectedFactsModel.model_validate_json(path.read_bytes())
+        self.assertEqual(render_model(model), path.read_bytes())
+        from kb_scanner.knowledge.production import lint_generated as lint_v2
+        from kb_scanner.knowledge.provider import _collected_as_v2
+        self.assertEqual(lint_v2(_collected_as_v2(model)), ())
+        # 单源单族：全部条目为 riscv 目标族、riscv-only 语义范围。
+        self.assertEqual({item.architectureFamily for item in model.facts}, {"riscv"})
+        self.assertTrue(all(item.semanticScope == "riscv-only" for item in model.facts))
+        counts = Counter(item.factKind for item in model.facts)
+        self.assertEqual(counts["platformMacros"], 203)
+        self.assertEqual(len(counts), 1)
+        for name, digest in zip(model.source.inputFiles, model.source.inputSha256):
+            self.assertEqual(hashlib.sha256((RULES / name).read_bytes()).hexdigest(), digest)
+        # 转换脚本可再生成：collect() 与落盘产物逐字节一致。
+        from tools.collect_riscv_entries import collect
+        regenerated, _ = collect(RULES)
+        self.assertEqual(render_model(regenerated), path.read_bytes())
+
+    def test_reserve_data_is_pinned_and_not_in_runtime_manifest(self) -> None:
+        """储备语料：哈希钉死防漂移；不进 knowledge-manifest（不装载、不投影）。"""
+        manifest_text = (RULES / "knowledge-manifest.json").read_text(encoding="utf-8")
+        self.assertNotIn("reserve", manifest_text)
+        for name, digest in RESERVE_SHA256.items():
+            self.assertEqual(hashlib.sha256((RULES / name).read_bytes()).hexdigest(), digest, name)
 
     def test_runtime_data_contains_no_execution_or_classification_recipe(self) -> None:
         forbidden = {"regex", "operator", "pattern", "matcher", "severity", "blocking", "reason", "suggestion", "message", "readiness"}

@@ -64,11 +64,16 @@ class FamilyProjection:
                 projected.append({key: member[key] for key in ("path", "roleHint", "candidateStatus", "token", "rule", "observation")}
                                  | {"bindings": bindings})
             remaining -= len(projected)
-            selected.append({key: family[key] for key in ("id", "template", "status", "memberCount", "alternativeStatus", "candidateAbsence", "reasonCodes")}
-                            | {"members": projected, "omittedMembers": family["memberCount"] - len(projected)})
+            family_view = {key: family[key] for key in ("id", "template", "status", "memberCount", "alternativeStatus", "candidateAbsence", "reasonCodes")}
+            if "candidateMissingMember" in family:
+                # 缺失候选（family-absence-v1）：纯词法推导，status=candidate 不构成结论。
+                family_view["candidateMissingMember"] = family["candidateMissingMember"]
+            family_view["members"] = projected
+            family_view["omittedMembers"] = family["memberCount"] - len(projected)
+            selected.append(family_view)
         omitted_families = len(families) - len(selected)
         clipped = omitted_families or omitted_bindings or omitted_sources or any(f["omittedMembers"] for f in selected)
-        return {"version": self.catalog["version"], "scope": self.catalog["scope"],
+        view = {"version": self.catalog["version"], "scope": self.catalog["scope"],
                 "discoveryStatus": self.catalog["discoveryStatus"], "discoveryReasonCodes": self.catalog["reasonCodes"],
                 "pathCount": self.catalog["pathCount"], "pathsProcessed": self.catalog["pathsProcessed"],
                 "observedFamilyCount": self.catalog["familyCount"], "familyCount": len(families),
@@ -77,6 +82,10 @@ class FamilyProjection:
                 "reasonCodes": ["family-output-budget"] if clipped else [],
                 "explanation": "文件命名仅提示候选实现；不能证明行为等价、目标选中或缺少通用实现。",
                 "explanation_en": "File names only suggest candidate implementations; they do not prove equivalence, target selection, or absence of portable code."}
+        # 目录级缺失候选：只进 report 级投影（report() 调用方），不进单 finding 级。
+        if "directoryAbsence" in self.catalog and family_limit == self.budget.families:
+            view["directoryAbsence"] = self.catalog["directoryAbsence"][: self.budget.families]
+        return view
 
 
 def render_family_summary(extensions):
@@ -86,7 +95,16 @@ def render_family_summary(extensions):
     rows = []
     for family in catalog["families"]:
         members = "".join(f"<li>{html.escape(m['path'], quote=True)} · {html.escape(m['roleHint'])} · 待核查</li>" for m in family["members"])
-        rows.append(f"<li>{html.escape(family['template'], quote=True)}<ul>{members}</ul></li>")
+        absence = family.get("candidateMissingMember")
+        absence_row = ""
+        if absence:
+            absence_row = (f"<li>缺失候选：{html.escape(absence['derivedTargetPath'], quote=True)}"
+                           f"（推导自 {html.escape(absence['anchorPath'], quote=True)}；仅候选，非结论）</li>")
+        rows.append(f"<li>{html.escape(family['template'], quote=True)}<ul>{members}{absence_row}</ul></li>")
+    directory_rows = "".join(
+        f"<li>{html.escape(item['parentPath'], quote=True)} 下未见 riscv 子目录；推导目标 {html.escape(item['derivedTargetPath'], quote=True)}（仅候选）</li>"
+        for item in catalog.get("directoryAbsence", ()))
+    directory_section = f"<ul>{directory_rows}</ul>" if directory_rows else ""
     return ("<section><h2>架构实现候选家族</h2><p>" + html.escape(catalog["explanation"])
             + f"</p><p>发现状态：{html.escape(catalog['discoveryStatus'])}；展示状态：{html.escape(catalog['projectionStatus'])}</p><ul>"
-            + "".join(rows) + "</ul></section>")
+            + "".join(rows) + "</ul>" + directory_section + "</section>")

@@ -27,12 +27,17 @@ FACT_KIND_LITERALS = Literal[
     "headers", "intrinsics", "builtins", "vectorTypes", "platformMacros", "compilerFlags",
     "assemblyInstructions", "registerNames", "cpuPlatformApis", "targetFeatures", "architectureAliases", "vectorWidthMarkers",
 ]
-# 知识库支持的源架构族：事实按族登记，检测按族过滤
-ARCHITECTURE_FAMILIES = ("x86", "arm64")
+# 知识库支持的知识架构族：事实按族登记，检测按族过滤。
+# "riscv" 是**目标族**——条目出现表示代码已有 RISC-V 分支/实现（与源族
+# "出现即迁移障碍"方向相反），只被消费端显式 family="riscv" 查询命中，
+# 不进入 source_arch 取值集与检测器注册表。
+ARCHITECTURE_FAMILIES = ("x86", "arm64", "riscv")
 # 语义范围：<族>-only（仅该架构存在）/ <族>-toolchain（该架构工具链语义）/ migration-sensitive（迁移敏感）
 SEMANTIC_SCOPES = (
-    "x86-only", "x86-toolchain", "arm64-only", "arm64-toolchain", "migration-sensitive",
+    "x86-only", "x86-toolchain", "arm64-only", "arm64-toolchain", "riscv-only", "migration-sensitive",
 )
+ArchitectureFamilyLiteral = Literal["x86", "arm64", "riscv"]
+SemanticScopeLiteral = Literal["x86-only", "x86-toolchain", "arm64-only", "arm64-toolchain", "riscv-only", "migration-sensitive"]
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _REVISION = re.compile(r"^[0-9a-f]{40}$")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -251,12 +256,12 @@ class SourceDescriptorModel(_StrictModel):
 
 
 class GeneratedFactV2Model(_StrictModel):
-    """单条 v2 生成事实：事实种类 + 架构族（x86/arm64）+ 规范值 + 语义范围。"""
+    """单条 v2 生成事实：事实种类 + 架构族（x86/arm64 源族、riscv 目标族）+ 规范值 + 语义范围。"""
 
     factKind: FACT_KIND_LITERALS
-    architectureFamily: Literal["x86", "arm64"]
+    architectureFamily: ArchitectureFamilyLiteral
     canonicalValue: str = Field(min_length=1)
-    semanticScope: Literal["x86-only", "x86-toolchain", "arm64-only", "arm64-toolchain", "migration-sensitive"]
+    semanticScope: SemanticScopeLiteral
 
 class GeneratedFactsV2Model(_StrictModel):
     """v2 生成事实载荷：一条来源描述 + 一组事实，事实三元组（种类/架构/规范值）必须唯一。"""
@@ -378,9 +383,9 @@ class CuratedEntryModel(_StrictModel):
 
     entryId: str = Field(min_length=1)
     factKind: Literal["assemblyInstructions", "registerNames", "cpuPlatformApis", "targetFeatures", "architectureAliases", "vectorWidthMarkers"]
-    architectureFamily: Literal["x86", "arm64"]
+    architectureFamily: ArchitectureFamilyLiteral
     canonicalValue: str = Field(min_length=1)
-    semanticScope: Literal["x86-only", "x86-toolchain", "arm64-only", "arm64-toolchain", "migration-sensitive"]
+    semanticScope: SemanticScopeLiteral
     referenceIds: tuple[str, ...] = Field(min_length=1)
     reviewStatus: Literal["accepted"]
 

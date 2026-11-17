@@ -14,90 +14,286 @@
     "third-party": "Installed container dependencies, outside scanner-owned source roots"
   },
   "modules": {
-    "scripts/measure_evidence_graph_qualification.py": ["tests.unit.test_retained_measurements"],
-    "tools/test_content_scale.py": ["tests.unit.test_test_content_scale"],
-    "kb_scanner/frontends/cpp/assert_profile.py": ["tests.unit.test_assert_profile"],
-    "kb_scanner/analyzers/test_content_structure.py": ["tests.unit.test_test_content_structure"],
-    "kb_scanner/analyzers/test_content.py": ["tests.unit.test_test_content"],
-    "kb_scanner/projection/v2/test_content.py": ["tests.unit.test_test_content_projection"],
-    "kb_scanner/frontends/cpp/test_inventory.py": ["tests.unit.test_test_inventory"],
-    "kb_scanner/frontends/build/cmake/test_registration.py": ["tests.unit.cmake.test_test_registration"],
-    "kb_scanner/analyzers/macro_state.py": ["tests.unit.test_macro_state"],
-    "kb_scanner/analyzers/macro_session.py": ["tests.unit.test_macro_session", "tests.unit.test_build_macro_binding"],
-    "kb_scanner/analyzers/macro_effects.py": ["tests.unit.test_macro_effects"],
-    "kb_scanner/projection/v2/evidence_kinds.py": ["tests.unit.test_macro_effect_projection"],
-    "kb_scanner/projection/v2/macro_effects.py": ["tests.unit.test_macro_effect_projection"],
-    "kb_scanner/frontends/cpp/macro_records.py": ["tests.unit.test_macro_records"],
-    "kb_scanner/frontends/build/make_values.py": ["tests.unit.test_make_effects"],
-    "kb_scanner/frontends/build/make_effects.py": ["tests.unit.test_make_effects"],
-    "kb_scanner/frontends/build/cmake/macro_conflicts.py": ["tests.unit.cmake.test_macro_conflicts"],
-    "kb_scanner/normalization/build_effects.py": ["tests.unit.test_build_effects"],
-    "kb_scanner/core/metadata.py": ["tests.unit.test_shared_metadata", "tests.test_core_pipeline"],
-    "kb_scanner/frontends/cpp/source_positions.py": ["tests.unit.frontends.cpp.test_source_positions"],
-    "kb_scanner/projection/publisher.py": ["tests.unit.schema_v2_projection.test_projector"],
-    "kb_scanner/detectors/test_selection.py": ["tests.unit.classification_assessment.test_test_detector"],
-    "kb_scanner/pipeline/usage_frontend.py": ["tests.unit.test_usage_frontend"],
-    "kb_scanner/pipeline/orchestrator.py": ["tests.test_core_pipeline", "tests.unit.test_usage_frontend"],
-    "kb_scanner/analyzers/span_lookup.py": ["tests.unit.test_span_lookup"],
-    "kb_scanner/analyzers/candidate_usage/conflicts.py": ["tests.unit.test_usage_conflicts"],
-    "kb_scanner/projection/v2/candidate_usage.py": ["tests.unit.test_usage_projection"],
-    "kb_scanner/classifiers/semantic_admission.py": ["tests.unit.candidate_semantics.test_admission", "tests.unit.test_usage_proof_validation"],
-    "kb_scanner/analyzers/candidate_usage/analysis.py": ["tests.unit.test_usage_analysis"],
-    "kb_scanner/classifiers/usage_proof.py": ["tests.unit.test_usage_proof_validation"],
-    "kb_scanner/analyzers/candidate_usage/proofs.py": ["tests.unit.test_usage_proofs"],
-    "kb_scanner/analyzers/candidate_usage/session.py": ["tests.unit.test_usage_session"],
-    "kb_scanner/analyzers/candidate_usage/index.py": ["tests.unit.test_usage_closure"],
-    "kb_scanner/analyzers/candidate_usage/closure.py": ["tests.unit.test_usage_closure"],
-    "kb_scanner/frontends/cpp/usage_bindings.py": ["tests.unit.test_usage_bindings"],
-    "kb_scanner/normalization/usage.py": ["tests.unit.test_usage_normalization"],
-    "kb_scanner/analyzers/candidate_usage/__init__.py": ["tests.unit.test_usage_demand"],
-    "kb_scanner/analyzers/candidate_usage/demand.py": ["tests.unit.test_usage_demand"],
-    "kb_scanner/frontends/cpp/usage_inventory.py": ["tests.unit.test_usage_inventory"],
-    "kb_scanner/frontends/cpp/function_inventory.py": ["tests.unit.test_function_inventory"],
-    "kb_scanner/frontends/cpp/function_semantics.py": ["tests.unit.test_function_semantics"],
-    "kb_scanner/frontends/cpp/frontend.py": ["tests.unit.test_function_semantics", "tests.unit.frontends.cpp.test_frontend"],
-    "kb_scanner/frontends/cpp/clang_adapter.py": ["tests.unit.test_macro_records", "tests.unit.test_function_clang_contract", "tests.unit.frontends.cpp.test_clang_adapter"],
-    "kb_scanner/frontends/cpp/tree_sitter_adapter.py": ["tests.unit.test_macro_records", "tests.unit.test_function_inventory", "tests.unit.frontends.cpp.test_tree_sitter_adapter"],
-    "kb_scanner/frontends/cpp/vocabulary.py": ["tests.unit.frontends.cpp.test_vocabulary"],
-    "kb_scanner/normalization/functions.py": ["tests.unit.test_function_normalization"],
-    "kb_scanner/normalization/cpp.py": ["tests.unit.test_macro_effect_detection", "tests.unit.test_function_normalization", "tests.unit.test_usage_normalization"],
-    "kb_scanner/analyzers/function_multiversion/__init__.py": ["tests.unit.test_function_multiversion"],
-    "kb_scanner/analyzers/function_multiversion/attributes.py": ["tests.unit.test_function_multiversion"],
-    "kb_scanner/analyzers/function_multiversion/grouping.py": ["tests.unit.test_function_multiversion"],
-    "kb_scanner/analyzers/function_multiversion/bindings.py": ["tests.unit.test_function_multiversion_pipeline"],
-    "kb_scanner/analyzers/function_multiversion/analysis.py": ["tests.unit.test_function_multiversion_pipeline"],
-    "kb_scanner/detectors/function_multiversion.py": ["tests.unit.test_function_multiversion_pipeline"],
-    "kb_scanner/projection/v2/multiversion.py": ["tests.unit.test_function_multiversion_pipeline"],
-    "kb_scanner/pipeline/composite.py": ["tests.unit.test_function_multiversion_pipeline", "tests.unit.test_architecture_family", "tests.unit.build_selection.test_composite", "tests.unit.test_source_chain_quality_edges"],
-    "kb_scanner/analyzers/architecture_family/__init__.py": ["tests.unit.test_architecture_family"],
-    "kb_scanner/frontends/family_inventory.py": ["tests.unit.test_architecture_family"],
-    "kb_scanner/analyzers/architecture_family/paths.py": ["tests.unit.test_architecture_family"],
-    "kb_scanner/analyzers/architecture_family/grouping.py": ["tests.unit.test_architecture_family"],
-    "kb_scanner/analyzers/architecture_family/bindings.py": ["tests.unit.test_architecture_family"],
-    "kb_scanner/analyzers/architecture_family/analyzer.py": ["tests.unit.test_architecture_family"],
-    "kb_scanner/projection/v2/families.py": ["tests.unit.test_architecture_family"],
-    "kb_scanner/detectors/local.py": ["tests.unit.test_macro_effect_detection", "tests.unit.knowledge_detection.test_local_detector", "tests.unit.cmake.test_risk"],
-    "kb_scanner/frontends/build/cmake/syntax.py": ["tests.unit.cmake.test_syntax"],
-    "kb_scanner/frontends/build/cmake/values.py": ["tests.unit.cmake.test_values"],
-    "kb_scanner/frontends/build/cmake/project.py": ["tests.unit.cmake.test_project"],
-    "kb_scanner/frontends/build/cmake/usage.py": ["tests.unit.cmake.test_macro_conflicts", "tests.unit.cmake.test_usage"],
-    "kb_scanner/analyzers/cmake_selection.py": ["tests.unit.cmake.test_graph"],
-    "kb_scanner/classifiers/risk.py": ["tests.unit.cmake.test_risk"],
-    "kb_scanner/classifiers/migration.py": ["tests.unit.cmake.test_risk", "tests.unit.classification_assessment"],
-    "kb_scanner/assessors/migration.py": ["tests.unit.classification_assessment"],
-    "kb_scanner/projection/policy.py": ["tests.unit.test_function_multiversion_pipeline", "tests.unit.compatible_cutover"],
-    "kb_scanner/core/ids.py": ["tests.test_core_pipeline", "tests.unit.autoconf.test_syntax_values"],
-    "kb_scanner/frontends/build/adapters.py": ["tests.unit.build_selection.test_adapters", "tests.unit.autoconf.test_project"],
-    "kb_scanner/frontends/build/vocabulary.py": ["tests.unit.build_selection.test_vocabulary_safety"],
-    "kb_scanner/classifiers/policy.py": ["tests.unit.test_function_multiversion_pipeline", "tests.unit.autoconf.test_graph", "tests.unit.classification_assessment"],
-    "kb_scanner/frontends/build/autoconf/syntax.py": ["tests.unit.autoconf.test_syntax_values"],
-    "kb_scanner/frontends/build/autoconf/values.py": ["tests.unit.autoconf.test_syntax_values", "tests.unit.autoconf.test_flow"],
-    "kb_scanner/frontends/build/autoconf/flow.py": ["tests.unit.autoconf.test_flow"],
-    "kb_scanner/frontends/build/autoconf/project.py": ["tests.unit.autoconf.test_project"],
-    "kb_scanner/frontends/build/frontend.py": ["tests.unit.test_make_effect_frontend", "tests.unit.autoconf.test_project", "tests.unit.build_selection.test_workspace_frontend"],
-    "kb_scanner/frontends/build/workspace.py": ["tests.unit.autoconf.test_project", "tests.unit.build_selection.test_workspace_frontend"],
-    "kb_scanner/analyzers/autoconf_selection.py": ["tests.unit.autoconf.test_graph"],
-    "kb_scanner/detectors/build_selection.py": ["tests.unit.autoconf.test_graph", "tests.unit.build_selection"],
+    "scripts/measure_evidence_graph_qualification.py": [
+      "tests.unit.test_retained_measurements"
+    ],
+    "tools/test_content_scale.py": [
+      "tests.unit.test_test_content_scale"
+    ],
+    "kb_scanner/frontends/cpp/assert_profile.py": [
+      "tests.unit.test_assert_profile"
+    ],
+    "kb_scanner/analyzers/test_content_structure.py": [
+      "tests.unit.test_test_content_structure"
+    ],
+    "kb_scanner/analyzers/test_content.py": [
+      "tests.unit.test_test_content"
+    ],
+    "kb_scanner/projection/v2/test_content.py": [
+      "tests.unit.test_test_content_projection"
+    ],
+    "kb_scanner/frontends/cpp/test_inventory.py": [
+      "tests.unit.test_test_inventory"
+    ],
+    "kb_scanner/frontends/build/cmake/test_registration.py": [
+      "tests.unit.cmake.test_test_registration"
+    ],
+    "kb_scanner/analyzers/macro_state.py": [
+      "tests.unit.test_macro_state"
+    ],
+    "kb_scanner/analyzers/macro_session.py": [
+      "tests.unit.test_macro_session",
+      "tests.unit.test_build_macro_binding"
+    ],
+    "kb_scanner/analyzers/macro_effects.py": [
+      "tests.unit.test_macro_effects"
+    ],
+    "kb_scanner/projection/v2/evidence_kinds.py": [
+      "tests.unit.test_macro_effect_projection"
+    ],
+    "kb_scanner/projection/v2/macro_effects.py": [
+      "tests.unit.test_macro_effect_projection"
+    ],
+    "kb_scanner/frontends/cpp/macro_records.py": [
+      "tests.unit.test_macro_records"
+    ],
+    "kb_scanner/frontends/build/make_values.py": [
+      "tests.unit.test_make_effects"
+    ],
+    "kb_scanner/frontends/build/make_effects.py": [
+      "tests.unit.test_make_effects"
+    ],
+    "kb_scanner/frontends/build/cmake/macro_conflicts.py": [
+      "tests.unit.cmake.test_macro_conflicts"
+    ],
+    "kb_scanner/normalization/build_effects.py": [
+      "tests.unit.test_build_effects"
+    ],
+    "kb_scanner/core/metadata.py": [
+      "tests.unit.test_shared_metadata",
+      "tests.test_core_pipeline"
+    ],
+    "kb_scanner/frontends/cpp/source_positions.py": [
+      "tests.unit.frontends.cpp.test_source_positions"
+    ],
+    "kb_scanner/projection/publisher.py": [
+      "tests.unit.schema_v2_projection.test_projector"
+    ],
+    "kb_scanner/detectors/test_selection.py": [
+      "tests.unit.classification_assessment.test_test_detector"
+    ],
+    "kb_scanner/pipeline/usage_frontend.py": [
+      "tests.unit.test_usage_frontend"
+    ],
+    "kb_scanner/pipeline/orchestrator.py": [
+      "tests.test_core_pipeline",
+      "tests.unit.test_usage_frontend"
+    ],
+    "kb_scanner/analyzers/span_lookup.py": [
+      "tests.unit.test_span_lookup"
+    ],
+    "kb_scanner/analyzers/candidate_usage/conflicts.py": [
+      "tests.unit.test_usage_conflicts"
+    ],
+    "kb_scanner/projection/v2/candidate_usage.py": [
+      "tests.unit.test_usage_projection"
+    ],
+    "kb_scanner/classifiers/semantic_admission.py": [
+      "tests.unit.candidate_semantics.test_admission",
+      "tests.unit.test_usage_proof_validation"
+    ],
+    "kb_scanner/analyzers/candidate_usage/analysis.py": [
+      "tests.unit.test_usage_analysis"
+    ],
+    "kb_scanner/classifiers/usage_proof.py": [
+      "tests.unit.test_usage_proof_validation"
+    ],
+    "kb_scanner/analyzers/candidate_usage/proofs.py": [
+      "tests.unit.test_usage_proofs"
+    ],
+    "kb_scanner/analyzers/candidate_usage/session.py": [
+      "tests.unit.test_usage_session"
+    ],
+    "kb_scanner/analyzers/candidate_usage/index.py": [
+      "tests.unit.test_usage_closure"
+    ],
+    "kb_scanner/analyzers/candidate_usage/closure.py": [
+      "tests.unit.test_usage_closure"
+    ],
+    "kb_scanner/frontends/cpp/usage_bindings.py": [
+      "tests.unit.test_usage_bindings"
+    ],
+    "kb_scanner/normalization/usage.py": [
+      "tests.unit.test_usage_normalization"
+    ],
+    "kb_scanner/analyzers/candidate_usage/__init__.py": [
+      "tests.unit.test_usage_demand"
+    ],
+    "kb_scanner/analyzers/candidate_usage/demand.py": [
+      "tests.unit.test_usage_demand"
+    ],
+    "kb_scanner/frontends/cpp/usage_inventory.py": [
+      "tests.unit.test_usage_inventory"
+    ],
+    "kb_scanner/frontends/cpp/function_inventory.py": [
+      "tests.unit.test_function_inventory"
+    ],
+    "kb_scanner/frontends/cpp/function_semantics.py": [
+      "tests.unit.test_function_semantics"
+    ],
+    "kb_scanner/frontends/cpp/frontend.py": [
+      "tests.unit.test_function_semantics",
+      "tests.unit.frontends.cpp.test_frontend"
+    ],
+    "kb_scanner/frontends/cpp/clang_adapter.py": [
+      "tests.unit.test_macro_records",
+      "tests.unit.test_function_clang_contract",
+      "tests.unit.frontends.cpp.test_clang_adapter"
+    ],
+    "kb_scanner/frontends/cpp/tree_sitter_adapter.py": [
+      "tests.unit.test_macro_records",
+      "tests.unit.test_function_inventory",
+      "tests.unit.frontends.cpp.test_tree_sitter_adapter"
+    ],
+    "kb_scanner/frontends/cpp/vocabulary.py": [
+      "tests.unit.frontends.cpp.test_vocabulary"
+    ],
+    "kb_scanner/normalization/functions.py": [
+      "tests.unit.test_function_normalization"
+    ],
+    "kb_scanner/normalization/cpp.py": [
+      "tests.unit.test_macro_effect_detection",
+      "tests.unit.test_function_normalization",
+      "tests.unit.test_usage_normalization"
+    ],
+    "kb_scanner/analyzers/function_multiversion/__init__.py": [
+      "tests.unit.test_function_multiversion"
+    ],
+    "kb_scanner/analyzers/function_multiversion/attributes.py": [
+      "tests.unit.test_function_multiversion"
+    ],
+    "kb_scanner/analyzers/function_multiversion/grouping.py": [
+      "tests.unit.test_function_multiversion"
+    ],
+    "kb_scanner/analyzers/function_multiversion/bindings.py": [
+      "tests.unit.test_function_multiversion_pipeline"
+    ],
+    "kb_scanner/analyzers/function_multiversion/analysis.py": [
+      "tests.unit.test_function_multiversion_pipeline"
+    ],
+    "kb_scanner/detectors/function_multiversion.py": [
+      "tests.unit.test_function_multiversion_pipeline"
+    ],
+    "kb_scanner/projection/v2/multiversion.py": [
+      "tests.unit.test_function_multiversion_pipeline"
+    ],
+    "kb_scanner/pipeline/composite.py": [
+      "tests.unit.test_function_multiversion_pipeline",
+      "tests.unit.test_architecture_family",
+      "tests.unit.build_selection.test_composite",
+      "tests.unit.test_source_chain_quality_edges"
+    ],
+    "kb_scanner/analyzers/architecture_family/__init__.py": [
+      "tests.unit.test_architecture_family"
+    ],
+    "kb_scanner/frontends/family_inventory.py": [
+      "tests.unit.test_architecture_family"
+    ],
+    "kb_scanner/analyzers/architecture_family/paths.py": [
+      "tests.unit.test_architecture_family"
+    ],
+    "kb_scanner/analyzers/architecture_family/grouping.py": [
+      "tests.unit.test_architecture_family"
+    ],
+    "kb_scanner/analyzers/architecture_family/bindings.py": [
+      "tests.unit.test_architecture_family"
+    ],
+    "kb_scanner/analyzers/architecture_family/analyzer.py": [
+      "tests.unit.test_architecture_family"
+    ],
+    "kb_scanner/projection/v2/families.py": [
+      "tests.unit.test_architecture_family"
+    ],
+    "kb_scanner/detectors/local.py": [
+      "tests.unit.test_macro_effect_detection",
+      "tests.unit.knowledge_detection.test_local_detector",
+      "tests.unit.cmake.test_risk"
+    ],
+    "kb_scanner/frontends/build/cmake/syntax.py": [
+      "tests.unit.cmake.test_syntax"
+    ],
+    "kb_scanner/frontends/build/cmake/values.py": [
+      "tests.unit.cmake.test_values"
+    ],
+    "kb_scanner/frontends/build/cmake/project.py": [
+      "tests.unit.cmake.test_project"
+    ],
+    "kb_scanner/frontends/build/cmake/usage.py": [
+      "tests.unit.cmake.test_macro_conflicts",
+      "tests.unit.cmake.test_usage"
+    ],
+    "kb_scanner/analyzers/cmake_selection.py": [
+      "tests.unit.cmake.test_graph"
+    ],
+    "kb_scanner/classifiers/risk.py": [
+      "tests.unit.cmake.test_risk"
+    ],
+    "kb_scanner/classifiers/migration.py": [
+      "tests.unit.cmake.test_risk",
+      "tests.unit.classification_assessment"
+    ],
+    "kb_scanner/assessors/migration.py": [
+      "tests.unit.classification_assessment"
+    ],
+    "kb_scanner/projection/policy.py": [
+      "tests.unit.test_function_multiversion_pipeline",
+      "tests.unit.compatible_cutover"
+    ],
+    "kb_scanner/core/ids.py": [
+      "tests.test_core_pipeline",
+      "tests.unit.autoconf.test_syntax_values"
+    ],
+    "kb_scanner/frontends/build/adapters.py": [
+      "tests.unit.build_selection.test_adapters",
+      "tests.unit.autoconf.test_project"
+    ],
+    "kb_scanner/frontends/build/vocabulary.py": [
+      "tests.unit.build_selection.test_vocabulary_safety"
+    ],
+    "kb_scanner/classifiers/policy.py": [
+      "tests.unit.test_function_multiversion_pipeline",
+      "tests.unit.autoconf.test_graph",
+      "tests.unit.classification_assessment"
+    ],
+    "kb_scanner/frontends/build/autoconf/syntax.py": [
+      "tests.unit.autoconf.test_syntax_values"
+    ],
+    "kb_scanner/frontends/build/autoconf/values.py": [
+      "tests.unit.autoconf.test_syntax_values",
+      "tests.unit.autoconf.test_flow"
+    ],
+    "kb_scanner/frontends/build/autoconf/flow.py": [
+      "tests.unit.autoconf.test_flow"
+    ],
+    "kb_scanner/frontends/build/autoconf/project.py": [
+      "tests.unit.autoconf.test_project"
+    ],
+    "kb_scanner/frontends/build/frontend.py": [
+      "tests.unit.test_make_effect_frontend",
+      "tests.unit.autoconf.test_project",
+      "tests.unit.build_selection.test_workspace_frontend"
+    ],
+    "kb_scanner/frontends/build/workspace.py": [
+      "tests.unit.autoconf.test_project",
+      "tests.unit.build_selection.test_workspace_frontend"
+    ],
+    "kb_scanner/analyzers/autoconf_selection.py": [
+      "tests.unit.autoconf.test_graph"
+    ],
+    "kb_scanner/detectors/build_selection.py": [
+      "tests.unit.autoconf.test_graph",
+      "tests.unit.build_selection"
+    ],
     "kb_scanner/projection/v2/suggestions.py": [
       "tests.unit.test_function_multiversion_pipeline",
       "tests.unit.schema_v2_projection.test_suggestions"
@@ -160,6 +356,15 @@
     "kb_scanner/projection/v2/validation.py": [
       "tests.unit.schema_v2_projection.test_reference_validator",
       "tests.unit.test_source_chain_quality_edges"
+    ],
+    "kb_scanner/frontends/asm/__init__.py": [
+      "tests.unit.test_asm_frontend"
+    ],
+    "kb_scanner/frontends/asm/vocabulary.py": [
+      "tests.unit.test_asm_frontend"
+    ],
+    "kb_scanner/frontends/asm/frontend.py": [
+      "tests.unit.test_asm_frontend"
     ]
   },
   "boundaryPolicy": "Native C/C++, Make, retained Bash adapters, RPM shell and Autoconf syntax parsing use fakes in isolated unit runs. Real grammar and CLI scans run separately as components; no project command is executed.",

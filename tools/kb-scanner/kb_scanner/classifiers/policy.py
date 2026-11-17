@@ -90,7 +90,7 @@ class ClassificationPolicy:
             if not proof_complete:
                 return ClassificationDecision("unknown", "inactive-proof-incomplete", True)
             return ClassificationDecision("guarded_inactive", "x86-path-statically-excluded", True)
-        if kind in {"riscv_test_coverage_gap", "missing_riscv_selection_path"}:
+        if kind in {"riscv_test_coverage_gap", "missing_riscv_selection_path", "missing_riscv_family_member"}:
             return ClassificationDecision("actionable_non_blocking", "migration-or-test-gap")
         if observation.status == "hint" or str(observation.metadata.get("basis", "")).startswith("comment"):
             return ClassificationDecision("hint", "comment-only-hint")

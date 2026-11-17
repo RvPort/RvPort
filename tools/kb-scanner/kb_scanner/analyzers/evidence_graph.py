@@ -785,10 +785,13 @@ def _index_branches(
     group_counts: dict[str, int] = defaultdict(int)
     for evidence in evidence_items:
         by_subject[evidence.subject_id].append(evidence)
+    # 源族分支知识 + 目标族（riscv）平台宏：目标族供 _branch_role 的
+    # 目标族预检消费（"已有 RISC-V 分支"判定），源族按 source_arch 过滤。
     branch_knowledge = replace(knowledge, entries=tuple(
         entry for entry in knowledge.entries
-        if entry.architecture_family.lower() == architecture_family
-        and entry.fact_kind in {"architectureAliases", "platformMacros", "targetFeatures"}
+        if (entry.architecture_family.lower() == architecture_family
+            and entry.fact_kind in {"architectureAliases", "platformMacros", "targetFeatures"})
+        or (entry.architecture_family.lower() == "riscv" and entry.fact_kind == "platformMacros")
     ))
     roots = [
         item
@@ -863,6 +866,13 @@ def _branch_role(
     if fallback:
         return "fallback", ()
     condition = re.sub(r"/\*.*?\*/|//[^\r\n]*", " ", value, flags=re.DOTALL)
+    # 目标族预检：条件串命中 riscv 目标宏词表（__riscv*）即判为 riscv 分支并携带
+    # 知识条目 ID。必须先于 _ROLE_PATTERNS 词形正则（"__riscv_xlen" 内的 "riscv"
+    # 子串会被词形路径截胡且不带知识 ID）；negated 时返回 unknown（"未定义
+    # __riscv"不构成"已移植"证据，五态纪律）。
+    target_role, target_ids = _target_family_role(condition, knowledge)
+    if target_role is not None:
+        return ("unknown", ()) if negated else (target_role, target_ids)
     for role, pattern in _ROLE_PATTERNS.items():
         if pattern.search(condition):
             return ("unknown", ()) if negated else (role, ())
@@ -882,6 +892,32 @@ def _branch_role(
         necessary = required_foreign(condition, lambda name: (name,) if name.casefold() in tokens or family_hint.search(name) else ())
         return ("unknown" if negated or not necessary else family), tuple(sorted(set(matched)))
     return "unknown", ()
+
+
+def _target_family_role(
+    condition: str,
+    knowledge: KnowledgeSnapshot,
+) -> tuple[str | None, tuple[str, ...]]:
+    """目标族（riscv）角色预检：命中目标宏词表返回 ("riscv", 知识条目 ID)，否则 (None, ())。
+
+    只消费 architecture_family=="riscv" 的 platformMacros 条目（collected-v1
+    目标语料）；词边界正则与源族匹配一致。命中即"已有 RISC-V 分支"，
+    不做 required_foreign 复核——目标宏（如 __riscv_xlen）不会被同一条件内
+    的其他 token 削弱。
+    """
+    matched: list[str] = []
+    lowered = condition.lower()
+    for entry in knowledge.entries:
+        if entry.architecture_family.lower() != "riscv":
+            continue
+        if entry.fact_kind != "platformMacros":
+            continue
+        token = entry.canonical_value.lower()
+        if token and re.search(rf"(?<![A-Za-z0-9_]){re.escape(token)}(?![A-Za-z0-9_])", lowered):
+            matched.append(entry.id)
+    if not matched:
+        return None, ()
+    return "riscv", tuple(sorted(set(matched)))
 
 
 # 源架构族的启发式词元正则：无知识库命中时兜底判定分支属于源架构。

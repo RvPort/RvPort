@@ -1,7 +1,7 @@
 {
   "schemaVersion": "2.0",
   "catalogId": "riscv-porting-x86-facts",
-  "version": "2026.10-arm64.1",
+  "version": "2026.11-riscv.1",
   "sources": [
     {"sourceId": "binutils-2.42-x86", "kind": "generated-v2", "path": "generated/binutils-2.42-x86.json", "sha256": "e3ff7d8acccd50fd7e8a2f8c64d4a303e147b7540702a362c1b00f9bbdf29345"},
     {"sourceId": "clang-x86-entries", "kind": "legacy-generated", "path": "generated/clang-x86-entries.json", "sha256": "947e2ad0797248f8179f2bc29f4e7e0591bd7a14801ba819c9e56d31926e9a8c"},
@@ -9,6 +9,11 @@
       "sourceId": "collected-arm64-entries", "kind": "collected-v1",
       "path": "generated/arm64-collected-entries.json", "sha256": "4301bb10dd4ae3b035b9eda39caff01be7f52f4daaee55c33efae6917a7554f4",
       "collectedFiles": ["collected/arm64/aarch64.builtin", "collected/arm64/aarch64.intrinsics", "collected/arm64/aarch64.macro", "collected/arm64/aarch64.opcode"]
+    },
+    {
+      "sourceId": "collected-riscv-entries", "kind": "collected-v1",
+      "path": "generated/riscv-collected-entries.json", "sha256": "ec18d767685bfe6956d3c36f848cea7cfcdf7358a4a460bfb22f43f884a75853",
+      "collectedFiles": ["collected/riscv/riscv.macro"]
     },
     {
       "sourceId": "curated-x86-migration-semantics", "kind": "curated-v1",

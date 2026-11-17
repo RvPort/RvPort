@@ -59,6 +59,11 @@ class BuildSelectionDetector:
             if issue == "missing_riscv_selection_path":
                 _add_observation(observations, "missing_riscv_selection_path", relation, (), "candidate", "high", relation.target_id)
                 continue
+            if issue == "missing_riscv_family_member":
+                # 架构家族升格条目（architecture_family/absence）：构建已选中源架构
+                # 成员且家族内无 riscv/generic 成员。kind 同名、级别同 selection_gap。
+                _add_observation(observations, "missing_riscv_family_member", relation, (), "candidate", "high", relation.target_id)
+                continue
             if item_kind not in _RELEVANT_KINDS:
                 continue
             matches = tuple(

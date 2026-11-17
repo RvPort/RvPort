@@ -6,7 +6,7 @@
   },
   "knowledgeManifest": {
     "path": "knowledge-manifest.json",
-    "sha256": "3386928b4b9877220800145204b39c68b83df90101d52ea66b294fe5be3ae1e5"
+    "sha256": "4861d53fe9b666a8fed094a586a29c46927d6b81a8cc2ba0a91c31fa0d81ec8d"
   },
   "projectionPolicy": {
     "id": "kb-scanner.compatible-projection",

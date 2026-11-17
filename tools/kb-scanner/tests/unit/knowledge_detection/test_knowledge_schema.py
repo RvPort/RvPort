@@ -9,6 +9,7 @@ from kb_scanner.knowledge.schema import (
     CandidateDecisionModel, CuratedFactsModel, DecisionLedgerModel, GeneratedFactsModel, GeneratedFactsV2Model,
     KnowledgeManifestModel, KnowledgeManifestV2Model, ReferenceRegistryModel, SourceDescriptorModel, _validate_json_value,
 )
+from kb_scanner.knowledge.schema import GeneratedFactV2Model
 
 
 HASH = "a" * 64
@@ -242,6 +243,36 @@ class KnowledgeSchemaTests(unittest.TestCase):
                 "sourceId": "collected-arm64", "kind": "collected-v1",
                 "path": "generated/arm64.json", "sha256": HASH, "collectedFiles": [],
             }))
+
+    def test_riscv_target_family_and_scope_are_accepted(self) -> None:
+        """riscv 目标族：riscv + riscv-only 在 v2/curated/collected 事实合法；未知族仍拒绝。"""
+        fact = {"factKind": "platformMacros", "architectureFamily": "riscv",
+                "canonicalValue": "__riscv_xlen", "semanticScope": "riscv-only"}
+        model = GeneratedFactsV2Model.model_validate_json(json.dumps({
+            "schemaVersion": "2.0",
+            "source": {
+                "sourceId": "s", "officialUrl": "https://example.test", "release": "r",
+                "revision": "a" * 40, "license": "MIT", "collectedAt": "2026-11-12",
+                "inputPaths": ["a"], "inputSha256": [HASH],
+            },
+            "facts": [fact],
+        }))
+        self.assertEqual("riscv", model.facts[0].architectureFamily)
+        from kb_scanner.knowledge.schema import CollectedFactsModel
+        collected = CollectedFactsModel.model_validate_json(json.dumps({
+            "schemaVersion": "1.0",
+            "source": {
+                "sourceId": "collected-riscv", "officialUrl": "https://github.com/riscv-non-isa/riscv-c-api-doc",
+                "license": "Apache-2.0", "collectedAt": "2026-11-12",
+                "inputFiles": ["collected/riscv/riscv.macro"], "inputSha256": [HASH],
+            },
+            "facts": [fact],
+        }))
+        self.assertEqual("riscv", collected.facts[0].architectureFamily)
+        # 未知族/未知语义范围仍被拒（单条事实模型）。
+        for bad in (fact | {"semanticScope": "sparc-only"}, fact | {"architectureFamily": "sparc"}):
+            with self.subTest(bad=bad), self.assertRaises(ValidationError):
+                GeneratedFactV2Model.model_validate_json(json.dumps(bad))
 
 
 if __name__ == "__main__":

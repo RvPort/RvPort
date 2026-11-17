@@ -16,7 +16,9 @@ class FamilyBudget:
     """家族发现的各项工作量上限（frozen 不可变；负值在构造时抛 ValueError）。
 
     paths/families/members 限制发现阶段，bindings/proof_steps 限制绑定阶段，
-    relations 限制最终物化的成员关系数。超限不是错误：记 reasonCodes 并截断。
+    relations 限制最终物化的成员关系数，absence_candidates/absence_directories
+    限制缺失候选推导（文件级升格条目数/目录级推导父目录数）。超限不是错误：
+    记 reasonCodes 并截断。
     """
 
     paths: int = 100000
@@ -25,6 +27,8 @@ class FamilyBudget:
     bindings: int = 4096
     proof_steps: int = 10000
     relations: int = 10000
+    absence_candidates: int = 512
+    absence_directories: int = 256
 
     def __post_init__(self):
         if any(v < 0 for v in vars(self).values()):

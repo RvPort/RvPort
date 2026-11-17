@@ -25,6 +25,7 @@ class KnowledgeDetectionContractTests(unittest.TestCase):
             "generated/clang-x86-entries.json": "947e2ad0797248f8179f2bc29f4e7e0591bd7a14801ba819c9e56d31926e9a8c",
             "generated/gcc-x86-entries.json": "22d68c2ab3c8c40c8606451af2e5f493877661d031b6b2f379eff7886c23d191",
             "generated/arm64-collected-entries.json": "4301bb10dd4ae3b035b9eda39caff01be7f52f4daaee55c33efae6917a7554f4",
+            "generated/riscv-collected-entries.json": "ec18d767685bfe6956d3c36f848cea7cfcdf7358a4a460bfb22f43f884a75853",
         }
         declared = {item["path"]: item["sha256"] for item in payload["sources"]}
         self.assertEqual({path: declared[path] for path in expected}, expected)
@@ -41,7 +42,7 @@ class KnowledgeDetectionContractTests(unittest.TestCase):
             "headers", "intrinsics", "builtins", "vectorTypes", "platformMacros", "compilerFlags",
             "assemblyInstructions", "registerNames", "cpuPlatformApis", "targetFeatures", "architectureAliases", "vectorWidthMarkers",
         } <= {item.fact_kind for item in result.value.entries})
-        self.assertEqual(len(result.value.sources), 7)
+        self.assertEqual(len(result.value.sources), 8)
         legacy = [item for item in result.value.sources if item.source_id in {"clang-x86-entries", "gcc-x86-entries"}]
         self.assertTrue(all(item.kind == "generated-json" and "originalSource" in item.metadata for item in legacy))
         add = next(item for item in result.value.entries
@@ -69,6 +70,20 @@ class KnowledgeDetectionContractTests(unittest.TestCase):
                        if item.architecture_family == "x86" and item.fact_kind == "assemblyInstructions" and item.canonical_value == "add")
         arm64_add = next(item for item in arm64_entries if item.fact_kind == "assemblyInstructions" and item.canonical_value == "add")
         self.assertNotEqual(x86_add.id, arm64_add.id)
+
+    def test_real_provider_loads_riscv_target_macros(self) -> None:
+        """riscv 目标族语料以 collected-v1 装载：单源单族、全部 platformMacros、riscv-only 范围。"""
+        result = GeneratedFactsKnowledgeProvider().load(make_context(ROOT, rule_dir=RULES))
+        self.assertIn("collected-riscv-entries", {item.source_id for item in result.value.sources})
+        riscv_entries = [item for item in result.value.entries if item.architecture_family == "riscv"]
+        self.assertEqual({item.fact_kind for item in riscv_entries}, {"platformMacros"})
+        # platformMacros 属 legacy 六类：semanticScope 不进运行时 metadata（与 arm64 语料同约定）。
+        self.assertTrue(all("semanticScope" not in item.metadata for item in riscv_entries))
+        self.assertGreaterEqual(len(riscv_entries), 200)
+        self.assertIn("__riscv_xlen", {item.canonical_value for item in riscv_entries})
+        # 检测器注册表不含 riscv 键（目标族不进源族检测链）。
+        from kb_scanner.detectors.definitions import DEFINITIONS_BY_FAMILY
+        self.assertEqual(set(DEFINITIONS_BY_FAMILY), {"x86", "arm64"})
 
     def test_behavior_matrix_is_requirement_driven_and_records_curated_gap(self) -> None:
         payload = json.loads((RULES / "behavior-acceptance.json").read_text(encoding="utf-8"))
