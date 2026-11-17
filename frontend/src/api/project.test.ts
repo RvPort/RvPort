@@ -751,7 +751,8 @@ describe('project API contract', () => {
     getProjectKnowledgeBaseFinding('finding-1')
     getProjectKnowledgeBaseFindingCodeContext('finding-1')
     createProjectKnowledgeBaseScan('project-1', {
-      language: 'C/C++',
+      language: ['C/C++'],
+      sourceArch: 'x86',
       scope: './',
       excludedDirectoryNames: 'build,node_modules,.git,target,__pycache__',
       excludedPaths: 'third_party/simd\nvendor/x86'
@@ -767,6 +768,7 @@ describe('project API contract', () => {
     expect(request.get).toHaveBeenNthCalledWith(5, '/findings/finding-1/code-context')
     expect(request.post).toHaveBeenNthCalledWith(1, '/projects/project-1/kb-scans', {
       language: 'c,cpp',
+      sourceArch: 'x86',
       scanScope: { mode: 'ALL', paths: [] },
       excludePaths: [
         'build',
