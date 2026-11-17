@@ -38,6 +38,10 @@ from .test_inventory import collect as collect_test_content
 from .macro_records import event_metadata, call_records
 from .workspace import language_candidates_for_path
 
+# 单文件字节预算：与其他语言前端（asm/rust/go/java/python 的 4MB）对齐，
+# 超大源文件降级 PARTIAL 而非无界读入。
+MAX_FILE_BYTES = 4 * 1024 * 1024
+
 
 _MACRO_TOKEN = re.compile(
     rb'/\*[\s\S]*?\*/|//[^\n]*|##|\.\.\.|(?:u8|u|U|L)?"(?:\\.|[^"\\])*"|(?:u8|u|U|L)?\'(?:\\.|[^\'\\])*\'|'
@@ -93,6 +97,20 @@ class TreeSitterCppAdapter:
                 stage="frontend.tree-sitter",
                 severity=DiagnosticSeverity.WARNING,
                 message=f"Could not read C/C++ input {relative_path}: {type(exc).__name__}",
+                producer="tree-sitter-cpp-adapter",
+            )
+            return StageResult(value=(), status=CompletionStatus.PARTIAL, diagnostics=(diagnostic,))
+        if len(source) > MAX_FILE_BYTES:
+            # 单文件字节预算（与 asm/rust/go/java/python 前端对齐）：超大源文件
+            # 降级 PARTIAL 而非无界读入——防止巨型生成文件撑爆内存。
+            diagnostic = Diagnostic(
+                code="tree-sitter.file-too-large",
+                stage="frontend.tree-sitter",
+                severity=DiagnosticSeverity.WARNING,
+                message=(
+                    f"Skipped oversized C/C++ input {relative_path}: "
+                    f"{len(source)} bytes exceeds budget {MAX_FILE_BYTES}"
+                ),
                 producer="tree-sitter-cpp-adapter",
             )
             return StageResult(value=(), status=CompletionStatus.PARTIAL, diagnostics=(diagnostic,))

@@ -36,6 +36,21 @@ class StagedPipelineRunner:
         """
         try:
             return self._run(context, initial_diagnostics)
+        except MemoryError as exc:
+            # 内存预算闸门（入口 setrlimit 或系统 OOM 前沿）：把无界分配转换为
+            # 明确的 FATAL 诊断，进程在秒级退出而不是换页抖动卡死数小时。
+            fatal = Diagnostic(
+                code="pipeline.memory-budget-exceeded",
+                stage="orchestrator",
+                severity=DiagnosticSeverity.FATAL,
+                message=f"Pipeline aborted: memory budget exceeded ({exc})",
+                producer="staged-pipeline-runner",
+                affects_exit_code=True,
+            )
+            return self._stopped_result(
+                CompletionStatus.FAILED,
+                merge_diagnostics(initial_diagnostics, (fatal,)),
+            )
         except Exception as exc:  # noqa: BLE001 - convert stage invariant failures at the boundary
             fatal = Diagnostic(
                 code="pipeline.internal-error",

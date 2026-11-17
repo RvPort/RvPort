@@ -7,6 +7,7 @@ validate-rules 与 list-rules 用于在发布前校验规则包（bundle）的�
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from . import __version__
@@ -75,9 +76,46 @@ def main(argv: list[str] | None = None) -> int:
     return 2
 
 
+def _apply_memory_budget() -> tuple[str, ...]:
+    """按 KB_SCANNER_MEMORY_LIMIT_MIB 设置进程地址空间硬上限（RLIMIT_AS）。
+
+    环境变量未设置时默认 2048 MiB；设为 0 关闭（本机调试）。超限的分配抛
+    MemoryError，由 orchestrator 转成 pipeline.memory-budget-exceeded FATAL——
+    把"内存跑满后换页抖动卡死数小时"变成"分钟级失败 + 明确诊断"。
+    返回应用说明（诊断记录用）。
+    """
+    import resource
+
+    limit_mib = int(os.environ.get("KB_SCANNER_MEMORY_LIMIT_MIB", "2048"))
+    if limit_mib <= 0:
+        return ("memory-budget-disabled",)
+    limit_bytes = limit_mib * 1024 * 1024
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+        # 只降 soft、保留原 hard：后续（如测试）仍可恢复到原有上限。
+        resource.setrlimit(resource.RLIMIT_AS, (min(limit_bytes, hard if hard != resource.RLIM_INFINITY else limit_bytes), hard))
+    except (ValueError, OSError):
+        # 容器环境可能禁止调低（比如父进程限制更小）——尽力而为，不阻断扫描。
+        return ("memory-budget-unapplied",)
+    return ("memory-budget-applied", str(limit_mib))
+
+
 def run_scan(args: argparse.Namespace) -> int:
     """执行 scan 子命令：组装默认应用并运行扫描，返回退出码。"""
+    budget_notes = _apply_memory_budget()
     result = create_default_application().run(scan_request_from_namespace(args))
+    if budget_notes[0] != "memory-budget-applied":
+        # 未应用时以 WARNING 诊断附加到结果（可见但不变更退出码）。
+        from .core import CompletionStatus, Diagnostic, DiagnosticSeverity, merge_diagnostics
+
+        note = Diagnostic(
+            code=budget_notes[0],
+            stage="cli",
+            severity=DiagnosticSeverity.WARNING,
+            message=f"Scanner memory budget was not applied: {budget_notes[0]}",
+            producer="kb-scanner-cli",
+        )
+        result = type(result)(result.exit_code, result.diagnostics and tuple(result.diagnostics) + (note,) or (note,))
     return result.exit_code
 
 

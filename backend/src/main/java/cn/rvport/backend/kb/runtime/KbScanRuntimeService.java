@@ -226,6 +226,9 @@ public class KbScanRuntimeService {
         List<String> command = command(input, sourceRoot, outputDir, compileCommandsPath);
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(scannerRoot().toFile());
+        // kb-scanner 进程级内存硬闸门：扫描器入口据此 setrlimit(RLIMIT_AS)，超限转
+        // FATAL 诊断而非换页抖动；也避免 OOM killer 连带 worker 容器（JVM）。
+        builder.environment().put("KB_SCANNER_MEMORY_LIMIT_MIB", String.valueOf(memoryLimitMib()));
         long started = System.nanoTime();
         Process process = builder.start();
         context.registerLocalProcess(process, Duration.ofSeconds(5));
@@ -772,6 +775,11 @@ public class KbScanRuntimeService {
     private int timeoutSeconds() {
         Integer configured = properties.kbScan() == null ? null : properties.kbScan().timeoutSeconds();
         return configured == null ? 1800 : configured;
+    }
+
+    private int memoryLimitMib() {
+        Integer configured = properties.kbScan() == null ? null : properties.kbScan().memoryLimitMib();
+        return configured == null ? 2048 : configured;
     }
 
     private long maxOutputBytes() {

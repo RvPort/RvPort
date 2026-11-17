@@ -26,6 +26,9 @@ from .tree_sitter_adapter import TreeSitterCppAdapter
 from .vocabulary import entity_sort_key, evidence_sort_key, make_source_file_entity
 from .workspace import language_candidates_for_path
 from .usage_inventory import cap_records
+
+# 累计源文本字节预算：与其他语言前端的 MAX_TOTAL_BYTES（64MB）对齐。
+MAX_TOTAL_SOURCE_BYTES = 64 * 1024 * 1024
 from .test_inventory import cap_records as cap_test_records
 
 
@@ -73,8 +76,27 @@ class CppFrontend:
         overall_status = CompletionStatus.COMPLETE
         usage_remaining = self._usage_record_limit
         test_remaining = 100000
+        total_source_bytes = 0
 
         for relative_path in workspace.files:
+            # 累计源文本预算（64MB，与其他语言前端对齐）：超出后跳过剩余文件
+            # 并降级 PARTIAL——防大仓库全量读入。
+            source_path = (workspace.root / relative_path)
+            try:
+                file_size = source_path.stat().st_size
+            except OSError:
+                file_size = 0
+            if total_source_bytes + file_size > MAX_TOTAL_SOURCE_BYTES:
+                diagnostics = merge_diagnostics(diagnostics, (Diagnostic(
+                    code="tree-sitter.total-bytes-budget",
+                    stage="frontend",
+                    severity=DiagnosticSeverity.WARNING,
+                    message=f"Skipped remaining C/C++ inputs after {relative_path}: total source bytes budget {MAX_TOTAL_SOURCE_BYTES} exceeded",
+                    producer="cpp-frontend",
+                ),))
+                overall_status = CompletionStatus.PARTIAL
+                break
+            total_source_bytes += file_size
             result = self._tree_sitter.analyze_file(
                 context,
                 workspace.root,
