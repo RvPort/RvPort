@@ -20,6 +20,7 @@ from ...core import (
     merge_diagnostics,
 )
 from .adapters import AdapterResult, parse_m4, parse_machine_json, parse_rpm, parse_shell
+from .goreleaser import parse_goreleaser
 from .autoconf.project import analyze_project
 from .cmake.project import analyze_project as analyze_cmake
 from .cmake.usage import bind_usage
@@ -159,6 +160,8 @@ class BuildFrontend:
             return parse_m4(source, path, target_arch)
         if input_kind is BuildInputKind.RPM:
             return parse_rpm(source, path, target_arch)
+        if input_kind is BuildInputKind.GORELEASER:
+            return parse_goreleaser(source, path, target_arch)
         return parse_machine_json(source, path, input_kind.value, target_arch)
 
 
@@ -180,6 +183,7 @@ def _producer(input_kind: BuildInputKind) -> str:
         BuildInputKind.CTEST: "ctest-metadata-reader",
         BuildInputKind.COMPILATION_DATABASE: "compilation-database-build-reader",
         BuildInputKind.RPM: "bounded-rpm-parser",
+        BuildInputKind.GORELEASER: "goreleaser-indent-parser",
     }[input_kind]
 
 

@@ -26,6 +26,10 @@ from ..frontends.build import BuildFrontend
 from ..frontends.cpp import CppFrontend
 from ..frontends.cpp.workspace import language_candidates_for_path
 from ..frontends.asm.frontend import AsmFrontend
+from ..frontends.rust.frontend import RustFrontend
+from ..frontends.go.frontend import GoFrontend
+from ..frontends.java.frontend import JavaFrontend
+from ..frontends.python.frontend import PythonFrontend
 from ..normalization import BuildEvidenceNormalizer, CppEvidenceNormalizer
 from ..frontends.family_inventory import annotate_inventory
 from ..analyzers.architecture_family import ArchitectureFamilyAnalyzer
@@ -37,14 +41,21 @@ from ..analyzers.test_content import TestContentAnalyzer
 
 
 class CompositeProjectFrontend:
-    """组合前端：C/C++ 源码前端 + 构建系统前端 + 汇编前端，再叠加家族清单标注。"""
+    """组合前端：C/C++ 源码前端 + 构建系统前端 + 汇编/Rust/Go 前端，再叠加家族清单标注。"""
 
-    __slots__ = ("_cpp", "_build", "_asm")
+    __slots__ = ("_cpp", "_build", "_asm", "_rust", "_go", "_java", "_python")
 
-    def __init__(self, cpp: CppFrontend | None = None, build: BuildFrontend | None = None, asm: AsmFrontend | None = None) -> None:
+    def __init__(self, cpp: CppFrontend | None = None, build: BuildFrontend | None = None,
+                 asm: AsmFrontend | None = None, rust: RustFrontend | None = None,
+                 go: GoFrontend | None = None, java: JavaFrontend | None = None,
+                 python: PythonFrontend | None = None) -> None:
         self._cpp = cpp or CppFrontend()
         self._build = build or BuildFrontend()
         self._asm = asm or AsmFrontend()
+        self._rust = rust or RustFrontend()
+        self._go = go or GoFrontend()
+        self._java = java or JavaFrontend()
+        self._python = python or PythonFrontend()
 
     def analyze_with_knowledge(self, context, workspace, knowledge):
         """带知识包的前端入口：用知识构建用法锚点选择器后走 analyze。"""
@@ -53,19 +64,29 @@ class CompositeProjectFrontend:
     def analyze(self, context: ScanContext, workspace: WorkspaceSnapshot, *, usage_selector=None) -> StageResult[FrontendSnapshot]:
         """执行前端阶段：源码前端只看语言匹配的文件，构建前端看全部文件。
 
-        三个子前端的实体/证据经 _merge_frontend 去重合并（按稳定ID），
-        最后 annotate_inventory 为实体补注架构家族清单信息。汇编前端只在
-        language 开关含 asm 时产出证据（默认 c,cpp 时 asm 文件零证据）。
+        七个子前端的实体/证据经 _merge_frontend 去重合并（按稳定ID），
+        最后 annotate_inventory 为实体补注架构家族清单信息。汇编/Rust/Go/Java/Python
+        前端只在 language 开关含对应语言时产出证据（默认 c,cpp 零证据）。
         """
         cpp_workspace = WorkspaceSnapshot(
             workspace.root,
-            tuple(path for path in workspace.files if language_candidates_for_path(path, context.languages)),
+            # cpp 子前端只看 c/cpp/头文件候选（asm/rust 等其他语言域的文件
+            # 留给各自前端——cpp 的错误恢复解析会误产证据）。
+            tuple(path for path in workspace.files
+                  if set(language_candidates_for_path(path, context.languages)) & {"c", "cpp"}),
         )
         cpp_result = self._cpp.analyze(context, cpp_workspace,
             **({"usage_selector": usage_selector} if usage_selector is not None else {}))
         build_result = self._build.analyze(context, workspace)
         asm_result = self._asm.analyze(context, workspace)
-        return annotate_inventory(_merge_frontend(_merge_frontend(cpp_result, build_result), asm_result), workspace, context)
+        rust_result = self._rust.analyze(context, workspace)
+        go_result = self._go.analyze(context, workspace)
+        java_result = self._java.analyze(context, workspace)
+        python_result = self._python.analyze(context, workspace)
+        return annotate_inventory(
+            _merge_frontend(_merge_frontend(_merge_frontend(_merge_frontend(_merge_frontend(
+                _merge_frontend(cpp_result, build_result), asm_result), rust_result), go_result), java_result), python_result),
+            workspace, context)
 
 
 class CompositeNormalizer:

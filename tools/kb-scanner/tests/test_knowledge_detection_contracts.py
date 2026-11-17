@@ -42,7 +42,7 @@ class KnowledgeDetectionContractTests(unittest.TestCase):
             "headers", "intrinsics", "builtins", "vectorTypes", "platformMacros", "compilerFlags",
             "assemblyInstructions", "registerNames", "cpuPlatformApis", "targetFeatures", "architectureAliases", "vectorWidthMarkers",
         } <= {item.fact_kind for item in result.value.entries})
-        self.assertEqual(len(result.value.sources), 8)
+        self.assertEqual(len(result.value.sources), 11)
         legacy = [item for item in result.value.sources if item.source_id in {"clang-x86-entries", "gcc-x86-entries"}]
         self.assertTrue(all(item.kind == "generated-json" and "originalSource" in item.metadata for item in legacy))
         add = next(item for item in result.value.entries
@@ -76,7 +76,8 @@ class KnowledgeDetectionContractTests(unittest.TestCase):
         result = GeneratedFactsKnowledgeProvider().load(make_context(ROOT, rule_dir=RULES))
         self.assertIn("collected-riscv-entries", {item.source_id for item in result.value.sources})
         riscv_entries = [item for item in result.value.entries if item.architecture_family == "riscv"]
-        self.assertEqual({item.fact_kind for item in riscv_entries}, {"platformMacros"})
+        # platformMacros 来自 riscv.macro 语料；intrinsics 来自 rust 语料（riscv 目标族扩展）。
+        self.assertEqual({item.fact_kind for item in riscv_entries}, {"platformMacros", "intrinsics"})
         # platformMacros 属 legacy 六类：semanticScope 不进运行时 metadata（与 arm64 语料同约定）。
         self.assertTrue(all("semanticScope" not in item.metadata for item in riscv_entries))
         self.assertGreaterEqual(len(riscv_entries), 200)

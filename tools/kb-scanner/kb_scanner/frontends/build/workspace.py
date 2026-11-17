@@ -46,6 +46,8 @@ def build_input_kind(path: str) -> BuildInputKind | None:
         return BuildInputKind.CMAKE_SOURCE
     if lowered.endswith(".spec"):
         return BuildInputKind.RPM
+    if lowered in {".goreleaser.yml", ".goreleaser.yaml"}:
+        return BuildInputKind.GORELEASER
     return None
 
 

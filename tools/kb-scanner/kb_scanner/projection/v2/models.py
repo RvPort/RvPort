@@ -213,7 +213,7 @@ class Tool(ClosedModel):
 
 
 class Scope(ClosedModel):
-    domain: Literal["c-cpp-x86-to-riscv", "c-cpp-arm64-to-riscv"]
+    domain: Literal["c-cpp-x86-to-riscv", "c-cpp-arm64-to-riscv", "rust-x86-to-riscv", "rust-arm64-to-riscv", "go-x86-to-riscv", "go-arm64-to-riscv", "java-x86-to-riscv", "java-arm64-to-riscv", "python-x86-to-riscv", "python-arm64-to-riscv"]
     targetArchitecture: Literal["riscv32", "riscv64"]
     staticAnalysisOnly: Literal[True] = True
     compiled: Literal[False] = False

@@ -23,6 +23,12 @@ CPP_SUFFIXES = frozenset({".cc", ".cpp", ".cxx"})
 HEADER_SUFFIXES = frozenset({".h", ".hh", ".hpp", ".hxx", ".inc"})
 # 汇编输入后缀（与 frontends/asm/vocabulary.ASM_SUFFIXES 一致；.inc 保持 C 头语义不列入）。
 ASM_SUFFIXES = frozenset({".s", ".S", ".asm"})
+# Rust/Go/Java/Python 输入后缀（与 frontends/{rust,go,java,python}/vocabulary 的后缀集一致）。
+RUST_SUFFIXES = frozenset({".rs"})
+GO_SUFFIXES = frozenset({".go"})
+JAVA_SUFFIXES = frozenset({".java"})
+PY_SUFFIXES = frozenset({".py"})
+PYX_SUFFIXES = frozenset({".pyx"})
 SUPPORTED_SUFFIXES = C_SUFFIXES | CPP_SUFFIXES | HEADER_SUFFIXES
 
 
@@ -110,7 +116,7 @@ class CppWorkspaceCollector:
 
 def language_candidates_for_path(path: str, languages: tuple[str, ...] = ("c", "cpp")) -> tuple[str, ...]:
     """按后缀推断语言候选：.c→c，.cc/.cpp/.cxx→cpp，头文件→两者皆可，
-    .s/.S/.asm→asm（汇编输入域，默认不启用，opt-in）。
+    .s/.S/.asm→asm、.rs→rust、.go→go、.java→java、.py/.pyx→python（汇编/Rust/Go/Java/Python 输入域，默认不启用，opt-in）。
 
     返回值会与 context.languages（启用的语言开关）取交集；后缀不识别
     或语言未启用时返回空元组（该文件不受支持）。
@@ -125,6 +131,14 @@ def language_candidates_for_path(path: str, languages: tuple[str, ...] = ("c", "
         return tuple(item for item in ("c", "cpp") if item in enabled)
     if suffix in ASM_SUFFIXES:
         return ("asm",) if "asm" in enabled else ()
+    if suffix in RUST_SUFFIXES:
+        return ("rust",) if "rust" in enabled else ()
+    if suffix in GO_SUFFIXES:
+        return ("go",) if "go" in enabled else ()
+    if suffix in JAVA_SUFFIXES:
+        return ("java",) if "java" in enabled else ()
+    if suffix in PY_SUFFIXES | PYX_SUFFIXES:
+        return ("python",) if "python" in enabled else ()
     return ()
 
 

@@ -365,6 +365,51 @@
     ],
     "kb_scanner/frontends/asm/frontend.py": [
       "tests.unit.test_asm_frontend"
+    ],
+    "kb_scanner/frontends/rust/__init__.py": [
+      "tests.unit.test_rust_frontend"
+    ],
+    "kb_scanner/frontends/rust/vocabulary.py": [
+      "tests.unit.test_rust_frontend"
+    ],
+    "kb_scanner/frontends/rust/frontend.py": [
+      "tests.unit.test_rust_frontend"
+    ],
+    "kb_scanner/frontends/rust/cfg_evaluator.py": [
+      "tests.unit.test_rust_frontend"
+    ],
+    "kb_scanner/frontends/go/__init__.py": [
+      "tests.unit.test_go_frontend"
+    ],
+    "kb_scanner/frontends/go/vocabulary.py": [
+      "tests.unit.test_go_frontend"
+    ],
+    "kb_scanner/frontends/go/frontend.py": [
+      "tests.unit.test_go_frontend"
+    ],
+    "kb_scanner/frontends/go/build_tag.py": [
+      "tests.unit.test_go_frontend"
+    ],
+    "kb_scanner/frontends/java/__init__.py": [
+      "tests.unit.test_java_frontend"
+    ],
+    "kb_scanner/frontends/java/vocabulary.py": [
+      "tests.unit.test_java_frontend"
+    ],
+    "kb_scanner/frontends/java/frontend.py": [
+      "tests.unit.test_java_frontend"
+    ],
+    "kb_scanner/frontends/python/__init__.py": [
+      "tests.unit.test_python_frontend"
+    ],
+    "kb_scanner/frontends/python/vocabulary.py": [
+      "tests.unit.test_python_frontend"
+    ],
+    "kb_scanner/frontends/python/frontend.py": [
+      "tests.unit.test_python_frontend"
+    ],
+    "kb_scanner/frontends/build/goreleaser.py": [
+      "tests.unit.test_python_frontend"
     ]
   },
   "boundaryPolicy": "Native C/C++, Make, retained Bash adapters, RPM shell and Autoconf syntax parsing use fakes in isolated unit runs. Real grammar and CLI scans run separately as components; no project command is executed.",

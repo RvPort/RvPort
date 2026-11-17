@@ -27,6 +27,7 @@ class BuildInputKind(str, Enum):
     CTEST = "ctest"
     COMPILATION_DATABASE = "compilation-database"
     RPM = "rpm"
+    GORELEASER = "goreleaser"
 
 
 class SelectionStatus(str, Enum):
