@@ -40,7 +40,7 @@ class KbScanServiceUtilityTests {
         assertThat((String) invoke(defaults, "defaultLanguage")).isEqualTo("c,cpp");
 
         RvPortProperties configured = new RvPortProperties(null,
-                new RvPortProperties.KbScan(null, null, null, " ", 45, null, " rust ", null, "riscv64", -3),
+                new RvPortProperties.KbScan(null, null, null, " ", 45, null, " rust ", null, "riscv64", -3, null),
                 new RvPortProperties.Worker(false));
         KbScanService custom = service(configured);
         assertThat((int) invoke(custom, "timeoutSeconds")).isEqualTo(45);

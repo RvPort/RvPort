@@ -105,5 +105,29 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual(result.value.files, ())
 
 
+    def test_language_domain_suffix_gates(self) -> None:
+        """asm/rust/go/java/python 后缀：语言开→命中；语言关→空（opt-in 语义）。"""
+        for suffix, language in ((".S", "asm"), (".rs", "rust"), (".go", "go"), (".java", "java"), (".py", "python"), (".pyx", "python")):
+            with self.subTest(suffix=suffix):
+                self.assertEqual((language,), language_candidates_for_path(f"a{suffix}", (language,)))
+                self.assertEqual((), language_candidates_for_path(f"a{suffix}", ("c", "cpp")))
+
+    def test_header_intersects_enabled_languages(self) -> None:
+        """头文件候选与启用语言取交集（c 关→仅 cpp）。"""
+        self.assertEqual(("cpp",), language_candidates_for_path("a.h", ("cpp",)))
+        self.assertEqual(("c", "cpp"), language_candidates_for_path("a.h", ("cpp", "c")))
+        self.assertEqual((), language_candidates_for_path("a.h", ("rust",)))
+
+    def test_directory_with_disabled_language_files_skipped(self) -> None:
+        """目录发现：语言未启用的文件被跳过（asm/rust 文件在 c,cpp 扫描下不进清单）。"""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "main.c").write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            (root / "impl.S").write_text("nop\n", encoding="utf-8")
+            (root / "lib.rs").write_text("fn f() {}\n", encoding="utf-8")
+            result = CppWorkspaceCollector().collect(make_context(root))
+        self.assertEqual(("main.c",), result.value.files)
+
+
 if __name__ == "__main__":
     unittest.main()

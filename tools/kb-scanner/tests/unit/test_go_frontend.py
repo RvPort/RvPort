@@ -114,7 +114,72 @@ class GoFrontendUnitTests(unittest.TestCase):
         self.assertEqual(CompletionStatus.PARTIAL, result.status)
 
 
+class GoFrontendEdgeTests(unittest.TestCase):
+    """90/90 门禁补充：降级路径与求值器边界。"""
+
+    def _scan(self, text, max_bytes=None, languages=("go",)):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "main.go").write_text(text)
+            frontend = GoFrontend(max_bytes=max_bytes) if max_bytes else GoFrontend()
+            result = frontend.analyze(context(languages), WorkspaceSnapshot(root, ("main.go",)))
+        return result
+
+    def test_oversize_input_degrades_partial(self):
+        result = self._scan("// p\n" * 100, max_bytes=8)
+        self.assertEqual(CompletionStatus.PARTIAL, result.status)
+        self.assertTrue(any(d.code == "go-frontend.input-partial" for d in result.diagnostics))
+
+    def test_goarch_node_without_match_ignored(self):
+        """binary_expression 不含 GOARCH 比较 → 不产证。"""
+        result = self._scan("package main\nfunc f() bool { return 1 + 2 == 3 }\n")
+        selections = [e for e in result.value.evidence if e.kind == "selection_condition"]
+        self.assertEqual([], selections)
+
+    def test_switch_case_form(self):
+        """switch { case runtime.GOARCH == ...: } 形态经 switch 块与 case 节点各产证。"""
+        result = self._scan('package main\nfunc f() { switch {\ncase runtime.GOARCH == "arm64":\n}\n}\n')
+        selections = [e for e in result.value.evidence if e.kind == "selection_condition"]
+        self.assertGreaterEqual(len(selections), 1)
+        self.assertTrue(all(s.metadata["supportsRiscv"] == "false" for s in selections))
+
+    def test_non_c_import_c_no_evidence(self):
+        """import 非 "C"（如 runtime）不触发 cgo 块。"""
+        result = self._scan('package main\n// #include <x.h>\nimport "runtime"\n')
+        includes = [e for e in result.value.evidence if e.kind == "include"]
+        self.assertEqual([], includes)
+
+
+class BuildTagEdgeTests(unittest.TestCase):
+    def test_precedence_without_parens(self):
+        """&& 优先于 ||（无括号）：linux&&amd64=False，再 || riscv64=True → True。"""
+        self.assertTrue(evaluate_build_tag("linux && amd64 || riscv64"))
+        # riscv64=True || (linux&&amd64=False) → True（短路）。
+        self.assertTrue(evaluate_build_tag("riscv64 || linux && amd64"))
+        # linux&&mytag：False&&None → False（&& 对 False 短路）。
+        self.assertFalse(evaluate_build_tag("amd64 && mytag"))
+
+    def test_nested_not(self):
+        self.assertIsNone(evaluate_build_tag("!!linux"))
+        self.assertTrue(evaluate_build_tag("!amd64"))
+
+    def test_unknown_arch_word_not_arch(self):
+        """非闭集词（自定义 tag）→ unknown 而非 False。"""
+        self.assertIsNone(evaluate_build_tag("mytag"))
+
+    def test_malformed_variants(self):
+        for bad in ("()", "! ", "&& amd64", "amd64 ||", "(amd64"):
+            with self.subTest(bad=bad):
+                self.assertIsNone(evaluate_build_tag(bad))
+
+
 class VocabularyUnitTests(unittest.TestCase):
+    def test_negative_suffix(self):
+        """is_go_path 的 False 分支（覆盖词法分支的负例）。"""
+        self.assertFalse(is_go_path("a.go.txt"))
+        self.assertFalse(is_go_path("a.java"))
+        self.assertFalse(is_go_path("go.mod"))
+
     def test_suffix_gates(self):
         for path, expected in (("a.go", True), ("d/b.go", True), ("a.go.txt", False),
                                ("a.rs", False), ("a.c", False), ("go", False)):

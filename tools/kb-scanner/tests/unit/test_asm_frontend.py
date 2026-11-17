@@ -110,6 +110,37 @@ class ScanLinesUnitTests(unittest.TestCase):
         self.assertEqual(first[0].id, second[0].id)
 
 
+class AsmScanEdgeTests(unittest.TestCase):
+    """90/90 门禁补充：标签循环与词法边界。"""
+
+    def test_label_loop_stops_on_space_head(self):
+        """含空格的冒号头（'foo bar:'）不是 GNU 标签：整行作为语句产出。"""
+        items = list(_scan_lines("a.S", SUBJECT, ["foo bar: insn1"]))
+        self.assertEqual(["foo bar: insn1"], [i.value for i in items])
+
+    def test_multiple_label_prefixes_stripped(self):
+        """嵌套标签（foo: bar: insn）逐层剥离。"""
+        items = list(_scan_lines("a.S", SUBJECT, ["foo: bar: insn2"]))
+        self.assertEqual(["insn2"], [i.value for i in items])
+
+    def test_indented_label_standalone_skipped(self):
+        items = list(_scan_lines("a.S", SUBJECT, ["  lonely:  "]))
+        self.assertEqual([], items)
+
+    def test_semicolon_only_line_skipped(self):
+        items = list(_scan_lines("a.S", SUBJECT, [" ; just a comment"]))
+        self.assertEqual([], items)
+
+    def test_non_asm_files_ignored_in_workspace(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "a.c").write_text("int x;\n")
+            (root / "Makefile").write_text("all:\n")
+            frontend = AsmFrontend(FakeReader({}))
+            result = frontend.analyze(context(), WorkspaceSnapshot(root, ("a.c", "Makefile")))
+        self.assertEqual((), result.value.entities)
+
+
 class VocabularyUnitTests(unittest.TestCase):
     def test_suffix_gates(self):
         for path, expected in (("a.S", True), ("a.s", True), ("a.asm", True), ("d/b.s", True),

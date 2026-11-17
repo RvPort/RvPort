@@ -102,7 +102,86 @@ class PythonFrontendUnitTests(unittest.TestCase):
             PythonFrontend(max_bytes=0)
 
 
+class PythonFrontendEdgeTests(unittest.TestCase):
+    """90/90 门禁补充：状态机边界、pyx 形态与门控。"""
+
+    def _scan(self, files, languages=("python",)):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, content in files.items():
+                (root / name).write_text(content)
+            result = PythonFrontend().analyze(context(languages), WorkspaceSnapshot(root, tuple(files)))
+        return result
+
+    def test_oversize_input_degrades_partial(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "a.py").write_text("# pad\n" * 100)
+            result = PythonFrontend(max_bytes=8).analyze(context(), WorkspaceSnapshot(root, ("a.py",)))
+        self.assertEqual(CompletionStatus.PARTIAL, result.status)
+        self.assertTrue(any(d.code == "python-frontend.input-partial" for d in result.diagnostics))
+
+    def test_import_alias_cffi_module(self):
+        """import cffi as cf：模块名归类命中（cffi 状态置位，dlopen 走实例分支）。"""
+        result = self._scan({"a.py": 'import cffi as cf\n_ = cf.FFI().dlopen("x.so")\n'})
+        loads = [e for e in result.value.evidence if e.metadata.get("nodeType") == "python_dynamic_load"]
+        self.assertEqual({"cffi_instance"}, {e.metadata["loadForm"] for e in loads})
+
+    def test_from_import_unrelated_module_ignored(self):
+        result = self._scan({"a.py": "from os import path\n"})
+        self.assertEqual((), result.value.evidence)
+
+    def test_ffi_assignment_with_module_prefix(self):
+        """ffi = cffi.FFI() 形态同样收集实例。"""
+        result = self._scan({"a.py": 'import cffi\nf = cffi.FFI()\nf.dlopen("y.so")\n'})
+        loads = [e for e in result.value.evidence if e.metadata.get("nodeType") == "python_dynamic_load"]
+        self.assertEqual({"cffi_instance"}, {e.metadata["loadForm"] for e in loads})
+
+    def test_set_source_single_string_treated_as_c(self):
+        """set_source 只有一个字符串（无模块名实参的畸形）：整串按 C 处理。"""
+        result = self._scan({"a.py": 'from cffi import FFI\nffi = FFI()\nffi.set_source("#include <x.h>")\n'})
+        includes = [e for e in result.value.evidence if e.kind == "include"]
+        self.assertEqual(1, len(includes))
+
+    def test_cdef_non_string_argument_no_embedded_c(self):
+        """cdef 的实参非字符串字面量：不产内嵌 C 证据。"""
+        result = self._scan({"a.py": 'from cffi import FFI\nffi = FFI()\nffi.cdef(DECLS)\n'})
+        embedded = [e for e in result.value.evidence if e.metadata.get("nodeType") == "python_cffi_cdef"]
+        self.assertEqual([], embedded)
+
+    def test_cdef_empty_string_no_evidence(self):
+        result = self._scan({"a.py": 'from cffi import FFI\nffi = FFI()\nffi.cdef("")\n'})
+        embedded = [e for e in result.value.evidence if "cffi" in str(e.metadata.get("nodeType", ""))]
+        self.assertEqual([], embedded)
+
+    def test_verify_call_produces_selection(self):
+        result = self._scan({"a.py": 'from cffi import FFI\nffi = FFI()\nffi.verify("x")\n'})
+        selections = [e for e in result.value.evidence if e.kind == "selection_condition"]
+        self.assertEqual(1, len(selections))
+
+    def test_pyx_call_without_string_library(self):
+        """pyx 行命中调用形态但无字符串库名：产 call 不产库名证。"""
+        result = self._scan({"m.pyx": "lib = ctypes.CDLL(name)\n"})
+        calls = [e for e in result.value.evidence if e.metadata.get("nodeType") == "cython_ctypes_call"]
+        libs = [e for e in result.value.evidence if e.metadata.get("nodeType") == "cython_native_library"]
+        self.assertEqual(1, len(calls))
+        self.assertEqual([], libs)
+
+    def test_pyx_blank_lines_skipped(self):
+        result = self._scan({"m.pyx": "\n\n   \n"})
+        self.assertEqual((), result.value.evidence)
+
+    def test_load_form_unqualified_call_without_import(self):
+        """无 import 状态时 CDLL() 裸调用不产证。"""
+        result = self._scan({"a.py": 'x = CDLL("a.so")\n'})
+        loads = [e for e in result.value.evidence if e.metadata.get("nodeType") == "python_dynamic_load"]
+        self.assertEqual([], loads)
+
+
 class VocabularyUnitTests(unittest.TestCase):
+    def test_negative_suffix(self):
+        self.assertFalse(is_python_path("a.pyw"))
+        self.assertFalse(is_python_path("a.pyx.txt"))
     def test_suffix_gates(self):
         for path, expected in (("a.py", True), ("a.pyx", True), ("d/a.py", True),
                                ("a.pyi", False), ("a.java", False), ("py", False)):
@@ -111,6 +190,41 @@ class VocabularyUnitTests(unittest.TestCase):
 
 
 class GoreleaserParserTests(unittest.TestCase):
+    def _records(self, yaml_text):
+        return parse_goreleaser(yaml_text, ".goreleaser.yml", "riscv64").records
+
+    def test_unclosed_block_flushes_at_eof(self):
+        """EOF 兜底：goarch 块未闭合时同样检查缺失。"""
+        records = self._records("goarch:\n  - amd64\n")
+        self.assertEqual(1, len(records))
+
+    def test_empty_goarch_block_no_record(self):
+        """空块（无列表项）不产记录。"""
+        records = self._records("goarch:\nother: 1\n")
+        self.assertEqual(0, len(records))
+
+    def test_consecutive_blocks(self):
+        """两个 goarch 块连续（块结束行即下一锚点）：第二块独立判定。"""
+        yaml_text = "goarch:\n  - amd64\ngoarch:\n  - arm64\n"
+        records = self._records(yaml_text)
+        self.assertEqual(2, len(records), "两个缺 riscv 的块各产一条")
+
+    def test_non_item_line_flushes_block(self):
+        """非列表行（任意缩进）触发块 flush；块结束行同时是新锚点则重开。"""
+        yaml_text = "goarch:\n  - amd64\narchives: []\n"
+        records = self._records(yaml_text)
+        self.assertEqual(1, len(records), "flush 时 [amd64] 缺 riscv → 1 条")
+
+    def test_item_indent_not_deeper_ignored(self):
+        """缩进不深于锚点的行不是列表项（作为块结束处理）。"""
+        yaml_text = "goarch:\n- amd64\n"
+        records = self._records(yaml_text)
+        # "- amd64" 缩进 0 不深于锚点 0 → 块立即结束且列表空 → 无记录
+        self.assertEqual(0, len(records))
+
+    def test_producer_name(self):
+        from kb_scanner.frontends.build.goreleaser import goreleaser_producer
+        self.assertEqual("goreleaser-indent-parser", goreleaser_producer())
     def test_missing_riscv_emits_constraint(self):
         result = parse_goreleaser("builds:\n  - goarch:\n      - amd64\n      - arm64\n", ".goreleaser.yml", "riscv64")
         self.assertEqual(1, len(result.records))

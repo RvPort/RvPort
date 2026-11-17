@@ -702,7 +702,7 @@ class KbScanServiceTests {
 
     private KbScanService service() {
         return service(new RvPortProperties(null, new RvPortProperties.KbScan(null, null, null,
-                tempDir.resolve("runtime/kb-scans").toString(), 1800, null, "c,cpp", "x86", "riscv64", 20), new RvPortProperties.Worker(false)));
+                tempDir.resolve("runtime/kb-scans").toString(), 1800, null, "c,cpp", "x86", "riscv64", 20, null), new RvPortProperties.Worker(false)));
     }
 
     private KbScanService service(RvPortProperties properties) {

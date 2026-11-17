@@ -106,7 +106,9 @@ def run_scan(args: argparse.Namespace) -> int:
     result = create_default_application().run(scan_request_from_namespace(args))
     if budget_notes[0] != "memory-budget-applied":
         # 未应用时以 WARNING 诊断附加到结果（可见但不变更退出码）。
-        from .core import CompletionStatus, Diagnostic, DiagnosticSeverity, merge_diagnostics
+        import dataclasses
+
+        from .core import Diagnostic, DiagnosticSeverity
 
         note = Diagnostic(
             code=budget_notes[0],
@@ -115,7 +117,7 @@ def run_scan(args: argparse.Namespace) -> int:
             message=f"Scanner memory budget was not applied: {budget_notes[0]}",
             producer="kb-scanner-cli",
         )
-        result = type(result)(result.exit_code, result.diagnostics and tuple(result.diagnostics) + (note,) or (note,))
+        result = dataclasses.replace(result, diagnostics=(*result.diagnostics, note))
     return result.exit_code
 
 

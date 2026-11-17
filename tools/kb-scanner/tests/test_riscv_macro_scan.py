@@ -113,5 +113,34 @@ int vec_add(int *a, int *b, int n) {
         self.assertEqual("x86", role_x86)
 
 
+    def test_target_family_role_edges(self):
+        """_target_family_role 边界：无 riscv 条目、非宏 kind 的 riscv 条目、空条件。"""
+        from kb_scanner.analyzers.evidence_graph import _target_family_role
+        from kb_scanner.core import KnowledgeSnapshot, stable_id
+        from tests.unit.knowledge_detection.support import make_context
+
+        context = StagedContextFactory()
+        knowledge = GeneratedFactsKnowledgeProvider().load(make_context(ROOT, rule_dir=RULES)).value
+        # 无 riscv 词命中：普通条件返回 (None, ())。
+        self.assertEqual((None, ()), _target_family_role("__x86_64__ || unix", knowledge))
+        # 空条件不抛。
+        self.assertEqual((None, ()), _target_family_role("", knowledge))
+        # 真实快照含 riscv intrinsics（rust 语料）——确认它们不参与宏匹配（kind 过滤）。
+        role, ids = _target_family_role("__riscv_xlen >= 64", knowledge)
+        self.assertEqual("riscv", role)
+        self.assertTrue(ids)
+
+    def test_domain_fallback_for_unknown_languages(self):
+        """domain 推导回退：languages 无映射语言时回退 c-cpp-*。"""
+        from kb_scanner.projection.v2.projector import _domain
+        from types import SimpleNamespace
+        fallback = _domain(SimpleNamespace(languages=("cobol",), source_arch="x86"))
+        self.assertEqual("c-cpp-x86-to-riscv", fallback)
+        rust = _domain(SimpleNamespace(languages=("rust",), source_arch="arm64"))
+        self.assertEqual("rust-arm64-to-riscv", rust)
+        mixed = _domain(SimpleNamespace(languages=("c", "rust"), source_arch="x86"))
+        self.assertEqual("c-cpp-x86-to-riscv", mixed, "混合取第一命中（c 在前）")
+
+
 if __name__ == "__main__":
     unittest.main()

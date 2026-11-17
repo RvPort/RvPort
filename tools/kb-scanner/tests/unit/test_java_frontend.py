@@ -91,7 +91,55 @@ class JavaFrontendUnitTests(unittest.TestCase):
         self.assertEqual(CompletionStatus.PARTIAL, result.status)
 
 
+class JavaFrontendEdgeTests(unittest.TestCase):
+    """90/90 门禁补充：降级路径与判定边界。"""
+
+    def _scan(self, text, max_bytes=None, languages=("java",)):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "A.java").write_text(text)
+            frontend = JavaFrontend(max_bytes=max_bytes) if max_bytes else JavaFrontend()
+            result = frontend.analyze(context(languages), WorkspaceSnapshot(root, ("A.java",)))
+        return result
+
+    def test_oversize_input_degrades_partial(self):
+        result = self._scan("// pad\n" * 100, max_bytes=8)
+        self.assertEqual(CompletionStatus.PARTIAL, result.status)
+        self.assertTrue(any(d.code == "java-frontend.input-partial" for d in result.diagnostics))
+
+    def test_dotted_receiver_load_not_reported(self):
+        """带点接收者（a.b.load）不属四形态 → 不产证。"""
+        result = self._scan('class A { void f() { a.b.load("x"); } }\n')
+        self.assertEqual([], self._jni_of(result))
+
+    def test_unloaded_runtime_var_still_excluded_after_load(self):
+        """收集集中变量但方法非 load → 不产证。"""
+        result = self._scan('class A { Runtime rt = Runtime.getRuntime(); void f() { rt.exec("x"); } }\n')
+        self.assertEqual([], self._jni_of(result))
+
+    def test_os_arch_context_without_arch_literal(self):
+        """os.arch 上下文但无比对架构串 → 不产 selection。"""
+        result = self._scan('class A { String a() { return System.getProperty("os.arch"); } }\n')
+        selections = [e for e in result.value.evidence if e.kind == "selection_condition"]
+        self.assertEqual([], selections)
+
+    def test_load_without_string_argument(self):
+        """加载调用无字符串实参：产 call 不产库名证。"""
+        result = self._scan('class A { void f() { System.loadLibrary(LIB_NAME); } }\n')
+        self.assertEqual(1, len(self._jni_of(result)))
+        self.assertEqual([], self._libraries(result))
+
+    def _jni_of(self, result):
+        return [e for e in result.value.evidence if e.kind == "call_expression"]
+
+    def _libraries(self, result):
+        return [e.value for e in result.value.evidence if e.kind == "preprocessor_condition"]
+
+
 class VocabularyUnitTests(unittest.TestCase):
+    def test_negative_suffix(self):
+        self.assertFalse(is_java_path("A.java.txt"))
+        self.assertFalse(is_java_path("A.kt"))
     def test_suffix_gates(self):
         for path, expected in (("A.java", True), ("d/A.java", True), ("a.jav", False),
                                ("a.rs", False), ("a.py", False), ("java", False)):

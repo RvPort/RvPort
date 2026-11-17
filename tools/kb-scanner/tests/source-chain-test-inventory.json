@@ -299,7 +299,8 @@
       "tests.unit.schema_v2_projection.test_suggestions"
     ],
     "kb_scanner/projection/v2/projector.py": [
-      "tests.unit.schema_v2_projection.test_projector"
+      "tests.unit.schema_v2_projection.test_projector",
+      "tests.unit.test_language_edge_coverage"
     ],
     "kb_scanner/projection/v2/renderers.py": [
       "tests.unit.schema_v2_projection.test_renderers",
@@ -327,6 +328,7 @@
     ],
     "kb_scanner/analyzers/evidence_graph.py": [
       "tests.unit.evidence_graph",
+      "tests.unit.test_language_edge_coverage",
       "tests.unit.test_source_chain_relations"
     ],
     "kb_scanner/projection/v2/index.py": [
@@ -370,22 +372,26 @@
       "tests.unit.test_rust_frontend"
     ],
     "kb_scanner/frontends/rust/vocabulary.py": [
+      "tests.unit.test_language_edge_coverage",
       "tests.unit.test_rust_frontend"
     ],
     "kb_scanner/frontends/rust/frontend.py": [
       "tests.unit.test_rust_frontend"
     ],
     "kb_scanner/frontends/rust/cfg_evaluator.py": [
+      "tests.unit.test_language_edge_coverage",
       "tests.unit.test_rust_frontend"
     ],
     "kb_scanner/frontends/go/__init__.py": [
       "tests.unit.test_go_frontend"
     ],
     "kb_scanner/frontends/go/vocabulary.py": [
-      "tests.unit.test_go_frontend"
+      "tests.unit.test_go_frontend",
+      "tests.unit.test_language_edge_coverage"
     ],
     "kb_scanner/frontends/go/frontend.py": [
-      "tests.unit.test_go_frontend"
+      "tests.unit.test_go_frontend",
+      "tests.unit.test_language_edge_coverage"
     ],
     "kb_scanner/frontends/go/build_tag.py": [
       "tests.unit.test_go_frontend"
@@ -394,7 +400,8 @@
       "tests.unit.test_java_frontend"
     ],
     "kb_scanner/frontends/java/vocabulary.py": [
-      "tests.unit.test_java_frontend"
+      "tests.unit.test_java_frontend",
+      "tests.unit.test_language_edge_coverage"
     ],
     "kb_scanner/frontends/java/frontend.py": [
       "tests.unit.test_java_frontend"
@@ -403,6 +410,7 @@
       "tests.unit.test_python_frontend"
     ],
     "kb_scanner/frontends/python/vocabulary.py": [
+      "tests.unit.test_language_edge_coverage",
       "tests.unit.test_python_frontend"
     ],
     "kb_scanner/frontends/python/frontend.py": [

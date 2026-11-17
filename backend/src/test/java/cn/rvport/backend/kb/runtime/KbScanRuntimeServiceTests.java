@@ -710,7 +710,7 @@ class KbScanRuntimeServiceTests {
                 new RvPortProperties(
                         null,
                         new RvPortProperties.KbScan("python", scannerRoot.toString(), "rulesets/riscv-porting",
-                                tempDir.resolve("runtime/kb-scans").toString(), timeout, 10_485_760L, "c,cpp", "x86", "riscv64", 20),... feat(kb-scan): integrate ARM64 source architecture with collected-v1 knowledge channel / 接入 ARM64 源架构（collected-v1 知识通道）
+                                tempDir.resolve("runtime/kb-scans").toString(), timeout, 10_485_760L, "c,cpp", "x86", "riscv64", 20, null),... test(kb-scanner): close out verification and archive eight OpenSpec changes / 验证收口并归档八个 OpenSpec 变更
                         new RvPortProperties.Worker(false)
                 ),
                 new ObjectMapper(),
