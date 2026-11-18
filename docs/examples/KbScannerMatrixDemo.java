@@ -187,7 +187,7 @@ public final class KbScannerMatrixDemo {
         }
         Path scannerRoot = Path.of(args[0]).toAbsolutePath().normalize();
         Path outputRoot = Path.of(System.getenv().getOrDefault(
-                "KB_SCANNER_DEMO_OUTPUT_DIR", "/home/10362325/Temp"));
+                "KB_SCANNER_DEMO_OUTPUT_DIR", System.getProperty("java.io.tmpdir")));
         Files.createDirectories(outputRoot);
 
         int passed = 0;

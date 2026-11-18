@@ -18,12 +18,13 @@ else
 fi
 
 # 项目目录（任意宿主路径）挂进容器 /project，容器内统一以 /project 引用；
-# 产物目录挂进容器 /home/10362325/Temp（demo 默认写到该路径，宿主直接可见）
+# 产物目录挂进容器 /tmp/demo-out（demo 默认写到该路径，宿主直接可见）
 docker run --rm -m 3g \
   -v "$REPO_ROOT/tools/kb-scanner:/workspace/tools/kb-scanner:ro" \
   -v "$REPO_ROOT/docs/examples:/demo" -v ~/.m2:/root/.m2 \
   -v "$PROJECT_DIR:/project:ro" \
-  -v /home/10362325/Temp:/home/10362325/Temp \
+  -e KB_SCANNER_DEMO_OUTPUT_DIR=/tmp/demo-out \
+  -v "${KB_DEMO_OUTPUT_DIR:-/tmp}/demo-out:/tmp/demo-out" \
   -v kb-scanner-demo-pip-cache:/root/.cache/pip \
   -w /demo eclipse-temurin:25-jdk-noble bash -c '
     set -e
@@ -46,5 +47,5 @@ docker run --rm -m 3g \
       java -cp ".:$CP" KbScannerMatrixDemo /workspace/tools/kb-scanner
     fi
     # 产物目录归还宿主用户（容器内以 root 写入）
-    chown -R '"$(id -u)"':'"$(id -g)"' /home/10362325/Temp/kb-scan-demo-* 2>/dev/null || true
+    chown -R '"$(id -u)"':'"$(id -g)"' "${KB_DEMO_OUTPUT_DIR:-/tmp}"/demo-out/kb-scan-demo-* 2>/dev/null || true
   '

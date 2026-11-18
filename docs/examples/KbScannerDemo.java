@@ -55,10 +55,10 @@ public final class KbScannerDemo {
         }
         Path projectDir = Path.of(args[0]).toAbsolutePath().normalize();
         Path scannerRoot = Path.of(args[1]).toAbsolutePath().normalize();
-        // 产物落在用户磁盘 Temp 下（可用环境变量 KB_SCANNER_DEMO_OUTPUT_DIR 覆盖），
-        // 便于直接查看 scan-result.json / scan-report.html，也避免 /tmp 重启丢失。
+        // 产物目录可用环境变量 KB_SCANNER_DEMO_OUTPUT_DIR 指定；缺省取系统临时目录
+        //（便于直接查看 scan-result.json / scan-report.html，避免与 /tmp 系统清理策略冲突时可用 env 改到持久目录）。
         Path outputRoot = Path.of(System.getenv().getOrDefault(
-                "KB_SCANNER_DEMO_OUTPUT_DIR", "/home/10362325/Temp"));
+                "KB_SCANNER_DEMO_OUTPUT_DIR", System.getProperty("java.io.tmpdir")));
         Files.createDirectories(outputRoot);
         Path outputDir = Files.createTempDirectory(outputRoot, "kb-scan-demo-");
 

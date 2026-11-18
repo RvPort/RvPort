@@ -16,6 +16,9 @@ ENV MAVEN_OPTS=-Xmx1536m
 
 # 可通过构建参数切换 Maven 下载入口，默认使用官方仓库。
 ARG MAVEN_MIRROR_URL=https://repo.maven.apache.org/maven2
+# 受限网络：Maven(JVM) 不读 http_proxy 环境变量，经 MAVEN_OPTS 显式注入代理；
+# 代理可用时也可将 MAVEN_MIRROR_URL 指向可达镜像源。两者都无则直连。
+ARG MAVEN_OPTS=
 RUN --mount=type=cache,target=/root/.m2 \
     mkdir -p /root/.m2 && \
     printf '<settings><mirrors><mirror><id>build-mirror</id><mirrorOf>central</mirrorOf><url>%s</url></mirror></mirrors></settings>\n' "${MAVEN_MIRROR_URL}" > /root/.m2/settings.xml && \
@@ -50,14 +53,26 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends aria2 ca-certificates xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
+# 预置 LLVM tarball（可选）：存在于构建上下文时免下载，sha256 仍强制校验。
+# 构建后由 .dockerignore 之外的手动清理或 CI 缓存策略管理；未提供时此 COPY 需有文件。
+COPY backend/LLVM-21.1.8-Linux-X64.tar.xz /workspace/backend/
+
+ARG ARIA2_PROXY=
+# 受限网络：构建上下文可预置 LLVM tarball（backend/LLVM-*.tar.xz，构建时 COPY），
+# 存在则直接使用（sha256 仍校验），否则走 aria2 下载（可经 ARIA2_PROXY）。
 RUN --mount=type=cache,target=/var/cache/rvport-toolchains \
-    mkdir -p /opt/rvport/toolchains \
-    && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY no_proxy \
-    && aria2c --allow-overwrite=true --auto-file-renaming=false --continue=true \
-        --max-connection-per-server=16 --min-split-size=16M --split=16 \
-        --connect-timeout=30 --timeout=60 --lowest-speed-limit=64K --max-tries=20 --retry-wait=2 \
-        --dir=/var/cache/rvport-toolchains --out="${BITCODE_LLVM_ARCHIVE}" \
-        "${BITCODE_LLVM_BASE_URL}/${BITCODE_LLVM_ARCHIVE}" \
+    mkdir -p /opt/rvport/toolchains /var/cache/rvport-toolchains \
+    && if [ -f "/workspace/backend/${BITCODE_LLVM_ARCHIVE}" ]; then \
+           echo "using prebuilt ${BITCODE_LLVM_ARCHIVE} from build context"; \
+           cp "/workspace/backend/${BITCODE_LLVM_ARCHIVE}" "/var/cache/rvport-toolchains/${BITCODE_LLVM_ARCHIVE}"; \
+       else \
+           unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY no_proxy; \
+           aria2c ${ARIA2_PROXY:+--all-proxy=${ARIA2_PROXY}} --allow-overwrite=true --auto-file-renaming=false --continue=true \
+               --max-connection-per-server=16 --min-split-size=16M --split=16 \
+               --connect-timeout=30 --timeout=60 --lowest-speed-limit=64K --max-tries=20 --retry-wait=2 \
+               --dir=/var/cache/rvport-toolchains --out="${BITCODE_LLVM_ARCHIVE}" \
+               "${BITCODE_LLVM_BASE_URL}/${BITCODE_LLVM_ARCHIVE}"; \
+       fi \
     && echo "${BITCODE_LLVM_SOURCE_SHA256}  /var/cache/rvport-toolchains/${BITCODE_LLVM_ARCHIVE}" | sha256sum -c - \
     && mkdir -p /tmp/llvm-minimal \
     && tar -xJf "/var/cache/rvport-toolchains/${BITCODE_LLVM_ARCHIVE}" -C /tmp/llvm-minimal \
