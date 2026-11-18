@@ -344,8 +344,8 @@ class KbScanRuntimeServiceUtilityTests {
 
         for (KbScanInput input : java.util.Arrays.asList(
                 null,
-                new KbScanInput(null, null, UUID.randomUUID(), null, null, null, null, null, null),
-                new KbScanInput(UUID.randomUUID(), null, UUID.randomUUID(), null, null, null, null, null, null))) {
+                new KbScanInput(null, null, UUID.randomUUID(), null, null, null, null, null, null, null),
+                new KbScanInput(UUID.randomUUID(), null, UUID.randomUUID(), null, null, null, null, null, null, null))) {
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> invoke(service, "validate", input, context))
                     .isInstanceOf(cn.rvport.backend.task.TaskExecutionException.class);
         }

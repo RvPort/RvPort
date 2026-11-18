@@ -131,7 +131,7 @@ public class KbScanService {
                 timeoutSeconds(),
                 "KB 扫描任务已创建"
         ));
-        KbScanInput runInput = new KbScanInput(projectId, null, sourceRevision.id(), ruleVersion, language, sourceArch, targetArch, scanScope, excludePaths, executionContext);... feat(kb-scan): integrate ARM64 source architecture with collected-v1 knowledge channel / 接入 ARM64 源架构（collected-v1 知识通道）
+        KbScanInput runInput = new KbScanInput(projectId, null, sourceRevision.id(), ruleVersion, language, sourceArch, targetArch, scanScope, excludePaths, executionContext);
         UUID runId = kbScanRepository.createRun(runInput, task.id());
         auditLogService.record(projectId, actorUserId, "kb.scan.create", "kb_scan_run", runId,
                 Map.of("taskId", task.id(), "sourceRevisionId", sourceRevision.id()), httpRequest);

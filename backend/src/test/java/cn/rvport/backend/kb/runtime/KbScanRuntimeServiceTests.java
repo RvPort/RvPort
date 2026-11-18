@@ -710,7 +710,7 @@ class KbScanRuntimeServiceTests {
                 new RvPortProperties(
                         null,
                         new RvPortProperties.KbScan("python", scannerRoot.toString(), "rulesets/riscv-porting",
-                                tempDir.resolve("runtime/kb-scans").toString(), timeout, 10_485_760L, "c,cpp", "x86", "riscv64", 20, null),... test(kb-scanner): close out verification and archive eight OpenSpec changes / 验证收口并归档八个 OpenSpec 变更
+                                tempDir.resolve("runtime/kb-scans").toString(), timeout, 10_485_760L, "c,cpp", "x86", "riscv64", 20, null),
                         new RvPortProperties.Worker(false)
                 ),
                 new ObjectMapper(),
