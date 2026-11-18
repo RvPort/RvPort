@@ -1,7 +1,9 @@
 ## Purpose
 
-定义 RvPort 后端数据库设计的持久化边界、核心模型约束、数据安全要求和查询支撑方式。该能力覆盖 PostgreSQL schema、Liquibase 迁移、jOOQ 代码生成、敏感字段保护、跨运行时记录关联以及面向 API 分页过滤所需的索引约束。
+定义 RvPort 后端数据库的持久化边界、核心模型约束、数据安全和查询支撑，覆盖 PostgreSQL schema、Liquibase、jOOQ、敏感字段、跨运行时关联及分页索引，并保证报告来源快照、草稿、人工审计、确认版本和发布的一致性。
+
 ## Requirements
+
 ### Requirement: PostgreSQL 是后端持久化基础
 后端数据库设计 SHALL 以 PostgreSQL 作为 MVP 持久化目标，并 SHALL 使用适合 PostgreSQL 的数据类型，包括 `uuid`、`timestamptz`、`jsonb`、`inet` 和必要的文本字段索引。
 
@@ -762,53 +764,6 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 - **AND** 数据库 SHALL 支持按 `task_id` 追溯 artifact
 - **AND** 数据库 SHALL 防止同一扫描运行下同一 artifact type 出现不可解释的重复成功记录
 
-### Requirement: 数据库必须持久化源码版本迁移输入集合
-数据库 SHALL 提供迁移输入集合表，用于表达一个源码版本下的一组迁移输入 reference。
-
-#### Scenario: 创建迁移输入集合表
-- **WHEN** 执行数据库迁移
-- **THEN** Schema SHALL 创建 `migration_input_sets` 表
-- **AND** 表 SHALL 包含 `id`、`project_id`、`source_revision_id`、`status`、`created_at` 和 `updated_at`
-- **AND** `project_id` SHALL 引用 `projects.id`
-- **AND** `source_revision_id` SHALL 引用 `source_revisions.id`
-- **AND** `status` SHALL 至少支持 `ACTIVE` 和 `ARCHIVED`
-
-#### Scenario: 限制源码版本唯一集合
-- **WHEN** 创建或维护 `migration_input_sets`
-- **THEN** 数据库 SHALL 防止同一 `source_revision_id` 出现多个 active 迁移输入集合
-- **AND** 数据库 SHALL 支持按 `project_id, source_revision_id` 查询集合
-
-### Requirement: 数据库必须持久化迁移输入 reference 列表
-数据库 SHALL 提供迁移输入 reference 表，用于统一展示候选问题并引用真实来源记录。
-
-#### Scenario: 创建迁移输入 reference 表
-- **WHEN** 执行数据库迁移
-- **THEN** Schema SHALL 创建 `migration_input_refs` 表
-- **AND** 表 SHALL 包含 `id`、`input_set_id`、`project_id`、`source_revision_id`、`issue_title`、`source_type`、`source_ref_id`、`detected_level`、`location_label`、`recommendation_summary`、`status`、`note`、`created_at` 和 `updated_at`
-- **AND** `input_set_id` SHALL 引用 `migration_input_sets.id`
-- **AND** `project_id` SHALL 引用 `projects.id`
-- **AND** `source_revision_id` SHALL 引用 `source_revisions.id`
-
-#### Scenario: 限制 reference 状态
-- **WHEN** 创建或更新 `migration_input_refs`
-- **THEN** `status` SHALL 只允许 `CANDIDATE`、`CONFIRMED` 或 `EXCLUDED`
-
-#### Scenario: 防止重复导入
-- **WHEN** 同一迁移输入集合中导入相同 `source_type` 和 `source_ref_id`
-- **THEN** 数据库 SHALL 通过唯一约束或等效机制防止重复 reference
-
-#### Scenario: 索引迁移输入列表查询路径
-- **WHEN** 创建 `migration_input_refs`
-- **THEN** 数据库 SHALL 为 `project_id, source_revision_id, created_at desc` 建立索引
-- **AND** 数据库 SHALL 为 `project_id, source_revision_id, source_type` 建立索引
-- **AND** 数据库 SHALL 为 `project_id, source_revision_id, status` 建立索引
-- **AND** 数据库 SHALL 为 `project_id, source_revision_id, detected_level` 建立索引
-
-#### Scenario: 多来源引用由服务层校验
-- **WHEN** `migration_input_refs.source_ref_id` 指向不同来源表
-- **THEN** 数据库 MAY 不为 `source_ref_id` 创建单一外键
-- **AND** 服务层 MUST 按 `source_type` 校验真实来源记录存在、项目归属和源码版本约束
-
 ### Requirement: 报告表必须绑定源码版本
 数据库 SHALL 支持将迁移评估报告显式绑定到生成时使用的源码版本。
 
@@ -823,18 +778,15 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 - **THEN** 数据库 SHALL 提供 `reports(project_id, source_revision_id, generated_at desc)` 或等效索引
 
 ### Requirement: 报告输入表必须保存迁移输入快照
-数据库 SHALL 使用 `report_inputs` 保存报告生成时使用的迁移输入引用和快照。
+数据库 SHALL 保存新报告固定分析来源快照，不保留旧 MIGRATION_INPUT_REF 数据读取或转换路径。
 
-#### Scenario: 保存迁移输入引用
-- **WHEN** 报告生成使用一条迁移输入 reference
-- **THEN** `report_inputs.input_type` SHALL 保存 `MIGRATION_INPUT_REF`
-- **AND** `report_inputs.input_id` SHALL 保存 `migration_input_refs.id`
-- **AND** `report_inputs.input_snapshot` SHALL 保存生成时的结构化快照
+#### Scenario: 新来源快照
+- **WHEN** 创建新报告输入 manifest
+- **THEN** SHALL 使用可区分的 ANALYSIS_RESULT 类型保存 sourceType/sourceRunId/sourceRefId、源码/Context/证据快照和摘要，按 report_id 及来源建立索引与唯一约束。
 
-#### Scenario: 查询报告输入
-- **WHEN** 后端查询某个报告的输入快照
-- **THEN** 数据库 SHALL 能通过 `report_inputs.report_id` 高效查询
-- **AND** 数据库 SHALL 能通过 `report_inputs(input_type, input_id)` 追溯输入来源
+#### Scenario: 空库初始化
+- **WHEN** 在独立开发数据库初始化新 schema
+- **THEN** SHALL 直接建立新报告与草稿/确认约束，不需要旧引用 backfill；新流程生成后的历史快照须保留。
 
 ### Requirement: 报告输出制品必须使用对象存储元数据
 数据库 SHALL 使用统一输出制品元数据记录迁移评估报告 HTML 和 JSON 输出位置，避免在报告业务表中保存大文件内容。
@@ -888,7 +840,7 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 - **WHEN** 后端保存阶段模型绑定
 - **THEN** 数据库 SHALL 将绑定写入 `model_stage_assignments`
 - **AND** (`owner_user_id`, `stage`) SHALL 唯一
-- **AND** SHALL 保存 TEST_LOG_COMPARE 和 KB_AI_EXTENSION 的个人阶段绑定
+- **AND** SHALL 保存 TEST_LOG_COMPARE 和 REPORT_AI_REVIEW 的个人阶段绑定
 - **AND** (`owner_user_id`, `model_profile_id`) SHALL 通过复合外键引用 profile 的同所有者唯一键，拒绝跨用户绑定
 - **AND** `agent_runtime_id` SHALL 外键引用 `agent_runtimes.id`
 - **AND** 后端 SHALL 拒绝绑定不存在或已禁用的模型 profile
@@ -1297,3 +1249,22 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 - **WHEN** 工具输出包含大量 Scope、证据节点或诊断文件
 - **THEN** 数据库 SHALL 保存对象制品引用和聚合计数
 - **AND** MUST NOT 把完整结果 bundle 写入单个 JSON 字段
+
+### Requirement: 数据库必须保证报告草稿确认和发布一致性
+数据库 SHALL 以专用关系记录 manifest、逐项 AI 结果、人工条目/事件、草稿版本和确认快照；引用必须约束同项目同报告同源码，不将全部业务明细放入单个 JSON。
+
+#### Scenario: 原子草稿修改
+- **WHEN** 批量更新多个条目
+- **THEN** SHALL 比较草稿版本、验证全部归属、一次递增版本并追加 actor 事件；失败整体回滚。
+
+#### Scenario: 确认唯一性
+- **WHEN** 重复或并发确认同一报告草稿版本
+- **THEN** SHALL 最多形成一份确认，保存完整处置与 TO_FIX 子集；空集合也有明确确认记录。
+
+#### Scenario: 当前发布
+- **WHEN** 新报告与旧草稿变化竞争
+- **THEN** SHALL 原子校验 Context、reviewRevision 和 generationSequence 后切换指针，不能出现两个可写当前报告。
+
+#### Scenario: 执行和源码存储
+- **WHEN** 任务跨 worker 恢复
+- **THEN** SHALL 持久安全主体/profile/runtime/尝试版本及不可变源码制品引用，禁止消息/审计保存明文凭据，jOOQ 在 Docker 从迁移后 schema 生成。

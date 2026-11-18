@@ -329,6 +329,27 @@ class ProjectWorkflowStatusServiceTests {
         assertBuild(service, projectId, runtime, context, WorkflowStageStatus.BLOCKED, "BUILD_VALIDATION_FAILED");
     }
 
+    @Test void overviewDistinguishesDraftEmptyConfirmationAndStaleReport() {
+        var project=UUID.randomUUID();
+        var revision=new SourceRevisionResponse(UUID.randomUUID(),project,SourceRevisionType.GIT,"main",null,null,null,null,null,true,null,null);
+        var runtime=runtime(project,null,null,false);
+        var context=new ProjectContextSnapshot(revision.id(),1L);
+        var aggregate=service();
+        for (String reason : java.util.List.of("UNCONFIRMED","CONFIRMED_EMPTY","CONFIRMED_WITH_ITEMS","REPORT_CONTEXT_CHANGED","REPORT_READ_ONLY")) {
+            boolean available=reason.startsWith("CONFIRMED");
+            var current=new cn.rvport.backend.report.review.CurrentFixListResolver.Current(available,UUID.randomUUID(),
+                    available?UUID.randomUUID():null,0L,reason.equals("CONFIRMED_WITH_ITEMS")?1:0,reason);
+            when(fixLists.current(project)).thenReturn(current);
+            var workflow=aggregate.aggregate(project,revision,runtime,context);
+            if(reason.startsWith("REPORT_")) {
+                assertStage(workflow,"report",WorkflowStageStatus.PENDING,"REPORT_MISSING");
+                assertStage(workflow,"manual",WorkflowStageStatus.PENDING,"REPORT_REQUIRED");
+            } else {
+                assertStage(workflow,"report",WorkflowStageStatus.DONE,"REPORT_READY");
+                assertStage(workflow,"manual",WorkflowStageStatus.PENDING,reason.equals("CONFIRMED_WITH_ITEMS")?"MANUAL_FIX_AVAILABLE":reason);
+            }
+        }
+    }
     private void assertBuild(ProjectWorkflowStatusService service, UUID projectId,
                              ProjectRuntimeEnvironmentResponse runtime, ProjectContextSnapshot context,
                              WorkflowStageStatus status, String reason) {
@@ -356,12 +377,13 @@ class ProjectWorkflowStatusServiceTests {
     private void assertManual(ProjectWorkflowStatusService service, SourceRevisionResponse source,
                               WorkflowStageStatus reportStatus, String expectedReason) {
         WorkflowStageResponse report = new WorkflowStageResponse("report", reportStatus, "reason");
-        WorkflowStageResponse result = ReflectionTestUtils.invokeMethod(service, "manual", report, source);
+        WorkflowStageResponse result = ReflectionTestUtils.invokeMethod(service, "manual", report, source,new cn.rvport.backend.report.review.CurrentFixListResolver.Current(true,UUID.randomUUID(),UUID.randomUUID(),1L,1,"CONFIRMED_WITH_ITEMS"));
         assertThat(result).isEqualTo(new WorkflowStageResponse("manual",
                 expectedReason.equals("REPORT_FAILED") ? WorkflowStageStatus.BLOCKED : WorkflowStageStatus.PENDING,
                 expectedReason));
     }
 
+    private final cn.rvport.backend.report.review.CurrentFixListResolver fixLists=org.mockito.Mockito.mock(cn.rvport.backend.report.review.CurrentFixListResolver.class);
     private ProjectWorkflowStatusService service() {
         var service = new ProjectWorkflowStatusService(
                 taskRepository,
@@ -372,6 +394,9 @@ class ProjectWorkflowStatusServiceTests {
                 automatedTestRepository,
                 optimizationCycleRepository,
                 archiveRepository);
+        ReflectionTestUtils.setField(service,"fixLists",fixLists);
+        org.mockito.Mockito.lenient().when(fixLists.current(org.mockito.ArgumentMatchers.any())).thenReturn(
+                new cn.rvport.backend.report.review.CurrentFixListResolver.Current(false,null,null,null,0,"REPORT_NOT_GENERATED"));
         ReflectionTestUtils.setField(service, "scanContextService", scanContextService);
         return service;
     }

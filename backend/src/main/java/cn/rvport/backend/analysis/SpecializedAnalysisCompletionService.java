@@ -2,8 +2,6 @@ package cn.rvport.backend.analysis;
 
 import cn.rvport.backend.archive.ArchiveCandidateRegistrar;
 import cn.rvport.backend.artifact.StoredArtifactView;
-import cn.rvport.backend.migration.MigrationInputService;
-import cn.rvport.backend.migration.MigrationInputSourceType;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -14,16 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class SpecializedAnalysisCompletionService {
 
     private final SpecializedAnalysisRepository repository;
-    private final MigrationInputService migrationInputService;
     private final ArchiveCandidateRegistrar archiveCandidateRegistrar;
 
     public SpecializedAnalysisCompletionService(
             SpecializedAnalysisRepository repository,
-            MigrationInputService migrationInputService,
             ArchiveCandidateRegistrar archiveCandidateRegistrar
     ) {
         this.repository = repository;
-        this.migrationInputService = migrationInputService;
         this.archiveCandidateRegistrar = archiveCandidateRegistrar;
     }
 
@@ -43,10 +38,6 @@ public class SpecializedAnalysisCompletionService {
         repository.complete(input.runId(), status, verdict, exitCode, summary,
                 requestArtifact.id(), jsonArtifact.id(), htmlArtifact.id(),
                 auditArtifact == null ? null : auditArtifact.id(), findings);
-        MigrationInputSourceType sourceType = input.analyzerType() == SpecializedAnalyzerType.FLOATING_POINT
-                ? MigrationInputSourceType.FLOATING_POINT_FINDING : MigrationInputSourceType.MEMORY_ORDER_FINDING;
-        migrationInputService.syncSourceRefs(input.projectId(), input.sourceRevisionId(), sourceType,
-                repository.listFindingIds(input.runId()));
         SpecializedAnalysisRunView completed = repository.findById(input.runId()).orElseThrow();
         archiveCandidateRegistrar.registerSpecializedAnalysis(completed, summary,
                 auditArtifact == null

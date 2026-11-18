@@ -1,12 +1,9 @@
 package cn.rvport.backend.report;
 
-import static cn.rvport.backend.jooq.tables.MigrationInputRefs.MIGRATION_INPUT_REFS;
 import static cn.rvport.backend.jooq.tables.ReportInputs.REPORT_INPUTS;
 import static cn.rvport.backend.jooq.tables.Reports.REPORTS;
 import static cn.rvport.backend.workflow.DomainLatestOrdering.activeFirst;
 
-import cn.rvport.backend.migration.MigrationInputRefView;
-import cn.rvport.backend.migration.MigrationInputRiskPolicy;
 import cn.rvport.backend.task.TaskStatus;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -146,44 +143,6 @@ public class ReportRepository {
         return record == null ? null : ReportView.from(record, jsonbToMap(record.getSummary()));
     }
 
-    public void insertInputs(UUID reportId, List<ReportInputSnapshot> inputs) {
-        for (ReportInputSnapshot input : inputs) {
-            ReportInputProjection projection = input.projection();
-            var insert = dsl.insertInto(REPORT_INPUTS)
-                    .set(REPORT_INPUTS.REPORT_ID, reportId)
-                    .set(REPORT_INPUTS.INPUT_TYPE, ReportInputType.MIGRATION_INPUT_REF.name())
-                    .set(REPORT_INPUTS.INPUT_ID, input.ref().id())
-                    .set(REPORT_INPUTS.INPUT_SNAPSHOT, toJsonb(input.snapshot()));
-            if (projection != null) {
-                insert.set(DSL.field(DSL.name("source_type"), String.class), projection.sourceType())
-                        .set(DSL.field(DSL.name("risk_level"), String.class), projection.riskLevel())
-                        .set(DSL.field(DSL.name("module_key"), String.class), projection.moduleKey())
-                        .set(DSL.field(DSL.name("module_name"), String.class), projection.moduleName())
-                        .set(DSL.field(DSL.name("module_basis"), String.class), projection.moduleBasis())
-                        .set(DSL.field(DSL.name("module_confidence"), String.class), projection.moduleConfidence())
-                        .set(DSL.field(DSL.name("related_module_keys"), JSONB.class), toJsonb(Map.of("items", projection.relatedModuleKeys())))
-                        .set(DSL.field(DSL.name("file_key"), String.class), projection.fileKey())
-                        .set(DSL.field(DSL.name("relative_path"), String.class), projection.relativePath())
-                        .set(DSL.field(DSL.name("finding_type"), String.class), projection.findingType())
-                        .set(DSL.field(DSL.name("line_start"), Integer.class), projection.lineStart())
-                        .set(DSL.field(DSL.name("line_end"), Integer.class), projection.lineEnd())
-                        .set(DSL.field(DSL.name("column_start"), Integer.class), projection.columnStart())
-                        .set(DSL.field(DSL.name("column_end"), Integer.class), projection.columnEnd())
-                        .set(DSL.field(DSL.name("symbol"), String.class), projection.symbol())
-                        .set(DSL.field(DSL.name("source_content_hash"), String.class), projection.sourceContentHash())
-                        .set(DSL.field(DSL.name("location_available"), Boolean.class), projection.locationAvailable());
-            }
-            insert.execute();
-        }
-    }
-
-    public void replaceInputs(UUID reportId, List<ReportInputSnapshot> inputs) {
-        dsl.deleteFrom(REPORT_INPUTS)
-                .where(REPORT_INPUTS.REPORT_ID.eq(reportId))
-                .execute();
-        insertInputs(reportId, inputs);
-    }
-
     public long countInputs(UUID reportId, ReportInputListRequest request) {
         return dsl.selectCount()
                 .from(REPORT_INPUTS)
@@ -207,51 +166,6 @@ public class ReportRepository {
                 .where(REPORT_INPUTS.REPORT_ID.eq(reportId))
                 .orderBy(REPORT_INPUTS.CREATED_AT.asc(), REPORT_INPUTS.ID.asc())
                 .fetch(record -> ReportInputView.from(record, jsonbToMap(record.getInputSnapshot())));
-    }
-
-    public List<UUID> listMigrationInputIds(UUID reportId) {
-        return dsl.select(REPORT_INPUTS.INPUT_ID)
-                .from(REPORT_INPUTS)
-                .where(REPORT_INPUTS.REPORT_ID.eq(reportId)
-                        .and(REPORT_INPUTS.INPUT_TYPE.eq(ReportInputType.MIGRATION_INPUT_REF.name())))
-                .fetch(REPORT_INPUTS.INPUT_ID);
-    }
-
-    public List<InputSummaryRow> summarizeCurrentInputs(UUID projectId, UUID sourceRevisionId) {
-        return dsl.select(
-                        MIGRATION_INPUT_REFS.STATUS,
-                        MIGRATION_INPUT_REFS.SOURCE_TYPE,
-                        MIGRATION_INPUT_REFS.DETECTED_LEVEL,
-                        DSL.count()
-                )
-                .from(MIGRATION_INPUT_REFS)
-                .where(MIGRATION_INPUT_REFS.PROJECT_ID.eq(projectId)
-                        .and(MIGRATION_INPUT_REFS.SOURCE_REVISION_ID.eq(sourceRevisionId)))
-                .groupBy(MIGRATION_INPUT_REFS.STATUS, MIGRATION_INPUT_REFS.SOURCE_TYPE, MIGRATION_INPUT_REFS.DETECTED_LEVEL)
-                .fetch(record -> new InputSummaryRow(
-                        record.get(MIGRATION_INPUT_REFS.STATUS),
-                        record.get(MIGRATION_INPUT_REFS.SOURCE_TYPE),
-                        record.get(MIGRATION_INPUT_REFS.DETECTED_LEVEL),
-                        record.get(DSL.count(), long.class)
-                ));
-    }
-
-    public long countInputPreview(UUID projectId, UUID sourceRevisionId, ReportInputPreviewListRequest request) {
-        return dsl.selectCount()
-                .from(MIGRATION_INPUT_REFS)
-                .where(inputPreviewFilter(projectId, sourceRevisionId, request))
-                .fetchOne(0, long.class);
-    }
-
-    public List<MigrationInputRefView> listInputPreview(UUID projectId, UUID sourceRevisionId, ReportInputPreviewListRequest request) {
-        int page = request.normalizedPage();
-        int pageSize = request.normalizedPageSize();
-        return dsl.selectFrom(MIGRATION_INPUT_REFS)
-                .where(inputPreviewFilter(projectId, sourceRevisionId, request))
-                .orderBy(inputPreviewSort(request))
-                .limit(pageSize)
-                .offset((page - 1) * pageSize)
-                .fetch(MigrationInputRefView::from);
     }
 
     private Condition filter(UUID projectId, ReportListRequest request) {
@@ -300,33 +214,6 @@ public class ReportRepository {
         return condition;
     }
 
-    private Condition inputPreviewFilter(UUID projectId, UUID sourceRevisionId, ReportInputPreviewListRequest request) {
-        Condition condition = MIGRATION_INPUT_REFS.PROJECT_ID.eq(projectId)
-                .and(MIGRATION_INPUT_REFS.SOURCE_REVISION_ID.eq(sourceRevisionId));
-        if (request.sourceType() != null) {
-            condition = condition.and(MIGRATION_INPUT_REFS.SOURCE_TYPE.eq(request.sourceType().name()));
-        }
-        if (request.status() != null) {
-            condition = condition.and(MIGRATION_INPUT_REFS.STATUS.eq(request.status().name()));
-        }
-        if (request.riskLevel() != null && !request.riskLevel().isBlank()) {
-            if (!MigrationInputRiskPolicy.isKnownRiskToken(request.riskLevel())) {
-                throw new IllegalArgumentException("Unsupported report input preview risk level: " + request.riskLevel());
-            }
-            String riskLevel = MigrationInputRiskPolicy.normalizeRiskToken(request.riskLevel());
-            condition = condition.and(DSL.upper(MIGRATION_INPUT_REFS.DETECTED_LEVEL).eq(riskLevel)
-                    .or(DSL.upper(MIGRATION_INPUT_REFS.DETECTED_LEVEL).like(riskLevel + "/%")));
-        }
-        String keyword = blankToNull(request.keyword());
-        if (keyword != null) {
-            condition = condition.and(MIGRATION_INPUT_REFS.ISSUE_TITLE.containsIgnoreCase(keyword)
-                    .or(MIGRATION_INPUT_REFS.LOCATION_LABEL.containsIgnoreCase(keyword))
-                    .or(MIGRATION_INPUT_REFS.RECOMMENDATION_SUMMARY.containsIgnoreCase(keyword))
-                    .or(MIGRATION_INPUT_REFS.NOTE.containsIgnoreCase(keyword)));
-        }
-        return condition;
-    }
-
     private List<SortField<?>> inputSort(ReportInputListRequest request) {
         Field<?> field = switch (blankToDefault(request.sortBy(), "")) {
             case "createdAt" -> REPORT_INPUTS.CREATED_AT;
@@ -338,24 +225,6 @@ public class ReportRepository {
             return List.of(REPORT_INPUTS.CREATED_AT.asc(), REPORT_INPUTS.ID.asc());
         }
         return List.of("desc".equalsIgnoreCase(request.sortDirection()) ? field.desc().nullsLast() : field.asc().nullsLast(), REPORT_INPUTS.ID.asc());
-    }
-
-    private List<SortField<?>> inputPreviewSort(ReportInputPreviewListRequest request) {
-        Field<?> field = switch (blankToDefault(request.sortBy(), "")) {
-            case "createdAt" -> MIGRATION_INPUT_REFS.CREATED_AT;
-            case "updatedAt" -> MIGRATION_INPUT_REFS.UPDATED_AT;
-            case "sourceType" -> MIGRATION_INPUT_REFS.SOURCE_TYPE;
-            case "detectedLevel" -> MIGRATION_INPUT_REFS.DETECTED_LEVEL;
-            case "status" -> MIGRATION_INPUT_REFS.STATUS;
-            case "issueTitle" -> MIGRATION_INPUT_REFS.ISSUE_TITLE;
-            case "locationLabel" -> MIGRATION_INPUT_REFS.LOCATION_LABEL;
-            case "" -> null;
-            default -> throw new IllegalArgumentException("Unsupported report input preview sort field: " + request.sortBy());
-        };
-        if (field == null) {
-            return List.of(MIGRATION_INPUT_REFS.UPDATED_AT.desc().nullsLast(), MIGRATION_INPUT_REFS.CREATED_AT.desc(), MIGRATION_INPUT_REFS.ID.desc());
-        }
-        return List.of("asc".equalsIgnoreCase(request.sortDirection()) ? field.asc().nullsLast() : field.desc().nullsLast(), MIGRATION_INPUT_REFS.ID.asc());
     }
 
     private JSONB toJsonb(Map<String, ?> value) {
@@ -381,16 +250,5 @@ public class ReportRepository {
         return value == null || value.isBlank() ? fallback : value.trim();
     }
 
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
 
-    public record ReportInputSnapshot(MigrationInputRefView ref, Map<String, Object> snapshot, ReportInputProjection projection) {
-        public ReportInputSnapshot(MigrationInputRefView ref, Map<String, Object> snapshot) {
-            this(ref, snapshot, null);
-        }
-    }
-
-    public record InputSummaryRow(String status, String sourceType, String detectedLevel, long count) {
-    }
 }

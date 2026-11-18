@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.UUID;
 
 public record OptimizationCycleSummaryResponse(
-        MigrationInputSummary migrationInputs,
         LatestReportSummary report,
         RecheckSummary recheck,
         StageRunSummary sourceDeploy,
@@ -15,7 +14,6 @@ public record OptimizationCycleSummaryResponse(
 ) {
     public static OptimizationCycleSummaryResponse empty() {
         return new OptimizationCycleSummaryResponse(
-                new MigrationInputSummary(0, Map.of()),
                 null,
                 null,
                 StageRunSummary.empty(),
@@ -23,9 +21,6 @@ public record OptimizationCycleSummaryResponse(
                 StageRunSummary.empty(),
                 null
         );
-    }
-
-    public record MigrationInputSummary(long total, Map<String, Long> byStatus) {
     }
 
     public record LatestReportSummary(

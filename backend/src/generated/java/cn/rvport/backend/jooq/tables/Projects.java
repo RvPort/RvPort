@@ -23,17 +23,14 @@ import cn.rvport.backend.jooq.tables.Environments.EnvironmentsPath;
 import cn.rvport.backend.jooq.tables.Findings.FindingsPath;
 import cn.rvport.backend.jooq.tables.IssueEvents.IssueEventsPath;
 import cn.rvport.backend.jooq.tables.Issues.IssuesPath;
-import cn.rvport.backend.jooq.tables.KbAiExtensionResults.KbAiExtensionResultsPath;
-import cn.rvport.backend.jooq.tables.KbAiExtensionRuns.KbAiExtensionRunsPath;
 import cn.rvport.backend.jooq.tables.KbScanArtifacts.KbScanArtifactsPath;
 import cn.rvport.backend.jooq.tables.KbScanRuns.KbScanRunsPath;
-import cn.rvport.backend.jooq.tables.MigrationInputRefs.MigrationInputRefsPath;
-import cn.rvport.backend.jooq.tables.MigrationInputSets.MigrationInputSetsPath;
 import cn.rvport.backend.jooq.tables.OptimizationCycles.OptimizationCyclesPath;
 import cn.rvport.backend.jooq.tables.ProjectRuntimeEnvironments.ProjectRuntimeEnvironmentsPath;
 import cn.rvport.backend.jooq.tables.RecheckRuns.RecheckRunsPath;
 import cn.rvport.backend.jooq.tables.ReportComparisonDiffItems.ReportComparisonDiffItemsPath;
 import cn.rvport.backend.jooq.tables.ReportComparisonRuns.ReportComparisonRunsPath;
+import cn.rvport.backend.jooq.tables.ReportReviewOperations.ReportReviewOperationsPath;
 import cn.rvport.backend.jooq.tables.Reports.ReportsPath;
 import cn.rvport.backend.jooq.tables.SourceDeployRuns.SourceDeployRunsPath;
 import cn.rvport.backend.jooq.tables.SourceImports.SourceImportsPath;
@@ -468,32 +465,6 @@ public class Projects extends TableImpl<ProjectsRecord> {
         return _issues;
     }
 
-    private transient KbAiExtensionResultsPath _kbAiExtensionResults;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_results</code> table
-     */
-    public KbAiExtensionResultsPath kbAiExtensionResults() {
-        if (_kbAiExtensionResults == null)
-            _kbAiExtensionResults = new KbAiExtensionResultsPath(this, null, Keys.KB_AI_EXTENSION_RESULTS__KB_AI_EXTENSION_RESULTS_PROJECT_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionResults;
-    }
-
-    private transient KbAiExtensionRunsPath _kbAiExtensionRuns;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_runs</code> table
-     */
-    public KbAiExtensionRunsPath kbAiExtensionRuns() {
-        if (_kbAiExtensionRuns == null)
-            _kbAiExtensionRuns = new KbAiExtensionRunsPath(this, null, Keys.KB_AI_EXTENSION_RUNS__KB_AI_EXTENSION_RUNS_PROJECT_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionRuns;
-    }
-
     private transient KbScanArtifactsPath _kbScanArtifacts;
 
     /**
@@ -518,32 +489,6 @@ public class Projects extends TableImpl<ProjectsRecord> {
             _kbScanRuns = new KbScanRunsPath(this, null, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_PROJECT_ID_FKEY.getInverseKey());
 
         return _kbScanRuns;
-    }
-
-    private transient MigrationInputRefsPath _migrationInputRefs;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.migration_input_refs</code> table
-     */
-    public MigrationInputRefsPath migrationInputRefs() {
-        if (_migrationInputRefs == null)
-            _migrationInputRefs = new MigrationInputRefsPath(this, null, Keys.MIGRATION_INPUT_REFS__MIGRATION_INPUT_REFS_PROJECT_ID_FKEY.getInverseKey());
-
-        return _migrationInputRefs;
-    }
-
-    private transient MigrationInputSetsPath _migrationInputSets;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.migration_input_sets</code> table
-     */
-    public MigrationInputSetsPath migrationInputSets() {
-        if (_migrationInputSets == null)
-            _migrationInputSets = new MigrationInputSetsPath(this, null, Keys.MIGRATION_INPUT_SETS__MIGRATION_INPUT_SETS_PROJECT_ID_FKEY.getInverseKey());
-
-        return _migrationInputSets;
     }
 
     private transient OptimizationCyclesPath _optimizationCycles;
@@ -609,6 +554,19 @@ public class Projects extends TableImpl<ProjectsRecord> {
             _reportComparisonRuns = new ReportComparisonRunsPath(this, null, Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_PROJECT_ID_FKEY.getInverseKey());
 
         return _reportComparisonRuns;
+    }
+
+    private transient ReportReviewOperationsPath _reportReviewOperations;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_review_operations</code> table
+     */
+    public ReportReviewOperationsPath reportReviewOperations() {
+        if (_reportReviewOperations == null)
+            _reportReviewOperations = new ReportReviewOperationsPath(this, null, Keys.REPORT_REVIEW_OPERATIONS__REPORT_REVIEW_OPERATIONS_PROJECT_ID_FKEY.getInverseKey());
+
+        return _reportReviewOperations;
     }
 
     private transient ReportsPath _reports;

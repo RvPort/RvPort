@@ -15,8 +15,6 @@ import cn.rvport.backend.buildvalidation.BuildValidationRunView;
 import cn.rvport.backend.buildvalidation.BuildValidationScope;
 import cn.rvport.backend.dependency.DependencyAnalysisView;
 import cn.rvport.backend.kb.KbScanView;
-import cn.rvport.backend.kb.ai.KbAiExtensionRunView;
-import cn.rvport.backend.kb.ai.KbAiExtensionStatus;
 import cn.rvport.backend.report.ReportType;
 import cn.rvport.backend.report.ReportView;
 import cn.rvport.backend.reportcomparison.ReportComparisonRunView;
@@ -120,7 +118,7 @@ class ArchiveCandidateRegistrarTests {
 
         ReportComparisonRunView comparison = new ReportComparisonRunView(
                 UUID.randomUUID(), projectId, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                TaskStatus.SUCCEEDED, Map.of(), null, null, now, now, now, now);
+                TaskStatus.SUCCEEDED, Map.of(), null, null, now, now, now, now, cn.rvport.backend.reportcomparison.ReportComparisonBasis.REPORT_FACTS, null, null);
         registrar.registerReportComparison(comparison, revisionId, Map.of("changed", 2));
 
         KbScanView kb = new KbScanView(
@@ -236,7 +234,7 @@ class ArchiveCandidateRegistrarTests {
     }
 
     @Test
-    void registersAutomatedTestAndKbAiExtensionWithArtifacts() {
+    void registersAutomatedTestWithArtifacts() {
         UUID projectId = UUID.randomUUID();
         UUID revisionId = UUID.randomUUID();
         UUID environmentId = UUID.randomUUID();
@@ -245,24 +243,17 @@ class ArchiveCandidateRegistrarTests {
                 1L, UUID.randomUUID(), null, "environment", "make test", null, 60, 0,
                 1, 0, 0, TaskStatus.SUCCEEDED, null, null, null, null, List.of(), null, null);
         OffsetDateTime now = OffsetDateTime.now();
-        KbAiExtensionRunView aiRun = new KbAiExtensionRunView(
-                UUID.randomUUID(), projectId, revisionId, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                UUID.randomUUID(), KbAiExtensionStatus.SUCCEEDED, Map.of(), null, null, null,
-                UUID.randomUUID(), now, now, now, now);
         ArchiveCandidateRegistrar registrar = new ArchiveCandidateRegistrar(candidateService, sourceRepository);
 
         registrar.registerAutomatedTest(testRun, null,
                 List.of(artifact(projectId, "TEST_LOG", "text/plain")));
-        registrar.registerKbAiExtension(aiRun, Map.of("adviceCount", 2), null);
 
         ArgumentCaptor<ArchiveCandidateUpsertCommand> captor = ArgumentCaptor.forClass(ArchiveCandidateUpsertCommand.class);
-        verify(candidateService, org.mockito.Mockito.times(2)).upsert(captor.capture());
+        verify(candidateService).upsert(captor.capture());
         assertThat(captor.getAllValues().get(0).candidateKey()).isEqualTo("automated-test-" + environmentId);
         assertThat(captor.getAllValues().get(0).artifactRefs()).singleElement()
                 .satisfies(ref -> assertThat(ref.filename()).endsWith(".log"));
-        assertThat(captor.getAllValues().get(1).candidateKey()).isEqualTo("kb-ai-extension");
-        assertThat(captor.getAllValues().get(1).summary().get("adviceCount")).isEqualTo(2);
-        assertThat(captor.getAllValues().get(1).artifactRefs()).isEmpty();
+
     }
 
     @Test

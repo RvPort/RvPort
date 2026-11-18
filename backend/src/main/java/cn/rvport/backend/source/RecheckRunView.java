@@ -12,8 +12,8 @@ public record RecheckRunView(
         UUID taskId,
         UUID baseSourceRevisionId,
         UUID targetSourceRevisionId,
-        UUID baseScanRunId,
-        UUID targetScanRunId,
+        UUID baseConfirmationId,
+        UUID targetConfirmationId,
         Map<String, Object> summary,
         TaskStatus status,
         OffsetDateTime createdAt
@@ -25,8 +25,8 @@ public record RecheckRunView(
                 record.getTaskId(),
                 record.getBaseSourceRevisionId(),
                 record.getTargetSourceRevisionId(),
-                record.getBaseScanRunId(),
-                record.getTargetScanRunId(),
+                record.getBaseConfirmationId(),
+                record.getTargetConfirmationId(),
                 summary,
                 TaskStatus.valueOf(record.getStatus()),
                 record.getCreatedAt()

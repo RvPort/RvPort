@@ -27,7 +27,7 @@ class KbCompileDatabaseTests {
     final KbScanView run = KbContextFixtures.scan(project, source, TaskStatus.RUNNING, KbContextFixtures.CONTEXT);
 
     KbScanRuntimeService service() {
-        return new KbScanRuntimeService(null, null, null, null, new ObjectMapper(), artifacts, null, null, null, null);
+        return new KbScanRuntimeService(null, null, null, null, new ObjectMapper(), artifacts, null, null, null);
     }
     Map<?, ?> resolve(Map<String, Object> facts) {
         var build = new BuildValidationRunView(buildId, project, UUID.randomUUID(), source, KbContextFixtures.ENV,

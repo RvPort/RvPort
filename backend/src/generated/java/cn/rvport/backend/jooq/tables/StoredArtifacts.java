@@ -8,10 +8,10 @@ import cn.rvport.backend.jooq.Indexes;
 import cn.rvport.backend.jooq.Keys;
 import cn.rvport.backend.jooq.Public;
 import cn.rvport.backend.jooq.tables.Archives.ArchivesPath;
-import cn.rvport.backend.jooq.tables.KbAiExtensionRuns.KbAiExtensionRunsPath;
 import cn.rvport.backend.jooq.tables.KbScanArtifacts.KbScanArtifactsPath;
 import cn.rvport.backend.jooq.tables.Projects.ProjectsPath;
 import cn.rvport.backend.jooq.tables.ReportFileContexts.ReportFileContextsPath;
+import cn.rvport.backend.jooq.tables.ReportFixListConfirmations.ReportFixListConfirmationsPath;
 import cn.rvport.backend.jooq.tables.SpecializedAnalysisRuns.SpecializedAnalysisRunsPath;
 import cn.rvport.backend.jooq.tables.Tasks.TasksPath;
 import cn.rvport.backend.jooq.tables.TestComparisonRuns.TestComparisonRunsPath;
@@ -259,48 +259,6 @@ public class StoredArtifacts extends TableImpl<StoredArtifactsRecord> {
         return _archives;
     }
 
-    private transient KbAiExtensionRunsPath _kbAiExtensionRunsAgentOutputArtifactIdFkey;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_runs</code> table, via the
-     * <code>kb_ai_extension_runs_agent_output_artifact_id_fkey</code> key
-     */
-    public KbAiExtensionRunsPath kbAiExtensionRunsAgentOutputArtifactIdFkey() {
-        if (_kbAiExtensionRunsAgentOutputArtifactIdFkey == null)
-            _kbAiExtensionRunsAgentOutputArtifactIdFkey = new KbAiExtensionRunsPath(this, null, Keys.KB_AI_EXTENSION_RUNS__KB_AI_EXTENSION_RUNS_AGENT_OUTPUT_ARTIFACT_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionRunsAgentOutputArtifactIdFkey;
-    }
-
-    private transient KbAiExtensionRunsPath _kbAiExtensionRunsInputArtifactIdFkey;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_runs</code> table, via the
-     * <code>kb_ai_extension_runs_input_artifact_id_fkey</code> key
-     */
-    public KbAiExtensionRunsPath kbAiExtensionRunsInputArtifactIdFkey() {
-        if (_kbAiExtensionRunsInputArtifactIdFkey == null)
-            _kbAiExtensionRunsInputArtifactIdFkey = new KbAiExtensionRunsPath(this, null, Keys.KB_AI_EXTENSION_RUNS__KB_AI_EXTENSION_RUNS_INPUT_ARTIFACT_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionRunsInputArtifactIdFkey;
-    }
-
-    private transient KbAiExtensionRunsPath _kbAiExtensionRunsOutputArtifactIdFkey;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_runs</code> table, via the
-     * <code>kb_ai_extension_runs_output_artifact_id_fkey</code> key
-     */
-    public KbAiExtensionRunsPath kbAiExtensionRunsOutputArtifactIdFkey() {
-        if (_kbAiExtensionRunsOutputArtifactIdFkey == null)
-            _kbAiExtensionRunsOutputArtifactIdFkey = new KbAiExtensionRunsPath(this, null, Keys.KB_AI_EXTENSION_RUNS__KB_AI_EXTENSION_RUNS_OUTPUT_ARTIFACT_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionRunsOutputArtifactIdFkey;
-    }
-
     private transient KbScanArtifactsPath _kbScanArtifacts;
 
     /**
@@ -325,6 +283,34 @@ public class StoredArtifacts extends TableImpl<StoredArtifactsRecord> {
             _reportFileContexts = new ReportFileContextsPath(this, null, Keys.REPORT_FILE_CONTEXTS__REPORT_FILE_CONTEXTS_ARTIFACT_ID_FKEY.getInverseKey());
 
         return _reportFileContexts;
+    }
+
+    private transient ReportFixListConfirmationsPath _reportFixListConfirmationsHtmlArtifactIdFkey;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_fix_list_confirmations</code> table, via the
+     * <code>report_fix_list_confirmations_html_artifact_id_fkey</code> key
+     */
+    public ReportFixListConfirmationsPath reportFixListConfirmationsHtmlArtifactIdFkey() {
+        if (_reportFixListConfirmationsHtmlArtifactIdFkey == null)
+            _reportFixListConfirmationsHtmlArtifactIdFkey = new ReportFixListConfirmationsPath(this, null, Keys.REPORT_FIX_LIST_CONFIRMATIONS__REPORT_FIX_LIST_CONFIRMATIONS_HTML_ARTIFACT_ID_FKEY.getInverseKey());
+
+        return _reportFixListConfirmationsHtmlArtifactIdFkey;
+    }
+
+    private transient ReportFixListConfirmationsPath _reportFixListConfirmationsJsonArtifactIdFkey;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_fix_list_confirmations</code> table, via the
+     * <code>report_fix_list_confirmations_json_artifact_id_fkey</code> key
+     */
+    public ReportFixListConfirmationsPath reportFixListConfirmationsJsonArtifactIdFkey() {
+        if (_reportFixListConfirmationsJsonArtifactIdFkey == null)
+            _reportFixListConfirmationsJsonArtifactIdFkey = new ReportFixListConfirmationsPath(this, null, Keys.REPORT_FIX_LIST_CONFIRMATIONS__REPORT_FIX_LIST_CONFIRMATIONS_JSON_ARTIFACT_ID_FKEY.getInverseKey());
+
+        return _reportFixListConfirmationsJsonArtifactIdFkey;
     }
 
     private transient SpecializedAnalysisRunsPath _specializedAnalysisRunsAuditBundleArtifactIdFkey;
@@ -399,7 +385,7 @@ public class StoredArtifacts extends TableImpl<StoredArtifactsRecord> {
     @Override
     public List<Check<StoredArtifactsRecord>> getChecks() {
         return Arrays.asList(
-            Internal.createCheck(this, DSL.name("stored_artifacts_owner_type_chk"), "((owner_type = ANY (ARRAY['KB_SCAN'::text, 'DEPENDENCY_ANALYSIS'::text, 'BUILD_VALIDATION'::text, 'MIGRATION_REPORT'::text, 'ARCHIVE'::text, 'AUTOMATED_TEST'::text, 'TEST_COMPARISON'::text, 'KB_AI_EXTENSION'::text, 'SPECIALIZED_ANALYSIS'::text])))", true),
+            Internal.createCheck(this, DSL.name("stored_artifacts_owner_type_chk"), "((owner_type = ANY (ARRAY['KB_SCAN'::text, 'DEPENDENCY_ANALYSIS'::text, 'BUILD_VALIDATION'::text, 'MIGRATION_REPORT'::text, 'ARCHIVE'::text, 'AUTOMATED_TEST'::text, 'TEST_COMPARISON'::text, 'SPECIALIZED_ANALYSIS'::text, 'SOURCE_REVISION'::text])))", true),
             Internal.createCheck(this, DSL.name("stored_artifacts_size_chk"), "((size_bytes >= 0))", true)
         );
     }

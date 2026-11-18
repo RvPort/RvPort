@@ -75,12 +75,6 @@
 | `GET` | `/api/environments/{environmentId}/snapshots` | [EnvironmentController.java](../src/main/java/cn/rvport/backend/environment/EnvironmentController.java) |
 | `GET` | `/health` | [HealthController.java](../src/main/java/cn/rvport/backend/health/HealthController.java) |
 | `GET` | `/api/health` | [HealthController.java](../src/main/java/cn/rvport/backend/health/HealthController.java) |
-| `POST` | `/api/projects/{projectId}/kb-scans/{scanId}/ai-extensions` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
-| `GET` | `/api/projects/{projectId}/kb-ai-extensions` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
-| `GET` | `/api/projects/{projectId}/kb-scans/{scanId}/ai-extension-readiness` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
-| `GET` | `/api/kb-ai-extensions/{runId}` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
-| `GET` | `/api/kb-ai-extensions/{runId}/artifacts` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
-| `GET` | `/api/kb-ai-extensions/{runId}/artifacts/{artifactId}/download` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
 | `POST` | `/api/projects/{projectId}/kb-scans` | [KbScanController.java](../src/main/java/cn/rvport/backend/kb/KbScanController.java) |
 | `GET` | `/api/projects/{projectId}/kb-scans` | [KbScanController.java](../src/main/java/cn/rvport/backend/kb/KbScanController.java) |
 | `GET` | `/api/projects/{projectId}/kb-scans/latest` | [KbScanController.java](../src/main/java/cn/rvport/backend/kb/KbScanController.java) |
@@ -94,11 +88,6 @@
 | `GET` | `/api/admin/configs/mail` | [MailConfigController.java](../src/main/java/cn/rvport/backend/mail/MailConfigController.java) |
 | `PATCH` | `/api/admin/configs/mail` | [MailConfigController.java](../src/main/java/cn/rvport/backend/mail/MailConfigController.java) |
 | `POST` | `/api/admin/configs/mail:test` | [MailConfigController.java](../src/main/java/cn/rvport/backend/mail/MailConfigController.java) |
-| `GET` | `/api/projects/{projectId}/source-revisions/{sourceRevisionId}/migration-inputs` | [MigrationInputController.java](../src/main/java/cn/rvport/backend/migration/MigrationInputController.java) |
-| `POST` | `/api/projects/{projectId}/source-revisions/{sourceRevisionId}/migration-inputs:import` | [MigrationInputController.java](../src/main/java/cn/rvport/backend/migration/MigrationInputController.java) |
-| `POST` | `/api/projects/{projectId}/source-revisions/{sourceRevisionId}/migration-inputs:auto-merge` | [MigrationInputController.java](../src/main/java/cn/rvport/backend/migration/MigrationInputController.java) |
-| `GET` | `/api/migration-inputs/{migrationInputId}` | [MigrationInputController.java](../src/main/java/cn/rvport/backend/migration/MigrationInputController.java) |
-| `PATCH` | `/api/migration-inputs/{migrationInputId}` | [MigrationInputController.java](../src/main/java/cn/rvport/backend/migration/MigrationInputController.java) |
 | `GET` | `/api/admin/model-profiles` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
 | `POST` | `/api/admin/model-profiles` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
 | `GET` | `/api/admin/model-profiles/{profileId}` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
@@ -109,8 +98,8 @@
 | `POST` | `/api/admin/model-profiles/{profileId}:test-agents` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
 | `GET` | `/api/admin/model-profile-agent-test-runs/{runId}` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
 | `GET` | `/api/admin/model-profiles/{profileId}/agent-probe-results` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
-| `GET` | `/api/admin/model-stage-assignments` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
-| `PATCH` | `/api/admin/model-stage-assignments` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
+| `GET` | `/api/me/model-stage-assignments` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
+| `PATCH` | `/api/me/model-stage-assignments` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
 | `GET` | `/api/projects/{projectId}/optimization/overview` | [OptimizationCycleController.java](../src/main/java/cn/rvport/backend/optimization/OptimizationCycleController.java) |
 | `GET` | `/api/projects/{projectId}/optimization/cycles` | [OptimizationCycleController.java](../src/main/java/cn/rvport/backend/optimization/OptimizationCycleController.java) |
 | `GET` | `/api/projects/{projectId}/optimization-cycles/latest` | [OptimizationCycleController.java](../src/main/java/cn/rvport/backend/optimization/OptimizationCycleController.java) |
@@ -122,11 +111,11 @@
 | `GET` | `/api/projects/{projectId}/overview` | [ProjectController.java](../src/main/java/cn/rvport/backend/project/ProjectController.java) |
 | `GET` | `/api/projects/{projectId}/runtime-environments` | [ProjectRuntimeEnvironmentController.java](../src/main/java/cn/rvport/backend/project/runtime/ProjectRuntimeEnvironmentController.java) |
 | `PATCH` | `/api/projects/{projectId}/runtime-environments` | [ProjectRuntimeEnvironmentController.java](../src/main/java/cn/rvport/backend/project/runtime/ProjectRuntimeEnvironmentController.java) |
-| `POST` | `/api/projects/{projectId}/reports/evaluation` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
+| `POST` | `/api/projects/{projectId}/reports/evaluation` | [ReportReviewGenerationController.java](../src/main/java/cn/rvport/backend/report/review/ReportReviewGenerationController.java) |
 | `GET` | `/api/projects/{projectId}/reports/evaluation` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
-| `GET` | `/api/projects/{projectId}/reports/evaluation/latest` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
-| `GET` | `/api/projects/{projectId}/reports/evaluation/readiness` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
-| `GET` | `/api/projects/{projectId}/reports/evaluation/input-preview` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
+| `GET` | `/api/projects/{projectId}/reports/evaluation/latest` | [ReportReviewGenerationController.java](../src/main/java/cn/rvport/backend/report/review/ReportReviewGenerationController.java) |
+| `GET` | `/api/projects/{projectId}/reports/evaluation/readiness` | [ReportReviewGenerationController.java](../src/main/java/cn/rvport/backend/report/review/ReportReviewGenerationController.java) |
+| `GET` | `/api/projects/{projectId}/reports/evaluation/input-preview` | [ReportReviewGenerationController.java](../src/main/java/cn/rvport/backend/report/review/ReportReviewGenerationController.java) |
 | `GET` | `/api/reports/{reportId}` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
 | `GET` | `/api/reports/{reportId}/inputs` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
 | `GET` | `/api/reports/{reportId}/download` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
@@ -183,3 +172,5 @@
 ### KB 扫描工作流一致性
 
 KB 创建必须绑定当前运行环境下选中的成功 `SOURCE_ONLY` 构建；overview、latest、默认当前列表和报告 KB 来源使用完整上下文判定。历史成功不等于当前阶段已完成。字段、原因码、状态矩阵与升级说明见 [KB 扫描上下文与历史结果](kb-scan-workflow-consistency.zh-CN.md)。
+
+结果评估、人工清单及联调约定见[结果报告与待修复清单](report-review.zh-CN.md)。

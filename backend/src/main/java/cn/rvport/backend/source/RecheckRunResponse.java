@@ -10,8 +10,8 @@ public record RecheckRunResponse(
         UUID taskId,
         UUID baseSourceRevisionId,
         UUID targetSourceRevisionId,
-        UUID baseScanRunId,
-        UUID targetScanRunId,
+        UUID baseConfirmationId,
+        UUID targetConfirmationId,
         Map<String, Object> summary,
         TaskStatus rawStatus,
         OffsetDateTime createdAt
@@ -25,8 +25,8 @@ public record RecheckRunResponse(
                 view.taskId(),
                 view.baseSourceRevisionId(),
                 view.targetSourceRevisionId(),
-                view.baseScanRunId(),
-                view.targetScanRunId(),
+                view.baseConfirmationId(),
+                view.targetConfirmationId(),
                 view.summary(),
                 view.status(),
                 view.createdAt()

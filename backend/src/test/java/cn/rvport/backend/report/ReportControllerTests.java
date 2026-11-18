@@ -21,7 +21,7 @@ class ReportControllerTests {
     private final ReportService reportService = mock(ReportService.class);
     private final ReportComparisonService comparisonService = mock(ReportComparisonService.class);
     private final ReportOrganizationService organizationService = mock(ReportOrganizationService.class);
-    private final ReportController controller = new ReportController(reportService, comparisonService, organizationService);
+    private final ReportController controller = new ReportController(reportService, comparisonService, organizationService,mock(cn.rvport.backend.report.review.ReviewWorkspaceService.class));
     private final RvPortUserPrincipal principal = new RvPortUserPrincipal(UUID.randomUUID(), "user", "User",
             "user@example.com", false, false, UserStatus.ACTIVE);
     private final MockHttpServletRequest request = new MockHttpServletRequest();
@@ -34,11 +34,7 @@ class ReportControllerTests {
         UUID comparisonId = UUID.randomUUID();
         UUID diffId = UUID.randomUUID();
 
-        assertThat(controller.createEvaluation(principal, projectId, null, request).timestamp()).isNotNull();
         assertThat(controller.listEvaluation(principal, projectId, null, request).timestamp()).isNotNull();
-        assertThat(controller.latestEvaluation(principal, projectId, revisionId, request).timestamp()).isNotNull();
-        assertThat(controller.readiness(principal, projectId, revisionId, request).timestamp()).isNotNull();
-        assertThat(controller.inputPreview(principal, projectId, null, request).timestamp()).isNotNull();
         assertThat(controller.get(principal, reportId, request).timestamp()).isNotNull();
         assertThat(controller.inputs(principal, reportId, null, request).timestamp()).isNotNull();
         assertThat(controller.codeModules(principal, reportId, null, request).timestamp()).isNotNull();
@@ -51,11 +47,7 @@ class ReportControllerTests {
         assertThat(controller.comparisonDiffItems(principal, comparisonId, null, request).timestamp()).isNotNull();
         assertThat(controller.comparisonDiffItem(principal, comparisonId, diffId, request).timestamp()).isNotNull();
 
-        verify(reportService).createEvaluation(projectId, null, principal.id(), false, request);
         verify(reportService).list(projectId, null, principal.id(), false);
-        verify(reportService).latest(projectId, revisionId, principal.id(), false);
-        verify(reportService).readiness(projectId, revisionId, principal.id(), false);
-        verify(reportService).inputPreview(projectId, null, principal.id(), false);
         verify(reportService).get(reportId, principal.id(), false);
         verify(reportService).inputs(reportId, null, principal.id(), false);
         verify(organizationService).modules(reportId, null, principal.id(), false);
@@ -76,7 +68,7 @@ class ReportControllerTests {
         when(reportService.download(reportId, "json", principal.id(), false))
                 .thenReturn(new ReportService.DownloadableReport(resource, "report.json", "application/json"));
 
-        var response = controller.download(principal, reportId, "json");
+        var response = controller.download(principal, reportId, "json",null);
 
         assertThat(response.getBody()).isSameAs(resource);
         assertThat(response.getHeaders().getContentType().toString()).isEqualTo("application/json");

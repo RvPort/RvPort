@@ -213,7 +213,7 @@ public class TaskLogEvents extends TableImpl<TaskLogEventsRecord> {
     public List<Check<TaskLogEventsRecord>> getChecks() {
         return Arrays.asList(
             Internal.createCheck(this, DSL.name("ck_task_log_events_content"), "(((char_length(content) > 0) AND (char_length(content) <= 4000)))", true),
-            Internal.createCheck(this, DSL.name("ck_task_log_events_log_type"), "(((log_type)::text = ANY ((ARRAY['STDOUT'::character varying, 'STDERR'::character varying])::text[])))", true),
+            Internal.createCheck(this, DSL.name("ck_task_log_events_log_type"), "(((log_type)::text = ANY (ARRAY[('STDOUT'::character varying)::text, ('STDERR'::character varying)::text])))", true),
             Internal.createCheck(this, DSL.name("ck_task_log_events_sequence"), "((sequence > 0))", true)
         );
     }

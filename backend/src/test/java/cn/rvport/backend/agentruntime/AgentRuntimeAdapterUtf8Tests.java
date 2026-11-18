@@ -106,6 +106,30 @@ class AgentRuntimeAdapterUtf8Tests {
     }
 
     @Test
+    void onlyActualReportCliReceivesSandboxAndUpstreamProfileIsNotACommandArgument(@org.junit.jupiter.api.io.TempDir Path workspace) throws Exception {
+        var original=request("CODEX",workspace,"验证");
+        for(var wire:CodexProviderWireApi.values()) {
+            var model=new CodexProviderResolvedConfig(true,"codex",CodexProviderType.OPENAI_COMPATIBLE,
+                    "http://fixture.invalid/v1","personal-model",wire,"fixture-secret",1,60);
+            CodexProcessRunner inspect=(cmd,env,prompt,working,budget)->{
+                assertThat(working).isEqualTo(workspace);
+                assertThat(cmd).noneMatch(argument->argument.contains("fixture-secret"));
+                if(wire==CodexProviderWireApi.CHAT) {
+                    assertThat(env).containsEntry("RVPORT_OCX_REVIEW_WORKSPACE",workspace.toAbsolutePath().toString())
+                            .doesNotContainKey("RVPORT_REPORT_REVIEW_SANDBOX");
+                    assertThat(Path.of(env.get("RVPORT_OCX_HOME"),"report_review_sandbox.py")).isRegularFile();
+                } else {
+                    assertThat(env).containsEntry("RVPORT_REPORT_REVIEW_SANDBOX",workspace.toAbsolutePath().toString())
+                            .doesNotContainKey("RVPORT_OCX_HOME");
+                }
+                return new CodexProcessResult(0,false,"ok","");
+            };
+            assertThat(new CodexAgentRuntimeAdapter(inspect).run(new AgentRuntimeExecutionRequest(original.runtime(),
+                    model,workspace,original.prompt(),Duration.ofSeconds(5),true)).stdout()).isEqualTo("ok");
+        }
+    }
+
+    @Test
     void codexUsesUtf8StdinInsteadOfPromptArgument() throws Exception {
         CapturingRunner runner = new CapturingRunner();
         Path workspace = Files.createTempDirectory("codex-adapter-utf8-");

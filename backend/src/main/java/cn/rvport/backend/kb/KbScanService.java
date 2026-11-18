@@ -8,8 +8,6 @@ import cn.rvport.backend.common.path.ServerPathException;
 import cn.rvport.backend.common.path.ServerPathGuard;
 import cn.rvport.backend.common.web.PageResponse;
 import cn.rvport.backend.config.RvPortProperties;
-import cn.rvport.backend.kb.ai.KbAiExtensionRepository;
-import cn.rvport.backend.kb.ai.KbAiExtensionSuggestionResponse;
 import cn.rvport.backend.migration.MigrationInputSourceType;
 import cn.rvport.backend.migration.NodeReportInclusionService;
 import cn.rvport.backend.migration.NodeReportInclusionState;
@@ -57,7 +55,6 @@ public class KbScanService {
     private final RvPortProperties properties;
     private final StoredArtifactService storedArtifactService;
     private final NodeReportInclusionService nodeReportInclusionService;
-    private final KbAiExtensionRepository kbAiExtensionRepository;
     @Autowired
     private KbScanContextService scanContextService;
 
@@ -72,8 +69,7 @@ public class KbScanService {
             AuditLogService auditLogService,
             RvPortProperties properties,
             StoredArtifactService storedArtifactService,
-            NodeReportInclusionService nodeReportInclusionService,
-            KbAiExtensionRepository kbAiExtensionRepository
+            NodeReportInclusionService nodeReportInclusionService
     ) {
         this.kbScanRepository = kbScanRepository;
         this.sourceRepository = sourceRepository;
@@ -85,7 +81,6 @@ public class KbScanService {
         this.properties = properties;
         this.storedArtifactService = storedArtifactService;
         this.nodeReportInclusionService = nodeReportInclusionService;
-        this.kbAiExtensionRepository = kbAiExtensionRepository;
     }
 
     KbScanService(
@@ -96,11 +91,10 @@ public class KbScanService {
             AuditLogService auditLogService,
             RvPortProperties properties,
             StoredArtifactService storedArtifactService,
-            NodeReportInclusionService nodeReportInclusionService,
-            KbAiExtensionRepository kbAiExtensionRepository
+            NodeReportInclusionService nodeReportInclusionService
     ) {
         this(kbScanRepository, sourceRepository, projectAccessService, taskService, null, null, auditLogService,
-                properties, storedArtifactService, nodeReportInclusionService, kbAiExtensionRepository);
+                properties, storedArtifactService, nodeReportInclusionService);
     }
 
     @Transactional
@@ -204,11 +198,9 @@ public class KbScanService {
                     MigrationInputSourceType.KB_FINDING,
                     findingIds
             );
-            Map<UUID, KbAiExtensionSuggestionResponse> suggestions = kbAiExtensionRepository.latestSuggestions(run.id(), findingIds);
             Map<UUID, NodeReportInclusionState> inclusionStates = states == null ? Map.of() : states;
             List<FindingResponse> items = rawViews.stream()
-                    .map(view -> FindingResponse.from(view, inclusionStates.get(view.id()))
-                            .withAiExtension(suggestions.get(view.id())))
+                    .map(view -> FindingResponse.from(view, inclusionStates.get(view.id())))
                     .toList();
             return PageResponse.of(items, page, pageSize, total);
         } catch (IllegalArgumentException ex) {
@@ -225,10 +217,7 @@ public class KbScanService {
                 MigrationInputSourceType.KB_FINDING,
                 finding.id()
         );
-        KbAiExtensionSuggestionResponse suggestion = kbAiExtensionRepository
-                .latestSuggestion(finding.scanRunId(), finding.id())
-                .orElse(null);
-        return FindingResponse.from(finding, state).withAiExtension(suggestion);
+        return FindingResponse.from(finding, state);
     }
 
     @Transactional(readOnly = true)

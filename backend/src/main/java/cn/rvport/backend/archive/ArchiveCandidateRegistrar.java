@@ -7,7 +7,6 @@ import cn.rvport.backend.automatedtest.AutomatedTestRunView;
 import cn.rvport.backend.buildvalidation.BuildValidationRunView;
 import cn.rvport.backend.dependency.DependencyAnalysisView;
 import cn.rvport.backend.kb.KbScanView;
-import cn.rvport.backend.kb.ai.KbAiExtensionRunView;
 import cn.rvport.backend.report.ReportView;
 import cn.rvport.backend.reportcomparison.ReportComparisonRunView;
 import cn.rvport.backend.source.RecheckRunView;
@@ -172,25 +171,6 @@ public class ArchiveCandidateRegistrar {
                         "riskLevel", run.riskLevel() == null ? "" : run.riskLevel().name()
                 )),
                 artifact == null ? List.of() : artifactRefs("test-comparison", List.of(artifact))
-        ));
-    }
-
-    public void registerKbAiExtension(KbAiExtensionRunView run, Map<String, Object> summary, List<StoredArtifactView> artifacts) {
-        candidateService.upsert(new ArchiveCandidateUpsertCommand(
-                run.projectId(),
-                run.sourceRevisionId(),
-                ArchiveNodeType.KB_AI_EXTENSION,
-                ArchiveCandidateType.SUMMARY,
-                "kb-ai-extension",
-                "KB_AI_EXTENSION",
-                run.id(),
-                "知识库 AI 扩展",
-                merge(summary, Map.of(
-                        "kbAiExtensionRunId", run.id().toString(),
-                        "kbScanRunId", run.kbScanRunId().toString(),
-                        "status", run.status().name()
-                )),
-                artifactRefs("kb-ai-extension", artifacts)
         ));
     }
 

@@ -39,32 +39,18 @@ public class ReportController {
     private final ReportComparisonService reportComparisonService;
     private final ReportOrganizationService reportOrganizationService;
 
-    @Autowired
+    private final cn.rvport.backend.report.review.ReviewWorkspaceService reviews;
+
     public ReportController(
             ReportService reportService,
             ReportComparisonService reportComparisonService,
-            ReportOrganizationService reportOrganizationService
+            ReportOrganizationService reportOrganizationService,
+            cn.rvport.backend.report.review.ReviewWorkspaceService reviews
     ) {
         this.reportService = reportService;
         this.reportComparisonService = reportComparisonService;
         this.reportOrganizationService = reportOrganizationService;
-    }
-
-    ReportController(ReportService reportService, ReportComparisonService reportComparisonService) {
-        this(reportService, reportComparisonService, null);
-    }
-
-    @PostMapping("/api/projects/{projectId}/reports/evaluation")
-    public ApiResponse<TaskResponse> createEvaluation(
-            @AuthenticationPrincipal RvPortUserPrincipal principal,
-            @PathVariable UUID projectId,
-            @RequestBody(required = false) ReportGenerateRequest body,
-            HttpServletRequest request
-    ) {
-        return ApiResponse.ok(
-                reportService.createEvaluation(projectId, body, principal.id(), principal.superAdmin(), request),
-                TraceIdFilter.currentTraceId(request)
-        );
+        this.reviews=reviews;
     }
 
     @GetMapping("/api/projects/{projectId}/reports/evaluation")
@@ -76,45 +62,6 @@ public class ReportController {
     ) {
         return ApiResponse.ok(
                 reportService.list(projectId, query, principal.id(), principal.superAdmin()),
-                TraceIdFilter.currentTraceId(request)
-        );
-    }
-
-    @GetMapping("/api/projects/{projectId}/reports/evaluation/latest")
-    public ApiResponse<DomainLatestResponse<ReportResponse>> latestEvaluation(
-            @AuthenticationPrincipal RvPortUserPrincipal principal,
-            @PathVariable UUID projectId,
-            @RequestParam(required = false) UUID sourceRevisionId,
-            HttpServletRequest request
-    ) {
-        return ApiResponse.ok(
-                reportService.latest(projectId, sourceRevisionId, principal.id(), principal.superAdmin()),
-                TraceIdFilter.currentTraceId(request)
-        );
-    }
-
-    @GetMapping("/api/projects/{projectId}/reports/evaluation/readiness")
-    public ApiResponse<ReportReadinessResponse> readiness(
-            @AuthenticationPrincipal RvPortUserPrincipal principal,
-            @PathVariable UUID projectId,
-            @RequestParam(required = false) UUID sourceRevisionId,
-            HttpServletRequest request
-    ) {
-        return ApiResponse.ok(
-                reportService.readiness(projectId, sourceRevisionId, principal.id(), principal.superAdmin()),
-                TraceIdFilter.currentTraceId(request)
-        );
-    }
-
-    @GetMapping("/api/projects/{projectId}/reports/evaluation/input-preview")
-    public ApiResponse<PageResponse<ReportInputPreviewResponse>> inputPreview(
-            @AuthenticationPrincipal RvPortUserPrincipal principal,
-            @PathVariable UUID projectId,
-            @Valid @ModelAttribute ReportInputPreviewListRequest query,
-            HttpServletRequest request
-    ) {
-        return ApiResponse.ok(
-                reportService.inputPreview(projectId, query, principal.id(), principal.superAdmin()),
                 TraceIdFilter.currentTraceId(request)
         );
     }
@@ -148,9 +95,9 @@ public class ReportController {
     public ResponseEntity<Resource> download(
             @AuthenticationPrincipal RvPortUserPrincipal principal,
             @PathVariable UUID reportId,
-            @RequestParam String format
+            @RequestParam String format,@RequestParam(required=false) UUID confirmationId
     ) {
-        ReportService.DownloadableReport report = reportService.download(reportId, format, principal.id(), principal.superAdmin());
+        ReportService.DownloadableReport report = confirmationId!=null?reviews.download(reportId,confirmationId,format,principal.id(),principal.superAdmin()):reportService.download(reportId, format, principal.id(), principal.superAdmin());
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(report.contentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()

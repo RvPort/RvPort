@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 import cn.rvport.backend.audit.AuditLogService;
 import cn.rvport.backend.artifact.StoredArtifactService;
 import cn.rvport.backend.config.RvPortProperties;
-import cn.rvport.backend.kb.ai.KbAiExtensionRepository;
 import cn.rvport.backend.migration.NodeReportInclusionService;
 import cn.rvport.backend.project.ProjectAccessService;
 import cn.rvport.backend.source.SourceRepository;
@@ -50,8 +49,6 @@ class KbScanLatestServiceTests {
     private StoredArtifactService storedArtifactService;
     @Mock
     private NodeReportInclusionService nodeReportInclusionService;
-    @Mock
-    private KbAiExtensionRepository kbAiExtensionRepository;
 
     @Test
     void latestRetainsHistoryWhenActiveSourceIsMissingOrRuntimeChanged() throws Exception {
@@ -139,8 +136,7 @@ class KbScanLatestServiceTests {
                 auditLogService,
                 new RvPortProperties(null, null, null),
                 storedArtifactService,
-                nodeReportInclusionService,
-                kbAiExtensionRepository
+                nodeReportInclusionService
         );
         org.springframework.test.util.ReflectionTestUtils.setField(service, "scanContextService", scanContextService);
         return service;

@@ -25,9 +25,6 @@ import cn.rvport.backend.kb.KbScanArtifactType;
 import cn.rvport.backend.kb.KbScanInput;
 import cn.rvport.backend.kb.KbScanRepository;
 import cn.rvport.backend.kb.KbScanView;
-import cn.rvport.backend.migration.MigrationInputRepository;
-import cn.rvport.backend.migration.MigrationInputService;
-import cn.rvport.backend.migration.MigrationInputSourceType;
 import cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentRepository;
 import cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentView;
 import cn.rvport.backend.source.SourceRepository;
@@ -91,8 +88,6 @@ class KbScanRuntimeServiceTests {
     @Mock
     private ArchiveCandidateRegistrar archiveCandidateRegistrar;
     @Mock
-    private MigrationInputService migrationInputService;
-    @Mock
     private BuildValidationRepository buildValidationRepository;
     @Mock
     private ProjectRuntimeEnvironmentRepository runtimeEnvironmentRepository;
@@ -109,8 +104,6 @@ class KbScanRuntimeServiceTests {
         when(kbScanRepository.findByTaskId(taskId)).thenReturn(Optional.of(run));
         when(sourceRepository.findById(revision)).thenReturn(Optional.of(sourceRevision(project, revision, tempDir)));
         when(toolRunRepository.create(any(), any(), any(), any(), any(), any(), any())).thenReturn(UUID.randomUUID());
-        when(migrationInputService.syncSourceRefs(project, revision, MigrationInputSourceType.KB_FINDING, List.of()))
-                .thenReturn(new MigrationInputRepository.InsertResult(List.of(), 0));
         var current = new java.util.concurrent.atomic.AtomicReference<>(cn.rvport.backend.kb.KbContextFixtures.ready(project, revision));
         org.mockito.Mockito.doAnswer(call -> {
             if (Integer.valueOf(15).equals(call.getArgument(0)))
@@ -162,9 +155,6 @@ class KbScanRuntimeServiceTests {
         when(toolRunRepository.create(eq(projectId), eq(taskId), eq("kb-scanner"), any(), any(), eq(TaskStatus.RUNNING), any()))
                 .thenReturn(toolRunId);
         UUID findingId = UUID.randomUUID();
-        when(kbScanRepository.listFindingIds(scanId)).thenReturn(List.of(findingId));
-        when(migrationInputService.syncSourceRefs(projectId, sourceRevisionId, MigrationInputSourceType.KB_FINDING, List.of(findingId)))
-                .thenReturn(new MigrationInputRepository.InsertResult(List.of(), 0));
 
         service(scannerRoot).scan(input(projectId, sourceRevisionId), context);
 
@@ -193,7 +183,6 @@ class KbScanRuntimeServiceTests {
         assertThat(artifactCaptor.getAllValues()).allSatisfy(artifact -> assertThat(artifact.sha256()).hasSize(64));
         verify(kbScanRepository).markRunning(scanId);
         verify(kbScanRepository).markSucceeded(eq(scanId), any());
-        verify(migrationInputService).syncSourceRefs(projectId, sourceRevisionId, MigrationInputSourceType.KB_FINDING, List.of(findingId));
         verify(toolRunRepository).finish(eq(toolRunId), eq(TaskStatus.SUCCEEDED), eq(0), any());
         verify(context).progress(5, "准备 KB 扫描");
         verify(context).progress(15, "执行 KB Scanner");
@@ -233,9 +222,6 @@ class KbScanRuntimeServiceTests {
         when(sourceRepository.findById(sourceRevisionId)).thenReturn(Optional.of(sourceRevision(projectId, sourceRevisionId, sourceRoot)));
         when(toolRunRepository.create(eq(projectId), eq(taskId), eq("kb-scanner"), any(), any(), eq(TaskStatus.RUNNING), any()))
                 .thenReturn(toolRunId);
-        when(kbScanRepository.listFindingIds(scanId)).thenReturn(List.of());
-        when(migrationInputService.syncSourceRefs(projectId, sourceRevisionId, MigrationInputSourceType.KB_FINDING, List.of()))
-                .thenReturn(new MigrationInputRepository.InsertResult(List.of(), 0));
         org.mockito.Mockito.doThrow(new IllegalArgumentException("unsafe server path"))
                 .when(archiveCandidateRegistrar).registerKbScan(eq(run), any(), any());
 
@@ -266,9 +252,6 @@ class KbScanRuntimeServiceTests {
         when(sourceRepository.findById(sourceRevisionId)).thenReturn(Optional.of(sourceRevision(projectId, sourceRevisionId, sourceRoot)));
         when(toolRunRepository.create(eq(projectId), eq(taskId), eq("kb-scanner"), any(), any(), eq(TaskStatus.RUNNING), any()))
                 .thenReturn(toolRunId);
-        when(kbScanRepository.listFindingIds(scanId)).thenReturn(List.of());
-        when(migrationInputService.syncSourceRefs(projectId, sourceRevisionId, MigrationInputSourceType.KB_FINDING, List.of()))
-                .thenReturn(new MigrationInputRepository.InsertResult(List.of(), 0));
         KbScanRuntimeService service = service(fakeScannerWithBody("""
                 {"schemaVersion":"2.0","scan":{"scope":{"mode":"ALL","paths":[]}},"summary":{},"findings":[],"diagnostics":[]}
                 """, true));
@@ -303,9 +286,6 @@ class KbScanRuntimeServiceTests {
         when(sourceRepository.findById(sourceRevisionId)).thenReturn(Optional.of(sourceRevision(projectId, sourceRevisionId, sourceRoot)));
         when(toolRunRepository.create(eq(projectId), eq(taskId), eq("kb-scanner"), any(), any(), eq(TaskStatus.RUNNING), any()))
                 .thenReturn(toolRunId);
-        when(kbScanRepository.listFindingIds(scanId)).thenReturn(List.of());
-        when(migrationInputService.syncSourceRefs(projectId, sourceRevisionId, MigrationInputSourceType.KB_FINDING, List.of()))
-                .thenReturn(new MigrationInputRepository.InsertResult(List.of(), 0));
         org.mockito.Mockito.doReturn(buildRun(projectId, taskId, sourceRevisionId, sourceEnvironmentId, buildRunId, artifactId))
                 .when(scanContextService).requireExecution(any(), any());
         when(storedArtifactService.download(artifactId)).thenReturn(new StoredArtifactResource(
@@ -351,9 +331,6 @@ class KbScanRuntimeServiceTests {
         when(sourceRepository.findById(sourceRevisionId)).thenReturn(Optional.of(sourceRevision(projectId, sourceRevisionId, sourceRoot)));
         when(toolRunRepository.create(eq(projectId), eq(taskId), eq("kb-scanner"), any(), any(), eq(TaskStatus.RUNNING), any()))
                 .thenReturn(toolRunId);
-        when(kbScanRepository.listFindingIds(scanId)).thenReturn(List.of());
-        when(migrationInputService.syncSourceRefs(projectId, sourceRevisionId, MigrationInputSourceType.KB_FINDING, List.of()))
-                .thenReturn(new MigrationInputRepository.InsertResult(List.of(), 0));
         org.mockito.Mockito.doReturn(buildRun(projectId, taskId, sourceRevisionId, sourceEnvironmentId, buildRunId, artifactId))
                 .when(scanContextService).requireExecution(any(), any());
         when(storedArtifactService.download(artifactId)).thenThrow(new IllegalStateException("object missing"));
@@ -391,7 +368,7 @@ class KbScanRuntimeServiceTests {
         verify(kbScanRepository, org.mockito.Mockito.never()).markRunning(any());
         verify(kbScanRepository, org.mockito.Mockito.never()).markSucceeded(any(), any());
         verify(kbScanRepository, org.mockito.Mockito.never()).replaceFindings(any(), any());
-        org.mockito.Mockito.verifyNoInteractions(toolRunRepository, migrationInputService);
+        org.mockito.Mockito.verifyNoInteractions(toolRunRepository);
     }
     @Test
     void scanRejectsIncompatibleSchemaVersionAndMarksFailed() throws Exception {
@@ -414,7 +391,6 @@ class KbScanRuntimeServiceTests {
                 .hasMessage("KB Scanner 结果版本不兼容");
         verify(kbScanRepository).markFailed(eq(scanId), any());
         verify(toolRunRepository).finish(eq(toolRunId), eq(TaskStatus.FAILED), eq(0), any());
-        verify(migrationInputService, never()).syncSourceRefs(any(), any(), any(), any());
     }
 
     @Test
@@ -438,7 +414,6 @@ class KbScanRuntimeServiceTests {
                 .hasMessage("KB Scanner 执行失败");
         verify(kbScanRepository).markFailed(eq(scanId), any());
         verify(toolRunRepository).finish(eq(toolRunId), eq(TaskStatus.FAILED), eq(1), any());
-        verify(migrationInputService, never()).syncSourceRefs(any(), any(), any(), any());
     }
 
     @Test
@@ -479,9 +454,6 @@ class KbScanRuntimeServiceTests {
         when(sourceRepository.findById(sourceRevisionId)).thenReturn(Optional.of(sourceRevision(projectId, sourceRevisionId, sourceRoot)));
         when(toolRunRepository.create(eq(projectId), eq(taskId), eq("kb-scanner"), any(), any(), eq(TaskStatus.RUNNING), any()))
                 .thenReturn(toolRunId);
-        when(kbScanRepository.listFindingIds(scanId)).thenReturn(List.of());
-        when(migrationInputService.syncSourceRefs(projectId, sourceRevisionId, MigrationInputSourceType.KB_FINDING, List.of()))
-                .thenReturn(new MigrationInputRepository.InsertResult(List.of(), 0));
 
         String duplicatePayload = """
                 {
@@ -530,9 +502,6 @@ class KbScanRuntimeServiceTests {
         when(sourceRepository.findById(sourceRevisionId)).thenReturn(Optional.of(sourceRevision(projectId, sourceRevisionId, sourceRoot)));
         when(toolRunRepository.create(eq(projectId), eq(taskId), eq("kb-scanner"), any(), any(), eq(TaskStatus.RUNNING), any()))
                 .thenReturn(toolRunId);
-        when(kbScanRepository.listFindingIds(scanId)).thenReturn(List.of());
-        when(migrationInputService.syncSourceRefs(projectId, sourceRevisionId, MigrationInputSourceType.KB_FINDING, List.of()))
-                .thenReturn(new MigrationInputRepository.InsertResult(List.of(), 0));
 
         String payload = """
                 {
@@ -593,7 +562,6 @@ class KbScanRuntimeServiceTests {
         verify(kbScanRepository).markCancelled(eq(scanId), any());
         verify(toolRunRepository).finish(eq(toolRunId), eq(TaskStatus.CANCELLED), eq(null), any());
         verify(kbScanRepository, org.mockito.Mockito.never()).replaceFindings(eq(scanId), any());
-        verify(migrationInputService, never()).syncSourceRefs(any(), any(), any(), any());
     }
 
     @Test
@@ -748,7 +716,6 @@ class KbScanRuntimeServiceTests {
                 new ObjectMapper(),
                 storedArtifactService,
                 archiveCandidateRegistrar,
-                migrationInputService,
                 buildValidationRepository,
                 runtimeEnvironmentRepository
         );

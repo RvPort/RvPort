@@ -11,6 +11,7 @@ import cn.rvport.backend.jooq.tables.Projects.ProjectsPath;
 import cn.rvport.backend.jooq.tables.ReportComparisonRuns.ReportComparisonRunsPath;
 import cn.rvport.backend.jooq.tables.ReportFileContexts.ReportFileContextsPath;
 import cn.rvport.backend.jooq.tables.ReportInputs.ReportInputsPath;
+import cn.rvport.backend.jooq.tables.ReportReviewRuns.ReportReviewRunsPath;
 import cn.rvport.backend.jooq.tables.SourceRevisions.SourceRevisionsPath;
 import cn.rvport.backend.jooq.tables.Tasks.TasksPath;
 import cn.rvport.backend.jooq.tables.Users.UsersPath;
@@ -218,7 +219,7 @@ public class Reports extends TableImpl<ReportsRecord> {
 
     @Override
     public List<UniqueKey<ReportsRecord>> getUniqueKeys() {
-        return Arrays.asList(Keys.REPORTS_TASK_ID_KEY);
+        return Arrays.asList(Keys.REPORTS_PROJECT_SOURCE_ID_UK, Keys.REPORTS_TASK_ID_KEY);
     }
 
     @Override
@@ -327,6 +328,35 @@ public class Reports extends TableImpl<ReportsRecord> {
             _reportInputs = new ReportInputsPath(this, null, Keys.REPORT_INPUTS__REPORT_INPUTS_REPORT_ID_FKEY.getInverseKey());
 
         return _reportInputs;
+    }
+
+    private transient ReportReviewRunsPath _reportReviewRunsProjectIdSourceRevisionIdReportIdFkey;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_review_runs</code> table, via the
+     * <code>report_review_runs_project_id_source_revision_id_report_id_fkey</code>
+     * key
+     */
+    public ReportReviewRunsPath reportReviewRunsProjectIdSourceRevisionIdReportIdFkey() {
+        if (_reportReviewRunsProjectIdSourceRevisionIdReportIdFkey == null)
+            _reportReviewRunsProjectIdSourceRevisionIdReportIdFkey = new ReportReviewRunsPath(this, null, Keys.REPORT_REVIEW_RUNS__REPORT_REVIEW_RUNS_PROJECT_ID_SOURCE_REVISION_ID_REPORT_ID_FKEY.getInverseKey());
+
+        return _reportReviewRunsProjectIdSourceRevisionIdReportIdFkey;
+    }
+
+    private transient ReportReviewRunsPath _reportReviewRunsReportIdFkey;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_review_runs</code> table, via the
+     * <code>report_review_runs_report_id_fkey</code> key
+     */
+    public ReportReviewRunsPath reportReviewRunsReportIdFkey() {
+        if (_reportReviewRunsReportIdFkey == null)
+            _reportReviewRunsReportIdFkey = new ReportReviewRunsPath(this, null, Keys.REPORT_REVIEW_RUNS__REPORT_REVIEW_RUNS_REPORT_ID_FKEY.getInverseKey());
+
+        return _reportReviewRunsReportIdFkey;
     }
 
     @Override

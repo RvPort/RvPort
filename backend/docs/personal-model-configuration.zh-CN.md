@@ -9,7 +9,7 @@
 | 个人管理、绑定与测试 | `backend/src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java`、`ModelProfileService.java`、`ModelProfileRepository.java` |
 | 平台受管目录与删除 admin 路由 | `backend/src/main/java/cn/rvport/backend/agentruntime/`、`security/SecurityConfiguration.java` |
 | 配置主体与固定引用 | `backend/src/main/java/cn/rvport/backend/modelprofile/ModelConfigurationAccess.java`、`ModelExecutionSelection.java` |
-| 知识库 AI 创建、readiness 和执行 | `backend/src/main/java/cn/rvport/backend/kb/ai/` |
+| 报告 AI 复核创建、readiness 和执行 | `src/main/java/cn/rvport/backend/report/review/` |
 | 自动比较继承测试批次触发者 | `backend/src/main/java/cn/rvport/backend/testcomparison/`、`automatedtest/` |
 | worker probe 分派、恢复与归并 | `backend/src/main/java/cn/rvport/backend/modelprofile/CodexProbeDispatcher.java`、`CodexProbeJobRepository.java`、`CodexProbeRecovery.java` |
 | admin 归属迁移与历史保护 | `backend/src/main/resources/db/changelog/changes/0130-personal-model-configuration.sql` |
@@ -109,10 +109,12 @@ docker exec -e RVPORT_ACCEPTANCE_PROJECT=rvport-personal-model rvport-personal-m
 
 `apiKey` PATCH 缺省时保持原密钥，显式 null/空字符串清除，非空值加密更新；响应仅提供 `apiKeyConfigured`、`apiKeyMasked`，不返回原值。测试请求中的临时覆盖不更新配置；Codex CHAT 跨 worker 临时覆盖加密保存，终态、取消或超时清除。测试分项沿用 `message`/`message_en` 及原诊断结构。
 
+报告 AI 复核使用 `REPORT_AI_REVIEW`，替代原知识库 AI 建议阶段。全新初始化后，用户需在个人设置中为它选择一个自己的模型 profile 和一个平台提供的 Agent runtime。普通报告不调用模型；增强报告缺少绑定时拒绝创建，不自动降级。读取已发布报告不要求查看者配置模型。
+
 绑定例子：
 
 ```json
-{"assignments":[{"stage":"KB_AI_EXTENSION","modelProfileId":"本人-profile-UUID","agentRuntimeId":"平台-runtime-UUID"},{"stage":"TEST_LOG_COMPARE","modelProfileId":"本人-profile-UUID","agentRuntimeId":"平台-runtime-UUID"}]}
+{"assignments":[{"stage":"REPORT_AI_REVIEW","modelProfileId":"本人-profile-UUID","agentRuntimeId":"平台-runtime-UUID"},{"stage":"TEST_LOG_COMPARE","modelProfileId":"本人-profile-UUID","agentRuntimeId":"平台-runtime-UUID"}]}
 ```
 
 批次原子保存；重复或未知阶段、跨用户 profile、禁用 profile/runtime 均拒绝。个人名称大小写不敏感唯一，不同用户可以同名。轮询由 `:test-agents` 返回的 run ID，直到 `finishedAt` 非空；profile 的 `activeAgentProbeRun` 和 `agentProbeResults` 也只属于本人。跨用户 UUID 与不存在 UUID 均为 404；禁止通过其他账号 run ID 查询详情。
@@ -134,7 +136,7 @@ docker exec -e RVPORT_ACCEPTANCE_PROJECT=rvport-personal-model rvport-personal-m
 
 任务创建时固定引用。领取/自动重试复核账号、项目资格、profile 归属和启用、runtime 启用，并重新读取选定 profile 的当前参数；本次调用使用同一解析快照。排队改绑不会换掉既有引用，凭据修复可在下一次尝试生效。`TOOL` 日志的 `MODEL_EXECUTION` 记录主体、UUID、profile/runtime 更新时间，不记录地址、密钥、完整参数或 prompt。兼容性结果的 `details.modelExecution` 保存同类安全版本信息；worker 已保存的实际领取快照不会被 API 归并时的新版本覆盖。重复完成通知不会重跑已派生比较，包括 FAILED/UNAVAILABLE；自动重试由原任务机制处理。
 
-现有手动重新触发是创建新的 KB AI 执行或新的自动测试批次。新批次使用新操作者；同一旧批次的重复完成事件不是手动重新触发。本次不新增比较重跑 API。AI 项目产物继续按项目权限共享，只带必要执行引用，不返回触发者的完整个人配置；其他查看者缺少模型不会使历史项目结果失效。
+现有手动重新触发是生成新的 AI 增强报告或新的自动测试批次。新批次使用新操作者；同一旧批次的重复完成事件不是手动重新触发。本次不新增比较重跑 API。AI 项目产物继续按项目权限共享，只带必要执行引用，不返回触发者的完整个人配置；其他查看者缺少模型不会使历史项目结果失效。
 
 ## 发布、核验与回滚
 

@@ -1,7 +1,9 @@
 ## Purpose
 
-定义 RvPort 后端 MVP API 设计的接口边界、通用约定、认证用户管理、长任务实时通道和核心领域资源映射要求。
+定义 RvPort 后端 API 的接口边界、通用约定、认证用户管理、长任务实时通道及核心领域资源映射，包含四类分析报告、复核草稿、不可变确认清单与个人模型阶段配置的契约。
+
 ## Requirements
+
 ### Requirement: 后端 API 设计文档使用中文并落在 backend 内
 后端 API 设计 SHALL 在 backend 目录内维护中文文档，并 SHALL 以根目录 API 设计为底稿进行收敛，而不是原样复制旧接口边界。
 
@@ -1162,69 +1164,6 @@ MVP 测试 API SHALL 只暴露测试命令退出码和汇总计数，不 SHALL �
 - **THEN** 后端 MAY 保持原 URL 不做 `.git` 自动补齐
 - **AND** 后端 SHALL 继续执行非空和安全校验
 
-### Requirement: API 必须提供迁移输入列表和详情
-后端 API SHALL 提供源码版本作用域下的迁移输入 reference 列表、详情和状态更新接口。该 API SHALL 作为各分析节点内确认和报告输入审计的通用后端能力，不再作为独立迁移输入合并页面的主入口。
-
-#### Scenario: 查询源码版本迁移输入列表
-- **WHEN** 已登录用户调用 `GET /api/projects/{projectId}/source-revisions/{sourceRevisionId}/migration-inputs`
-- **THEN** 后端 SHALL 校验当前用户有权访问该项目
-- **AND** 后端 SHALL 校验源码版本属于该项目
-- **AND** 响应 SHALL 返回分页迁移输入 reference 列表
-- **AND** 列表项 SHALL 包含 `id`、`issueTitle`、`sourceType`、`sourceRefId`、`detectedLevel`、`locationLabel`、`recommendationSummary`、`status`、`createdAt` 和 `updatedAt`
-
-#### Scenario: 迁移输入列表过滤排序
-- **WHEN** 用户查询迁移输入列表
-- **THEN** API SHALL 支持按 `sourceType`、`detectedLevel`、`status` 和关键字过滤
-- **AND** API SHALL 支持按 `createdAt`、`updatedAt`、`sourceType`、`detectedLevel`、`status` 和 `issueTitle` 排序
-- **AND** 后端 MUST 拒绝不在白名单内的过滤或排序字段
-
-#### Scenario: 查询迁移输入详情
-- **WHEN** 已登录用户调用 `GET /api/migration-inputs/{migrationInputId}`
-- **THEN** 后端 SHALL 根据 reference 所属项目校验访问权限
-- **AND** 响应 SHALL 返回 reference 摘要和按来源类型展开的真实详情
-- **AND** 响应 MUST NOT 暴露服务器真实路径、完整任务输入快照或明文凭据
-
-#### Scenario: 更新迁移输入确认状态
-- **WHEN** 用户调用 `PATCH /api/migration-inputs/{migrationInputId}` 更新确认状态或备注
-- **THEN** 后端 SHALL 校验项目访问权限
-- **AND** `status` SHALL 只允许 `CANDIDATE`、`CONFIRMED` 或 `EXCLUDED`
-- **AND** 后端 SHALL 更新 reference 状态和更新时间
-
-### Requirement: API 必须支持迁移输入批量导入和自动合并
-后端 API SHALL 提供批量导入真实结果记录接口，供各分析节点将本节点结果加入当前源码版本迁移输入。自动合并当前前序结果接口 SHALL 不再作为新主流程入口。
-
-#### Scenario: 批量导入迁移输入
-- **WHEN** 已登录用户调用 `POST /api/projects/{projectId}/source-revisions/{sourceRevisionId}/migration-inputs:import`
-- **THEN** 请求 SHALL 包含 `sourceType` 和非空 `sourceRefIds`
-- **AND** 后端 SHALL 校验项目权限和源码版本归属
-- **AND** 后端 SHALL 将合法来源记录导入该源码版本迁移输入集合
-- **AND** 后端 SHALL 根据来源结果风险等级设置默认确认状态
-- **AND** 响应 SHALL 返回 `createdCount`、`skippedDuplicateCount` 和已创建 reference 摘要
-
-#### Scenario: 自动合并迁移输入已废弃
-- **WHEN** 已登录用户调用 `POST /api/projects/{projectId}/source-revisions/{sourceRevisionId}/migration-inputs:auto-merge`
-- **THEN** 后端 SHALL 返回 deprecated 业务错误或兼容响应
-- **AND** 新前端主流程 MUST NOT 调用该接口准备报告输入
-
-#### Scenario: 新流程拒绝 SBOM 来源导入
-- **WHEN** 已登录用户提交 `sourceType=SBOM_RESULT` 导入迁移输入
-- **THEN** 后端 SHALL 拒绝请求或返回 deprecated 业务错误
-- **AND** 后端 MUST NOT 为新流程创建新的 `SBOM_RESULT` reference
-
-### Requirement: API 报告生成必须只消费确认后的迁移输入
-后端报告生成 API SHALL 只使用当前源码版本下已确认的迁移输入 reference 作为报告内容来源。确认状态 MAY 由节点默认规则生成，也 MAY 由用户在各分析节点内人工调整。
-
-#### Scenario: 生成报告时读取确认项
-- **WHEN** 用户为某个源码版本生成迁移报告
-- **THEN** 后端 SHALL 查询该 `sourceRevisionId` 下 `status=CONFIRMED` 的迁移输入 reference
-- **AND** 后端 SHALL 按 `sourceType` 和 `sourceRefId` 回查真实来源详情构造报告内容
-- **AND** 后端 MUST NOT 直接把未确认的 KB findings、依赖分析 results 或历史 SBOM result items 写入报告
-
-#### Scenario: 无确认项生成报告
-- **WHEN** 当前源码版本没有已确认迁移输入
-- **THEN** 后端 SHALL 返回明确业务错误或生成空内容摘要
-- **AND** 行为 SHALL 在 API 文档中明确
-
 ### Requirement: API 必须支持新建环境前连接预检
 后端 API SHALL 提供不依赖 `environmentId` 的项目级环境连接预检接口，使前端能在新建环境提交前验证 SSH 连接配置。
 
@@ -1292,7 +1231,7 @@ MVP 测试 API SHALL 只暴露测试命令退出码和汇总计数，不 SHALL �
 - **THEN** 后端 SHALL 校验用户有该项目访问权限
 - **AND** 请求体 MAY 包含 `sourceRevisionId`
 - **AND** 未提交 `sourceRevisionId` 时后端 SHALL 使用项目当前 active source revision
-- **AND** 后端 SHALL 校验源码版本属于该项目
+- **AND** 后端 SHALL 校验源码版本属于该项目且为当前版本，要求至少一类当前有效成功分析，并固定 manifest；mode、selectionToken 和重新生成基线 SHALL 遵循报告复核契约
 - **AND** 响应 SHALL 返回报告生成任务的 `taskId`、任务类型和当前状态
 
 #### Scenario: 创建报告没有源码版本
@@ -1309,9 +1248,9 @@ MVP 测试 API SHALL 只暴露测试命令退出码和汇总计数，不 SHALL �
 
 #### Scenario: 查询最新迁移评估报告
 - **WHEN** 用户调用 `GET /api/projects/{projectId}/reports/evaluation/latest`
-- **THEN** 后端 SHALL 返回该项目最近生成或创建的评估报告摘要
+- **THEN** 后端 SHALL 分别返回仍有效的 currentReport、latestGeneration 和 currentFixList，不能以最近失败或进行中的任务遮蔽当前报告
 - **AND** 请求 MAY 支持 `sourceRevisionId` 过滤
-- **AND** 没有报告时 SHALL 返回空数据或明确的 not found 业务响应
+- **AND** 没有报告时 SHALL 返回 currentReport=null 及明确原因；最新任务和当前清单分别表达
 
 #### Scenario: 查询报告详情
 - **WHEN** 用户调用 `GET /api/reports/{reportId}`
@@ -1329,7 +1268,7 @@ MVP 测试 API SHALL 只暴露测试命令退出码和汇总计数，不 SHALL �
 #### Scenario: 下载报告
 - **WHEN** 用户调用 `GET /api/reports/{reportId}/download?format=HTML` 或 `format=JSON`
 - **THEN** 后端 SHALL 校验报告所属项目访问权限
-- **AND** 后端 SHALL 从对象存储制品或兼容的历史受控存储中返回对应格式的报告内容
+- **AND** 后端 SHALL 从新流程保存的受控对象存储制品中返回对应格式的报告内容
 - **AND** 后端 MUST NOT 支持未明确允许的格式
 - **AND** 响应 MUST NOT 暴露对象存储 bucket、object key 或服务器真实路径
 
@@ -1344,7 +1283,7 @@ MVP 测试 API SHALL 只暴露测试命令退出码和汇总计数，不 SHALL �
 #### Scenario: 创建报告比较
 - **WHEN** 前端在报告页面发起当前报告与历史报告比较
 - **THEN** 前端 SHALL 调用 `POST /api/reports/{reportId}/comparisons`
-- **AND** 请求体 MAY 包含 `baseReportId`
+- **AND** 请求体 MAY 包含 `baseReportId` 和 `basis`；basis 默认 REPORT_FACTS，CONFIRMED_FIX_LIST 必须提供明确两侧 confirmationId
 - **AND** 未传入 `baseReportId` 时后端 SHALL 自动选择上一份可比较历史报告
 - **AND** 响应 SHALL 返回比较运行 ID、任务 ID、状态、base report 摘要和 target report 摘要
 
@@ -1718,71 +1657,6 @@ MVP 测试 API SHALL 只暴露测试命令退出码和汇总计数，不 SHALL �
 - **THEN** 后端 API 设计 SHALL 标记其为 deprecated
 - **AND** 新流程文档 SHALL 引导前端使用依赖分析 API
 
-### Requirement: API 必须提供评估报告页 readiness
-后端 API SHALL 提供评估报告页 readiness 接口，用于返回当前源码版本下报告生成条件、输入统计、警告、最新报告和历史比较准备信息；没有 confirmed 输入 SHALL 表示当前报告输入为空，而不是报告生成阻塞条件。
-
-#### Scenario: 查询评估报告 readiness
-- **WHEN** 已登录用户调用 `GET /api/projects/{projectId}/reports/evaluation/readiness`
-- **THEN** 后端 MUST 校验当前用户对项目有访问权限
-- **AND** 请求 MAY 包含 `sourceRevisionId`
-- **AND** 未提交 `sourceRevisionId` 时后端 SHALL 使用项目当前 active source revision
-- **AND** 响应 SHALL 包含 `canGenerate`、`blockers`、`warnings`、`sourceRevision`、`inputSummary`、`latestReport`、`latestComparableReport` 和 `latestComparison`
-- **AND** 响应 MUST NOT 暴露服务器真实路径、对象存储内部 key、明文凭据或完整任务输入快照
-
-#### Scenario: readiness 校验源码版本归属
-- **WHEN** 用户提交的 `sourceRevisionId` 不属于 URL 中的项目
-- **THEN** 后端 SHALL 返回统一业务错误
-- **AND** 后端 MUST NOT 返回该源码版本或所属项目的详情
-
-#### Scenario: 缺少源码版本时返回阻塞原因
-- **WHEN** 当前源码版本不存在且请求未指定有效源码版本
-- **THEN** 响应 SHALL 返回 `canGenerate=false`
-- **AND** `blockers` SHALL 使用稳定错误码表达源码版本缺失
-- **AND** 接口 MUST NOT 创建异步报告任务
-
-#### Scenario: 没有 confirmed 输入时允许生成报告
-- **WHEN** 当前源码版本存在但 confirmed 输入数量为 0
-- **THEN** 响应 SHALL 返回 `canGenerate=true`
-- **AND** `inputSummary` SHALL 返回 confirmed 输入数量为 0
-- **AND** `blockers` MUST NOT 包含 confirmed 输入缺失错误
-- **AND** 后续报告创建接口 SHALL 允许创建生成全零报告的异步任务
-
-### Requirement: API 必须提供评估报告输入预览
-后端 API SHALL 提供当前源码版本的报告输入预览列表，供前端在评估报告页展示将进入报告或可人工处理的输入。
-
-#### Scenario: 查询评估报告输入预览
-- **WHEN** 已登录用户调用 `GET /api/projects/{projectId}/reports/evaluation/input-preview`
-- **THEN** 后端 MUST 校验当前用户对项目有访问权限
-- **AND** 请求 MAY 包含 `sourceRevisionId`
-- **AND** 未提交 `sourceRevisionId` 时后端 SHALL 使用项目当前 active source revision
-- **AND** 响应 SHALL 返回分页数据
-- **AND** 每条记录 SHALL 包含 `id`、`sourceType`、`sourceRefId`、`issueTitle`、`detectedLevel`、`locationLabel`、`status`、`recommendationSummary`、`note`、`updatedAt` 和受控来源定位摘要
-
-#### Scenario: 输入预览支持过滤排序
-- **WHEN** 用户调用输入预览接口并提交 `sourceType`、`status`、`riskLevel`、`keyword`、`page`、`pageSize`、`sortBy` 或 `sortDirection`
-- **THEN** 后端 SHALL 使用分页响应格式
-- **AND** 过滤条件 SHALL 使用 AND 语义组合
-- **AND** `sortBy` 白名单 SHALL 至少包含 `updatedAt`、`sourceType`、`status`、`detectedLevel`、`issueTitle` 和 `locationLabel`
-
-#### Scenario: 输入预览拒绝非法查询参数
-- **WHEN** 用户提交非法 `status`、非法 `sourceType`、非法 `riskLevel` 或非法排序字段
-- **THEN** API SHALL 返回统一参数校验错误
-- **AND** 后端 MUST NOT 将非法参数拼接到 SQL
-
-### Requirement: API 报告详情必须返回当前输入摘要
-后端 API SHALL 在评估报告详情响应中返回当前源码版本输入状态摘要，并 SHALL 保持历史报告快照不可变。
-
-#### Scenario: 报告详情包含当前输入状态
-- **WHEN** 已登录用户调用 `GET /api/reports/{reportId}`
-- **THEN** 后端 SHALL 返回历史报告 summary、artifact 摘要和源码版本摘要
-- **AND** 响应 SHALL 返回 `currentInputSummary`
-- **AND** `currentInputSummary` SHALL 包含总数、按状态统计、按来源统计、按风险统计和 LOW candidate 数量
-
-#### Scenario: 报告详情权限校验
-- **WHEN** 普通用户通过 reportId 查询其他用户项目的报告详情
-- **THEN** 后端 SHALL 返回访问拒绝或项目不存在错误
-- **AND** 后端 MUST NOT 泄露报告是否存在于其他项目
-
 ### Requirement: 构建和 KB API 必须返回 compile database 使用摘要
 后端 API SHALL 在构建详情和 KB 扫描详情中返回安全的 compile database 使用摘要，使前端能展示扫描是否使用了真实构建上下文。
 
@@ -2022,7 +1896,7 @@ KB finding 列表和详情 API SHALL 以 schema v2 的领域结构作为主要�
 - **WHEN** 前端查询特定 KB finding 详情
 - **THEN** 后端 SHALL 返回完整 v2 finding payload
 - **AND** 返回内容 SHALL 包含 `fact`、`conclusion`、`occurrences` 和 `evidenceChain`
-- **AND** 返回内容 SHALL 包含当前人工确认状态、报告纳入状态和 AI 扩展建议
+- **AND** 返回内容 SHALL 包含真实报告纳入状态；旧节点人工确认字段 SHALL 删除；MUST NOT 动态附加旧 AI 扩展建议，人工复核状态 SHALL 从具体报告草稿读取
 
 #### Scenario: 查询 finding 代码上下文
 - **WHEN** 前端查询特定 finding 的代码上下文
@@ -2126,9 +2000,9 @@ API SHALL 分别提供浮点精度与内存序分析的创建、latest、运行�
 - **THEN** API SHALL 返回稳定分页结果和总数
 
 #### Scenario: 查询 Finding 列表
-- **WHEN** 用户按 severity、confidence、status、code、category、filePath、关键字或确认状态过滤并按 severity、path、line、code 或 createdAt 排序
+- **WHEN** 用户按 severity、confidence、status、code、category、filePath、关键字过滤并按 severity、path、line、code 或 createdAt 排序
 - **THEN** API SHALL 返回稳定分页结果
-- **AND** 每条 SHALL 返回 migrationInputRefId、migrationInputStatus、confirmedForNextReport 和 includedInLatestReport
+- **AND** 每条 SHALL 返回真实 includedInLatestReport；MUST NOT 返回旧 migrationInputRefId、migrationInputStatus、confirmedForNextReport，人工状态在报告复核接口查询
 
 #### Scenario: 非法查询字段
 - **WHEN** 用户传入未列入白名单的排序、过滤或分页值
@@ -2291,7 +2165,7 @@ API SHALL 分别提供浮点精度与内存序分析的创建、latest、运行�
 - **AND** 任一必需任务未完成时 MUST NOT 提示已具备归档条件
 
 ### Requirement: 个人模型配置 API 必须按认证所有者授权
-后端 API SHALL 为已认证配置所有者提供模型 profile 管理、安全 agent runtime 目录，以及 `TEST_LOG_COMPARE`、`KB_AI_EXTENSION` 两个阶段的个人模型/agent 绑定接口。旧 `codex-provider` 单例配置 API SHALL NOT 继续作为管理入口保留，受控业务阶段的模型和 agent 选择 SHALL 以个人模型 profile、平台 agent runtime 和个人阶段绑定为事实来源。
+后端 API SHALL 为已认证配置所有者提供模型 profile 管理、安全 agent runtime 目录，以及 `TEST_LOG_COMPARE`、`REPORT_AI_REVIEW` 两个阶段的个人模型/agent 绑定接口。旧 `codex-provider` 单例配置 API SHALL NOT 继续作为管理入口保留，受控业务阶段的模型和 agent 选择 SHALL 以个人模型 profile、平台 agent runtime 和个人阶段绑定为事实来源。
 
 #### Scenario: 查询模型 profile 列表
 - **WHEN** 已认证配置所有者调用 `GET /api/me/model-profiles`
@@ -2333,7 +2207,7 @@ API SHALL 分别提供浮点精度与内存序分析的创建、latest、运行�
 #### Scenario: 查询和保存阶段模型绑定
 - **WHEN** 已认证配置所有者调用 `GET /api/me/model-stage-assignments` 或 `PATCH /api/me/model-stage-assignments`
 - **THEN** API SHALL 返回或保存当前用户两个受控阶段到本人模型 profile 和平台 agent runtime 的绑定
-- **AND** 阶段名称 SHALL 使用后端白名单枚举，当前允许 `TEST_LOG_COMPARE` 和 `KB_AI_EXTENSION`
+- **AND** 阶段名称 SHALL 使用后端白名单枚举，当前允许 `TEST_LOG_COMPARE` 和 `REPORT_AI_REVIEW`
 - **AND** 绑定目标 SHALL 为本人已启用模型 profile 和已启用 agent runtime
 - **AND** 响应 MUST NOT 返回 API key 明文、密文、完整 agent 命令或完整 prompt
 
@@ -2344,7 +2218,7 @@ API SHALL 分别提供浮点精度与内存序分析的创建、latest、运行�
 
 #### Scenario: 模型配置 API 不直接暴露模型调用能力
 - **WHEN** 前端配置模型 profile、agent runtime 和阶段绑定
-- **THEN** 后端 SHALL 只保存、查询、测试配置以及为后续测试结果比较 agent runtime 提供阶段解析
+- **THEN** 后端 SHALL 只保存、查询、测试配置以及为测试结果比较和报告 AI 复核提供个人阶段解析
 - **AND** 后端 MUST NOT 通过配置 API 提供任意提示词执行或直接 LLM 调用能力
 
 #### Scenario: 普通用户和 admin 使用个人配置
@@ -2382,3 +2256,37 @@ API SHALL 分别提供浮点精度与内存序分析的创建、latest、运行�
 - **WHEN** 客户端调用 `/api/me/model-profiles/{profileId}:test` 等个人接口
 - **THEN** 后端 SHALL 验证本人归属并保留主要响应字段、脱敏及双语诊断
 - **AND** 单 Agent 入口 SHALL 保持有界同步语义，异步多 runtime 入口 SHALL 返回可轮询 run；前端适配由独立工作完成
+
+### Requirement: 报告 API 必须统一候选模式和当前状态
+后端 SHALL 扩展现有 reports/evaluation 创建、readiness、input-preview、history/latest 和报告详情，返回四类有效候选、生成模式、个人 AI 资格、当前报告/最近任务/清单状态。
+
+#### Scenario: 有效来源与模式
+- **WHEN** 请求生成或预览
+- **THEN** SHALL 至少一类有效成功分析，普通与 AI 资格分开；mode 必填，缺失返回参数错误，不能静默切换用户指定 AI。
+
+#### Scenario: 当前与历史
+- **WHEN** 查询 latest 或历史详情
+- **THEN** SHALL currentReport/latestGeneration 分开，历史内容不重算；固定摘要与草稿/确认摘要分开，接口无真实路径/秘密。
+
+#### Scenario: 阶段 readiness
+- **WHEN** 查询项目 report 阶段
+- **THEN** SHALL 返回来源资格与清单确认事实，保留原 status 枚举及无 UI 按钮约束；不能以 INCLUDED_FINDINGS 默认满足代替分析资格。
+
+### Requirement: 报告 API 必须提供统一处置框选和确认契约
+后端 SHALL 提供 review-items 的 GET/详情/POST/PATCH、已知 source-files/context、fix-list-confirmations 创建/分页/详情；复用任务/SSE 和受控下载，不按每个处置动作拆接口。
+
+#### Scenario: 一条多条同接口
+- **WHEN** 客户端提交 PATCH items
+- **THEN** SHALL 按同一版本/权限/原子语义执行 INCLUDE/EXCLUDE/RESTORE，返回草稿版本、全局统计和确认可用性。
+
+#### Scenario: 框选与确认
+- **WHEN** 新增人工问题或确认草稿
+- **THEN** SHALL 校验源码 hash/range 或全局待复核数量，拒绝越权/历史写入，支持空清单；读历史确认不读取当前草稿。
+
+#### Scenario: 完整列表
+- **WHEN** 列表超过一页或带文件过滤
+- **THEN** SHALL 提供稳定分页筛选排序、全局与过滤统计、版本冲突；依赖无源码仍在全局问题中。
+
+#### Scenario: 对接文档
+- **WHEN** 交付后端
+- **THEN** SHALL 固化请求响应、双语说明、错误码、任务恢复、Context/权限、限制和可重复联调夹具，前端本轮不修改。

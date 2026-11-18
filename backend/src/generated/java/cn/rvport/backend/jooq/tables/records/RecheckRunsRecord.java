@@ -162,6 +162,62 @@ public class RecheckRunsRecord extends UpdatableRecordImpl<RecheckRunsRecord> {
         return (OffsetDateTime) get(9);
     }
 
+    /**
+     * Setter for <code>public.recheck_runs.base_report_id</code>.
+     */
+    public void setBaseReportId(UUID value) {
+        set(10, value);
+    }
+
+    /**
+     * Getter for <code>public.recheck_runs.base_report_id</code>.
+     */
+    public UUID getBaseReportId() {
+        return (UUID) get(10);
+    }
+
+    /**
+     * Setter for <code>public.recheck_runs.target_report_id</code>.
+     */
+    public void setTargetReportId(UUID value) {
+        set(11, value);
+    }
+
+    /**
+     * Getter for <code>public.recheck_runs.target_report_id</code>.
+     */
+    public UUID getTargetReportId() {
+        return (UUID) get(11);
+    }
+
+    /**
+     * Setter for <code>public.recheck_runs.base_confirmation_id</code>.
+     */
+    public void setBaseConfirmationId(UUID value) {
+        set(12, value);
+    }
+
+    /**
+     * Getter for <code>public.recheck_runs.base_confirmation_id</code>.
+     */
+    public UUID getBaseConfirmationId() {
+        return (UUID) get(12);
+    }
+
+    /**
+     * Setter for <code>public.recheck_runs.target_confirmation_id</code>.
+     */
+    public void setTargetConfirmationId(UUID value) {
+        set(13, value);
+    }
+
+    /**
+     * Getter for <code>public.recheck_runs.target_confirmation_id</code>.
+     */
+    public UUID getTargetConfirmationId() {
+        return (UUID) get(13);
+    }
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -185,7 +241,7 @@ public class RecheckRunsRecord extends UpdatableRecordImpl<RecheckRunsRecord> {
     /**
      * Create a detached, initialised RecheckRunsRecord
      */
-    public RecheckRunsRecord(UUID id, UUID projectId, UUID taskId, UUID baseSourceRevisionId, UUID targetSourceRevisionId, UUID baseScanRunId, UUID targetScanRunId, JSONB summary, String status, OffsetDateTime createdAt) {
+    public RecheckRunsRecord(UUID id, UUID projectId, UUID taskId, UUID baseSourceRevisionId, UUID targetSourceRevisionId, UUID baseScanRunId, UUID targetScanRunId, JSONB summary, String status, OffsetDateTime createdAt, UUID baseReportId, UUID targetReportId, UUID baseConfirmationId, UUID targetConfirmationId) {
         super(RecheckRuns.RECHECK_RUNS);
 
         setId(id);
@@ -198,6 +254,10 @@ public class RecheckRunsRecord extends UpdatableRecordImpl<RecheckRunsRecord> {
         setSummary(summary);
         setStatus(status);
         setCreatedAt(createdAt);
+        setBaseReportId(baseReportId);
+        setTargetReportId(targetReportId);
+        setBaseConfirmationId(baseConfirmationId);
+        setTargetConfirmationId(targetConfirmationId);
         resetTouchedOnNotNull();
     }
 }

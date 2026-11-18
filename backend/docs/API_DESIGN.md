@@ -75,12 +75,6 @@ The index contains 171 routes, including 3 SSE endpoints.
 | `GET` | `/api/environments/{environmentId}/snapshots` | [EnvironmentController.java](../src/main/java/cn/rvport/backend/environment/EnvironmentController.java) |
 | `GET` | `/health` | [HealthController.java](../src/main/java/cn/rvport/backend/health/HealthController.java) |
 | `GET` | `/api/health` | [HealthController.java](../src/main/java/cn/rvport/backend/health/HealthController.java) |
-| `POST` | `/api/projects/{projectId}/kb-scans/{scanId}/ai-extensions` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
-| `GET` | `/api/projects/{projectId}/kb-ai-extensions` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
-| `GET` | `/api/projects/{projectId}/kb-scans/{scanId}/ai-extension-readiness` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
-| `GET` | `/api/kb-ai-extensions/{runId}` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
-| `GET` | `/api/kb-ai-extensions/{runId}/artifacts` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
-| `GET` | `/api/kb-ai-extensions/{runId}/artifacts/{artifactId}/download` | [KbAiExtensionController.java](../src/main/java/cn/rvport/backend/kb/ai/KbAiExtensionController.java) |
 | `POST` | `/api/projects/{projectId}/kb-scans` | [KbScanController.java](../src/main/java/cn/rvport/backend/kb/KbScanController.java) |
 | `GET` | `/api/projects/{projectId}/kb-scans` | [KbScanController.java](../src/main/java/cn/rvport/backend/kb/KbScanController.java) |
 | `GET` | `/api/projects/{projectId}/kb-scans/latest` | [KbScanController.java](../src/main/java/cn/rvport/backend/kb/KbScanController.java) |
@@ -94,11 +88,6 @@ The index contains 171 routes, including 3 SSE endpoints.
 | `GET` | `/api/admin/configs/mail` | [MailConfigController.java](../src/main/java/cn/rvport/backend/mail/MailConfigController.java) |
 | `PATCH` | `/api/admin/configs/mail` | [MailConfigController.java](../src/main/java/cn/rvport/backend/mail/MailConfigController.java) |
 | `POST` | `/api/admin/configs/mail:test` | [MailConfigController.java](../src/main/java/cn/rvport/backend/mail/MailConfigController.java) |
-| `GET` | `/api/projects/{projectId}/source-revisions/{sourceRevisionId}/migration-inputs` | [MigrationInputController.java](../src/main/java/cn/rvport/backend/migration/MigrationInputController.java) |
-| `POST` | `/api/projects/{projectId}/source-revisions/{sourceRevisionId}/migration-inputs:import` | [MigrationInputController.java](../src/main/java/cn/rvport/backend/migration/MigrationInputController.java) |
-| `POST` | `/api/projects/{projectId}/source-revisions/{sourceRevisionId}/migration-inputs:auto-merge` | [MigrationInputController.java](../src/main/java/cn/rvport/backend/migration/MigrationInputController.java) |
-| `GET` | `/api/migration-inputs/{migrationInputId}` | [MigrationInputController.java](../src/main/java/cn/rvport/backend/migration/MigrationInputController.java) |
-| `PATCH` | `/api/migration-inputs/{migrationInputId}` | [MigrationInputController.java](../src/main/java/cn/rvport/backend/migration/MigrationInputController.java) |
 | `GET` | `/api/admin/model-profiles` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
 | `POST` | `/api/admin/model-profiles` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
 | `GET` | `/api/admin/model-profiles/{profileId}` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
@@ -109,8 +98,8 @@ The index contains 171 routes, including 3 SSE endpoints.
 | `POST` | `/api/admin/model-profiles/{profileId}:test-agents` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
 | `GET` | `/api/admin/model-profile-agent-test-runs/{runId}` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
 | `GET` | `/api/admin/model-profiles/{profileId}/agent-probe-results` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
-| `GET` | `/api/admin/model-stage-assignments` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
-| `PATCH` | `/api/admin/model-stage-assignments` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
+| `GET` | `/api/me/model-stage-assignments` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
+| `PATCH` | `/api/me/model-stage-assignments` | [ModelProfileController.java](../src/main/java/cn/rvport/backend/modelprofile/ModelProfileController.java) |
 | `GET` | `/api/projects/{projectId}/optimization/overview` | [OptimizationCycleController.java](../src/main/java/cn/rvport/backend/optimization/OptimizationCycleController.java) |
 | `GET` | `/api/projects/{projectId}/optimization/cycles` | [OptimizationCycleController.java](../src/main/java/cn/rvport/backend/optimization/OptimizationCycleController.java) |
 | `GET` | `/api/projects/{projectId}/optimization-cycles/latest` | [OptimizationCycleController.java](../src/main/java/cn/rvport/backend/optimization/OptimizationCycleController.java) |
@@ -122,11 +111,11 @@ The index contains 171 routes, including 3 SSE endpoints.
 | `GET` | `/api/projects/{projectId}/overview` | [ProjectController.java](../src/main/java/cn/rvport/backend/project/ProjectController.java) |
 | `GET` | `/api/projects/{projectId}/runtime-environments` | [ProjectRuntimeEnvironmentController.java](../src/main/java/cn/rvport/backend/project/runtime/ProjectRuntimeEnvironmentController.java) |
 | `PATCH` | `/api/projects/{projectId}/runtime-environments` | [ProjectRuntimeEnvironmentController.java](../src/main/java/cn/rvport/backend/project/runtime/ProjectRuntimeEnvironmentController.java) |
-| `POST` | `/api/projects/{projectId}/reports/evaluation` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
+| `POST` | `/api/projects/{projectId}/reports/evaluation` | [ReportReviewGenerationController.java](../src/main/java/cn/rvport/backend/report/review/ReportReviewGenerationController.java) |
 | `GET` | `/api/projects/{projectId}/reports/evaluation` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
-| `GET` | `/api/projects/{projectId}/reports/evaluation/latest` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
-| `GET` | `/api/projects/{projectId}/reports/evaluation/readiness` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
-| `GET` | `/api/projects/{projectId}/reports/evaluation/input-preview` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
+| `GET` | `/api/projects/{projectId}/reports/evaluation/latest` | [ReportReviewGenerationController.java](../src/main/java/cn/rvport/backend/report/review/ReportReviewGenerationController.java) |
+| `GET` | `/api/projects/{projectId}/reports/evaluation/readiness` | [ReportReviewGenerationController.java](../src/main/java/cn/rvport/backend/report/review/ReportReviewGenerationController.java) |
+| `GET` | `/api/projects/{projectId}/reports/evaluation/input-preview` | [ReportReviewGenerationController.java](../src/main/java/cn/rvport/backend/report/review/ReportReviewGenerationController.java) |
 | `GET` | `/api/reports/{reportId}` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
 | `GET` | `/api/reports/{reportId}/inputs` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
 | `GET` | `/api/reports/{reportId}/download` | [ReportController.java](../src/main/java/cn/rvport/backend/report/ReportController.java) |
@@ -179,3 +168,5 @@ The index contains 171 routes, including 3 SSE endpoints.
 | `GET` | `/api/admin/workers/{workerInstanceId}` | [AdminWorkerController.java](../src/main/java/cn/rvport/backend/worker/AdminWorkerController.java) |
 | `PUT` | `/api/admin/workers/{workerInstanceId}/concurrency` | [AdminWorkerController.java](../src/main/java/cn/rvport/backend/worker/AdminWorkerController.java) |
 | `GET` | `/api/projects/{projectId}/readiness` | [StageReadinessController.java](../src/main/java/cn/rvport/backend/workflow/StageReadinessController.java) |
+
+See [result assessment and confirmed fix lists (Chinese)](report-review.zh-CN.md) for the review workflow and API examples.

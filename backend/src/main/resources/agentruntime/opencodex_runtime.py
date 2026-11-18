@@ -156,7 +156,11 @@ def run(command, env, deadline, cancelled):
         url = 'http://127.0.0.1:' + str(guard.server_port) + '/v1'
         codex_env = {**base, 'HOME': str(codex_home), 'CODEX_HOME': str(codex_home),
             'OPENAI_API_KEY': token, 'OPENAI_BASE_URL': url, 'OPENAI_MODEL': env['OPENAI_MODEL']}
-        codex = subprocess.Popen(local_command(command, url), env=codex_env)
+        cli_command = local_command(command, url)
+        if env.get('RVPORT_OCX_REVIEW_WORKSPACE'):
+            codex_env['RVPORT_REPORT_REVIEW_SANDBOX'] = env['RVPORT_OCX_REVIEW_WORKSPACE']
+            cli_command = [sys.executable, str(home / 'report_review_sandbox.py'), *cli_command]
+        codex = subprocess.Popen(cli_command, env=codex_env)
         while time.monotonic() < deadline and not cancelled.is_set():
             if proxy.poll() is not None:
                 raise RuntimeError('PROXY_EXITED')

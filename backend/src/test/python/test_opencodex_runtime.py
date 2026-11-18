@@ -157,7 +157,12 @@ def test_runtime_separates_credentials_and_cleans(tmp_path, monkeypatch, scenari
            'PATH': '/bin', 'UNRELATED_SECRET': 'other-secret'}
     command = ['codex', 'model_providers.rvport-openai-compatible.base_url="old"']
     if scenario == 'ok':
+        env['RVPORT_OCX_REVIEW_WORKSPACE'] = '/fixture/review'
         assert runtime.run(command, env, time.monotonic()+3, cancelled) == 0
+        assert calls[1][0][1] == str(tmp_path / 'report_review_sandbox.py')
+        assert calls[1][1]['env']['RVPORT_REPORT_REVIEW_SANDBOX'] == '/fixture/review'
+        assert 'RVPORT_OCX_HOME' not in calls[1][1]['env']
+        assert calls[1][1]['env']['OPENAI_API_KEY'] != 'private-key'
     else:
         with pytest.raises((ValueError, RuntimeError, TimeoutError)):
             runtime.run(command, env, time.monotonic()+3, cancelled)

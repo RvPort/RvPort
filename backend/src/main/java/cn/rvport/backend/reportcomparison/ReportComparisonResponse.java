@@ -20,7 +20,10 @@ public record ReportComparisonResponse(
         OffsetDateTime startedAt,
         OffsetDateTime finishedAt,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        ReportComparisonBasis basis,
+        UUID baseConfirmationId,
+        UUID targetConfirmationId
 ) {
     public static ReportComparisonResponse from(
             ReportComparisonRunView run,
@@ -42,7 +45,8 @@ public record ReportComparisonResponse(
                 run.startedAt(),
                 run.finishedAt(),
                 run.createdAt(),
-                run.updatedAt()
+                run.updatedAt(),
+                run.basis(), run.baseConfirmationId(), run.targetConfirmationId()
         );
     }
 }

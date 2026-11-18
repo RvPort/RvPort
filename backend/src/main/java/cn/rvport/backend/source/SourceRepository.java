@@ -2,7 +2,6 @@ package cn.rvport.backend.source;
 
 import static cn.rvport.backend.jooq.tables.SourceImports.SOURCE_IMPORTS;
 import static cn.rvport.backend.jooq.tables.SourceRevisions.SOURCE_REVISIONS;
-import static cn.rvport.backend.jooq.tables.MigrationInputSets.MIGRATION_INPUT_SETS;
 
 import cn.rvport.backend.jooq.tables.records.SourceImportsRecord;
 import cn.rvport.backend.jooq.tables.records.SourceRevisionsRecord;
@@ -94,7 +93,6 @@ public class SourceRepository {
                 .set(SOURCE_REVISIONS.CREATED_BY, createdBy)
                 .returning()
                 .fetchOne();
-        ensureMigrationInputSet(projectId, id);
         return SourceRevisionView.from(record);
     }
 
@@ -125,7 +123,6 @@ public class SourceRepository {
                 .set(SOURCE_REVISIONS.CREATED_BY, createdBy)
                 .returning()
                 .fetchOne();
-        ensureMigrationInputSet(projectId, id);
         return SourceRevisionView.from(record);
     }
 
@@ -200,14 +197,6 @@ public class SourceRepository {
         return condition;
     }
 
-    private void ensureMigrationInputSet(UUID projectId, UUID sourceRevisionId) {
-        dsl.insertInto(MIGRATION_INPUT_SETS)
-                .set(MIGRATION_INPUT_SETS.PROJECT_ID, projectId)
-                .set(MIGRATION_INPUT_SETS.SOURCE_REVISION_ID, sourceRevisionId)
-                .set(MIGRATION_INPUT_SETS.STATUS, "ACTIVE")
-                .onConflictDoNothing()
-                .execute();
-    }
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();

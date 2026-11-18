@@ -252,7 +252,7 @@ public class ModelStageAssignments extends TableImpl<ModelStageAssignmentsRecord
     @Override
     public List<Check<ModelStageAssignmentsRecord>> getChecks() {
         return Arrays.asList(
-            Internal.createCheck(this, DSL.name("model_stage_assignments_stage_chk"), "((stage = ANY (ARRAY['TEST_LOG_COMPARE'::text, 'KB_AI_EXTENSION'::text])))", true)
+            Internal.createCheck(this, DSL.name("model_stage_assignments_stage_chk"), "((stage = ANY (ARRAY['REPORT_AI_REVIEW'::text, 'TEST_LOG_COMPARE'::text])))", true)
         );
     }
 

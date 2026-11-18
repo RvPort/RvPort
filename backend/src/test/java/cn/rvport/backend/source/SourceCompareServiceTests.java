@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.common.web.PageResponse;
 import cn.rvport.backend.project.ProjectAccessService;
+import cn.rvport.backend.report.review.CurrentFixListResolver;
+import cn.rvport.backend.report.review.ReviewWorkspaceRepository;
 import cn.rvport.backend.task.RvPortTaskTypes;
 import cn.rvport.backend.task.TaskRepository;
 import cn.rvport.backend.task.TaskResponse;
@@ -26,6 +28,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class SourceCompareServiceTests {
 
+    private final UUID baseList = UUID.randomUUID(), targetList = UUID.randomUUID();
+    private final UUID baseReport = UUID.randomUUID(), targetReport = UUID.randomUUID();
+    @Mock CurrentFixListResolver fixLists;
+    @Mock ReviewWorkspaceRepository reviews;
+
+    private void current(UUID project) {
+        when(fixLists.current(project)).thenReturn(new CurrentFixListResolver.Current(true,targetReport,targetList,1L,0,"CONFIRMED_EMPTY"));
+    }
     @Mock
     private SourceRepository sourceRepository;
 
@@ -50,13 +60,15 @@ class SourceCompareServiceTests {
         RecheckRunView recheckRun = recheckRun(projectId, previous.id(), current.id(), TaskStatus.SUCCEEDED);
         DiffSummaryResponse summary = new DiffSummaryResponse(
                 2,
-                Map.of("NEW", 1L, "RESOLVED", 1L),
+                Map.of("NEW", 1L, "NOT_OBSERVED", 1L),
                 Map.of("KB_FINDING", 2L),
                 Map.of("high", 1L)
         );
         when(sourceRepository.findActive(projectId)).thenReturn(Optional.of(current));
         when(sourceRepository.findPrevious(projectId, current.id(), current.createdAt())).thenReturn(Optional.of(previous));
-        when(sourceCompareRepository.latestRecheckRun(projectId, previous.id(), current.id())).thenReturn(Optional.of(recheckRun));
+        current(projectId);
+        when(sourceCompareRepository.latestConfirmation(projectId, previous.id())).thenReturn(Optional.of(baseList));
+        when(sourceCompareRepository.latestRecheckRun(projectId, baseList, targetList)).thenReturn(Optional.of(recheckRun));
         when(sourceCompareRepository.diffSummary(projectId, recheckRun.id())).thenReturn(summary);
 
         LatestSourceCompareResponse response = service().latest(projectId, actorId, false);
@@ -109,7 +121,9 @@ class SourceCompareServiceTests {
         SourceRevisionView current = revision(projectId, UUID.randomUUID(), true, OffsetDateTime.now());
         when(sourceRepository.findActive(projectId)).thenReturn(Optional.of(current));
         when(sourceRepository.findPrevious(projectId, current.id(), current.createdAt())).thenReturn(Optional.of(previous));
-        when(sourceCompareRepository.latestRecheckRun(projectId, previous.id(), current.id())).thenReturn(Optional.empty());
+        current(projectId);
+        when(sourceCompareRepository.latestConfirmation(projectId, previous.id())).thenReturn(Optional.of(baseList));
+        when(sourceCompareRepository.latestRecheckRun(projectId, baseList, targetList)).thenReturn(Optional.empty());
 
         LatestSourceCompareResponse response = service().latest(projectId, actorId, false);
 
@@ -126,7 +140,9 @@ class SourceCompareServiceTests {
         RecheckRunView recheckRun = recheckRun(projectId, previous.id(), current.id(), TaskStatus.QUEUED);
         when(sourceRepository.findActive(projectId)).thenReturn(Optional.of(current));
         when(sourceRepository.findPrevious(projectId, current.id(), current.createdAt())).thenReturn(Optional.of(previous));
-        when(sourceCompareRepository.latestRecheckRun(projectId, previous.id(), current.id())).thenReturn(Optional.of(recheckRun));
+        current(projectId);
+        when(sourceCompareRepository.latestConfirmation(projectId, previous.id())).thenReturn(Optional.of(baseList));
+        when(sourceCompareRepository.latestRecheckRun(projectId, baseList, targetList)).thenReturn(Optional.of(recheckRun));
 
         LatestSourceCompareResponse response = service().latest(projectId, UUID.randomUUID(), false);
 
@@ -143,7 +159,9 @@ class SourceCompareServiceTests {
         RecheckRunView recheckRun = recheckRun(projectId, previous.id(), current.id(), TaskStatus.TIMEOUT);
         when(sourceRepository.findActive(projectId)).thenReturn(Optional.of(current));
         when(sourceRepository.findPrevious(projectId, current.id(), current.createdAt())).thenReturn(Optional.of(previous));
-        when(sourceCompareRepository.latestRecheckRun(projectId, previous.id(), current.id())).thenReturn(Optional.of(recheckRun));
+        current(projectId);
+        when(sourceCompareRepository.latestConfirmation(projectId, previous.id())).thenReturn(Optional.of(baseList));
+        when(sourceCompareRepository.latestRecheckRun(projectId, baseList, targetList)).thenReturn(Optional.of(recheckRun));
 
         LatestSourceCompareResponse response = service().latest(projectId, UUID.randomUUID(), false);
 
@@ -193,15 +211,20 @@ class SourceCompareServiceTests {
         TaskResponse task = taskResponse(projectId, actorId);
         when(sourceRepository.findById(base.id())).thenReturn(Optional.of(base));
         when(sourceRepository.findById(target.id())).thenReturn(Optional.of(target));
-        when(sourceCompareRepository.findReusableRecheckRun(projectId, base.id(), target.id())).thenReturn(Optional.empty());
+        current(projectId);
+        when(sourceCompareRepository.confirmedReport(projectId,base.id(),baseList)).thenReturn(Optional.of(baseReport));
+        when(sourceCompareRepository.confirmedReport(projectId,target.id(),targetList)).thenReturn(Optional.of(targetReport));
+        when(sourceCompareRepository.findReusableRecheckRun(projectId, baseList, targetList)).thenReturn(Optional.empty());
         when(taskService.create(org.mockito.ArgumentMatchers.argThat(command ->
                 command.projectId().equals(projectId)
                         && command.type().equals(RvPortTaskTypes.RECHECK_DIFF)
+                        && baseList.equals(command.inputSnapshot().get("baseConfirmationId"))
+                        && targetList.equals(command.inputSnapshot().get("targetConfirmationId"))
                         && command.inputSnapshot().get("baseSourceRevisionId").equals(base.id())
                         && command.inputSnapshot().get("targetSourceRevisionId").equals(target.id())
         ))).thenReturn(task);
 
-        TaskResponse response = service().create(projectId, new RecheckCreateRequest(base.id(), target.id()), actorId, false, null);
+        TaskResponse response = service().create(projectId, new RecheckCreateRequest(base.id(), target.id(), baseList, targetList), actorId, false, null);
 
         assertThat(response.id()).isEqualTo(task.id());
         verify(sourceCompareRepository).createRecheckRun(
@@ -210,6 +233,8 @@ class SourceCompareServiceTests {
                 org.mockito.ArgumentMatchers.eq(task.id()),
                 org.mockito.ArgumentMatchers.eq(base.id()),
                 org.mockito.ArgumentMatchers.eq(target.id()),
+                org.mockito.ArgumentMatchers.eq(baseReport), org.mockito.ArgumentMatchers.eq(targetReport),
+                org.mockito.ArgumentMatchers.eq(baseList), org.mockito.ArgumentMatchers.eq(targetList),
                 org.mockito.ArgumentMatchers.eq(TaskStatus.QUEUED)
         );
     }
@@ -220,7 +245,7 @@ class SourceCompareServiceTests {
         SourceRevisionView revision = revision(projectId, UUID.randomUUID(), true, OffsetDateTime.now());
         when(sourceRepository.findById(revision.id())).thenReturn(Optional.of(revision));
 
-        assertThatThrownBy(() -> service().create(projectId, new RecheckCreateRequest(revision.id(), revision.id()), UUID.randomUUID(), false, null))
+        assertThatThrownBy(() -> service().create(projectId, new RecheckCreateRequest(revision.id(), revision.id(), baseList, targetList), UUID.randomUUID(), false, null))
                 .isInstanceOf(ApiException.class)
                 .extracting("code")
                 .isEqualTo("SOURCE_REVISION_COMPARE_SELF");
@@ -236,10 +261,13 @@ class SourceCompareServiceTests {
         TaskResponse task = taskResponse(projectId, actorId);
         when(sourceRepository.findById(base.id())).thenReturn(Optional.of(base));
         when(sourceRepository.findById(target.id())).thenReturn(Optional.of(target));
-        when(sourceCompareRepository.findReusableRecheckRun(projectId, base.id(), target.id())).thenReturn(Optional.of(existing));
+        current(projectId);
+        when(sourceCompareRepository.confirmedReport(projectId,base.id(),baseList)).thenReturn(Optional.of(baseReport));
+        when(sourceCompareRepository.confirmedReport(projectId,target.id(),targetList)).thenReturn(Optional.of(targetReport));
+        when(sourceCompareRepository.findReusableRecheckRun(projectId, baseList, targetList)).thenReturn(Optional.of(existing));
         when(taskRepository.findById(existing.taskId())).thenReturn(Optional.of(taskView(existing.taskId(), projectId, actorId)));
 
-        TaskResponse response = service().create(projectId, new RecheckCreateRequest(base.id(), target.id()), actorId, false, null);
+        TaskResponse response = service().create(projectId, new RecheckCreateRequest(base.id(), target.id(), baseList, targetList), actorId, false, null);
 
         assertThat(response.id()).isEqualTo(existing.taskId());
     }
@@ -262,8 +290,24 @@ class SourceCompareServiceTests {
         verify(projectAccessService).requireProjectAccess(projectId, actorId, false);
     }
 
+    @Test
+    void rejectsStaleTargetOrForeignBaselineBeforeEnqueue() {
+        var project = UUID.randomUUID();
+        var base = revision(project, UUID.randomUUID(), false, OffsetDateTime.now().minusDays(1));
+        var target = revision(project, UUID.randomUUID(), true, OffsetDateTime.now());
+        when(sourceRepository.findById(base.id())).thenReturn(Optional.of(base));
+        when(sourceRepository.findById(target.id())).thenReturn(Optional.of(target));
+        current(project);
+        for (var selected : List.of(UUID.randomUUID(), targetList)) {
+            var request = new RecheckCreateRequest(base.id(),target.id(),baseList,selected);
+            assertThatThrownBy(() -> service().create(project,request,UUID.randomUUID(),false,null))
+                    .isInstanceOf(ApiException.class).extracting("code").isEqualTo("FIX_LIST_CONFIRMATION_REQUIRED");
+        }
+        org.mockito.Mockito.verifyNoInteractions(taskService);
+    }
+
     private SourceCompareService service() {
-        return new SourceCompareService(sourceRepository, sourceCompareRepository, projectAccessService, taskService, taskRepository);
+        return new SourceCompareService(sourceRepository, sourceCompareRepository, projectAccessService, taskService, taskRepository, fixLists, reviews);
     }
 
     private SourceRevisionView revision(UUID projectId, UUID id, boolean active, OffsetDateTime createdAt) {

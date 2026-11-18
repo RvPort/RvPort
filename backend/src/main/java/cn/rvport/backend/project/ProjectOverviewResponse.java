@@ -24,8 +24,10 @@ public record ProjectOverviewResponse(
 
     public record WorkflowResponse(
             String recommendedStageId,
-            List<WorkflowStageResponse> stages
+            List<WorkflowStageResponse> stages,
+            cn.rvport.backend.report.review.CurrentFixListResolver.Current currentFixList
     ) {
+        public WorkflowResponse(String recommendedStageId,List<WorkflowStageResponse> stages) { this(recommendedStageId,stages,null); }
         public WorkflowResponse {
             stages = stages == null ? List.of() : List.copyOf(stages);
         }

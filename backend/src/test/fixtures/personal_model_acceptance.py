@@ -117,7 +117,7 @@ def api(report):
             'wireApi': 'CHAT', 'apiKey': 'fixture-' + name, 'timeoutSeconds': 60, 'maxRuntimeSeconds': 1800})['id']
         client.call('PATCH', '/api/me/model-stage-assignments', {'assignments': [
             {'stage': stage, 'modelProfileId': profiles[name], 'agentRuntimeId': runtime_ids['CODEX']}
-            for stage in ('KB_AI_EXTENSION', 'TEST_LOG_COMPARE')]})
+            for stage in ('REPORT_AI_REVIEW', 'TEST_LOG_COMPARE')]})
         listed = client.call('GET', '/api/me/model-profiles')
         assert profiles[name] in {row['id'] for row in listed['items']}
         assert client.call('GET', '/api/me/model-profiles/' + profiles[name])['executablePath'] is None
@@ -131,7 +131,7 @@ def api(report):
                 ('GET', '/agent-probe-results', None)]:
             client.call(method, path + suffix, body, 404)
         client.call('PATCH', '/api/me/model-stage-assignments', {'assignments': [
-            {'stage': 'KB_AI_EXTENSION', 'modelProfileId': foreign, 'agentRuntimeId': runtime_ids['CODEX']}]}, 400)
+            {'stage': 'REPORT_AI_REVIEW', 'modelProfileId': foreign, 'agentRuntimeId': runtime_ids['CODEX']}]}, 400)
         client.call('POST', '/api/me/model-profiles', {'ownerUserId': users['alice']}, 400)
         client.call('PATCH', '/api/me/model-profiles/' + profiles[name], {'executablePath': '/bin/sh'}, 400)
         client.call('GET', '/api/admin/model-profiles', expected=404)

@@ -426,6 +426,13 @@ class CodexProviderProbeServiceTests {
         assertThat(result.checks().getFirst().message_en()).contains("AGENT_PROBE_TIMEOUT");
     }
 
+    @Test void channelLabelsAreRemovedOnlyOutsideJsonStrings() {
+        var probe=new CodexProviderProbeService(new CapturingRunner());
+        String payload="{\"text\":\"[STDERR] embedded \\\"quote\\\"\"}";
+        String cleaned=org.springframework.test.util.ReflectionTestUtils.invokeMethod(probe,"cleanMergedOutput",
+                "prefix }[STDOUT] "+payload+"[STDERR]");
+        assertThat(cleaned).isEqualTo("prefix }"+payload);
+    }
     private CodexProviderResolvedConfig config(String apiKey) {
         return config(apiKey, "https://llm.example.com/v1", "third-party-model", CodexProviderWireApi.RESPONSES);
     }

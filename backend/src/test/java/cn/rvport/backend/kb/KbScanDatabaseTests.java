@@ -58,14 +58,16 @@ class KbScanDatabaseTests {
                 database.setConnection(new JdbcConnection(connection));
                 database.setDefaultSchemaName(schema);
                 try (var liquibase = new Liquibase("db/changelog/db.changelog-master.yaml", new ClassLoaderResourceAccessor(), database)) {
-                    int changes = liquibase.getDatabaseChangeLog().getChangeSets().size();
-                    liquibase.update(changes - 3, new Contexts(), new LabelExpression());
+                    var changes = liquibase.getDatabaseChangeLog().getChangeSets();
+                    int baseline = (int) changes.stream().takeWhile(change -> !change.getFilePath().contains("/0128-")).count();
+                    int upgrade = (int) changes.stream().filter(change -> change.getFilePath().contains("/0128-")).count();
+                    assertThat(upgrade).isPositive();
+                    liquibase.update(baseline, new Contexts(), new LabelExpression());
                     actor = jdbc.queryForObject("select id from users where username='admin'", UUID.class);
                     jdbc.update("insert into projects(id,name,stage,status,created_by) values (?, 'kb migration test','PROJECT_CREATED','ACTIVE',?)", project, actor);
                     jdbc.update("insert into source_revisions(id,project_id,revision_type,is_active,working_copy_path,created_by) values (?,?,'GIT',true,?,?)", source, project, sourcePath.toString(), actor);
                     UUID legacy = scan(task("2026-01-01T00:00:00Z"), "SUCCEEDED", null);
-                    liquibase.update(new Contexts(), new LabelExpression());
-                    liquibase.update(new Contexts(), new LabelExpression());
+                    liquibase.update(upgrade, new Contexts(), new LabelExpression());
                     assertThat(jdbc.queryForMap("select source_environment_id,runtime_environment_version,build_run_id from kb_scan_runs where id=?", legacy).values())
                             .containsOnlyNulls();
                     assertThat(jdbc.queryForObject("select status from kb_scan_runs where id=?", String.class, legacy)).isEqualTo("SUCCEEDED");
@@ -154,7 +156,7 @@ class KbScanDatabaseTests {
                 dispatch, mapper, access, null, null, null, new TaskMetadataResolver());
         var audit = mock(AuditLogService.class);
         var target = new KbScanService(repository, sources, access, taskService, tasks, null, audit,
-                new RvPortProperties(null, null, null), null, null, null);
+                new RvPortProperties(null, null, null), null, null);
         ReflectionTestUtils.setField(target, "scanContextService", context);
         var factory = new ProxyFactory(target);
         factory.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource()));

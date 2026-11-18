@@ -275,7 +275,7 @@ public class ReportInputs extends TableImpl<ReportInputsRecord> {
     @Override
     public List<Check<ReportInputsRecord>> getChecks() {
         return Arrays.asList(
-            Internal.createCheck(this, DSL.name("report_inputs_type_chk"), "((input_type = 'MIGRATION_INPUT_REF'::text))", true)
+            Internal.createCheck(this, DSL.name("report_inputs_type_chk"), "((input_type = 'SCAN_FINDING'::text))", true)
         );
     }
 

@@ -27,7 +27,9 @@ class PersonalModelMigrationTests {
         dataSource = source(url + (url.contains("?") ? "&" : "?") + "currentSchema=" + schema);
         db = new JdbcTemplate(dataSource);
         String master = new ClassPathResource("db/changelog/db.changelog-master.yaml").getContentAsString(StandardCharsets.UTF_8);
-        String before = master.replaceAll("(?m)  - include:\\r?\\n      file: changes/0130-personal-model-configuration.sql\\r?\\n      relativeToChangelogFile: true\\r?\\n?", "")
+        int upgrade = master.indexOf("      file: changes/0130-personal-model-configuration.sql");
+        if (upgrade < 0) throw new IllegalStateException("missing personal model migration");
+        String before = master.substring(0, master.lastIndexOf("  - include:", upgrade))
                 .replace("file: changes/", "file: classpath:db/changelog/changes/")
                 .replace("relativeToChangelogFile: true", "relativeToChangelogFile: false");
         var baselineFile = temporary.resolve("personal-baseline.yaml");

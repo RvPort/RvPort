@@ -35,15 +35,27 @@ public class DefaultCodexProcessRunner implements CodexProcessRunner {
     ) throws IOException, InterruptedException {
         ExecutionBudget execution = new ExecutionBudget(timeout);
         Path supervisor = java.nio.file.Files.createTempFile("rvport-agent-supervisor-", ".py");
+        Path sandbox = null;
         try {
             try (var resource = DefaultCodexProcessRunner.class.getResourceAsStream("/agentruntime/agent_process_supervisor.py")) {
                 if (resource == null) { throw new IOException("Agent supervisor resource unavailable"); }
                 java.nio.file.Files.copy(resource, supervisor, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
             List<String> supervised = new ArrayList<>(List.of("python3", supervisor.toString()));
+            if(environment.containsKey("RVPORT_REPORT_REVIEW_SANDBOX")) {
+                sandbox=java.nio.file.Files.createTempFile("rvport-report-sandbox-", ".py");
+                try(var resource=DefaultCodexProcessRunner.class.getResourceAsStream("/agentruntime/report_review_sandbox.py")) {
+                    if(resource==null) throw new IOException("Report sandbox resource unavailable");
+                    java.nio.file.Files.copy(resource,sandbox,java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                supervised.add("python3"); supervised.add(sandbox.toString());
+            }
             supervised.addAll(command);
             return runSupervised(supervised, environment, standardInput, workingDirectory, timeout, execution);
-        } finally { java.nio.file.Files.deleteIfExists(supervisor); }
+        } finally {
+            java.nio.file.Files.deleteIfExists(supervisor);
+            if(sandbox!=null) java.nio.file.Files.deleteIfExists(sandbox);
+        }
     }
 
     private CodexProcessResult runSupervised(List<String> command, Map<String, String> environment, String standardInput,

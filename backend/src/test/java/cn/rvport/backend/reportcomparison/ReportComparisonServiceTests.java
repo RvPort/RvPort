@@ -60,8 +60,6 @@ class ReportComparisonServiceTests {
         ReportView target = report(targetReportId, projectId, UUID.randomUUID(), OffsetDateTime.now(), TaskStatus.SUCCEEDED);
         when(reportRepository.findById(targetReportId)).thenReturn(Optional.of(target));
         when(reportRepository.findById(baseReportId)).thenReturn(Optional.of(base));
-        when(comparisonRepository.hasInputs(baseReportId)).thenReturn(true);
-        when(comparisonRepository.hasInputs(targetReportId)).thenReturn(true);
         when(taskService.create(any())).thenReturn(task(taskId, projectId));
 
         TaskResponse response = service().create(targetReportId, new ReportComparisonCreateRequest(baseReportId), actorId, false, new MockHttpServletRequest());
@@ -74,6 +72,42 @@ class ReportComparisonServiceTests {
         assertThat(taskCaptor.getValue().inputSnapshot().get("baseReportId")).isEqualTo(baseReportId);
         assertThat(taskCaptor.getValue().inputSnapshot().get("targetReportId")).isEqualTo(targetReportId);
         verify(comparisonRepository).createRun(any(), eq(projectId), eq(taskId), eq(baseReportId), eq(targetReportId), eq(TaskStatus.QUEUED));
+    }
+
+    @Test
+    void comparesOnlySnapshotsBelongingToTheirRespectiveReports() {
+        UUID project=UUID.randomUUID(), actor=UUID.randomUUID(), left=UUID.randomUUID(), right=UUID.randomUUID();
+        var base=report(UUID.randomUUID(),project,UUID.randomUUID(),OffsetDateTime.now().minusDays(1),TaskStatus.SUCCEEDED);
+        var target=report(UUID.randomUUID(),project,UUID.randomUUID(),OffsetDateTime.now(),TaskStatus.SUCCEEDED);
+        when(reportRepository.findById(base.id())).thenReturn(Optional.of(base));
+        when(reportRepository.findById(target.id())).thenReturn(Optional.of(target));
+        var confirmed=ReportComparisonBasis.CONFIRMED_FIX_LIST;
+        for(var invalid: List.of(new ReportComparisonCreateRequest(base.id(),confirmed,null,right),
+                new ReportComparisonCreateRequest(base.id(),confirmed,left,null),
+                new ReportComparisonCreateRequest(base.id(),ReportComparisonBasis.REPORT_FACTS,left,null),
+                new ReportComparisonCreateRequest(base.id(),ReportComparisonBasis.REPORT_FACTS,null,right))) {
+            assertThatThrownBy(()->service().create(target.id(),invalid,actor,false,null))
+                    .isInstanceOf(ApiException.class).extracting("code").isEqualTo("REPORT_COMPARISON_BASIS_INVALID");
+        }
+        var request=new ReportComparisonCreateRequest(base.id(),confirmed,left,right);
+        assertThatThrownBy(()->service().create(target.id(),request,actor,false,null))
+                .isInstanceOf(ApiException.class).extracting("code").isEqualTo("REPORT_CONFIRMATION_NOT_FOUND");
+        when(comparisonRepository.hasConfirmation(base.id(),left)).thenReturn(true);
+        assertThatThrownBy(()->service().create(target.id(),request,actor,false,null))
+                .isInstanceOf(ApiException.class).extracting("code").isEqualTo("REPORT_CONFIRMATION_NOT_FOUND");
+        org.mockito.Mockito.verifyNoInteractions(taskService);
+        when(comparisonRepository.hasConfirmation(target.id(),right)).thenReturn(true);
+        UUID taskId=UUID.randomUUID();
+        when(taskService.create(any())).thenReturn(task(taskId,project));
+        assertThat(service().create(target.id(),request,actor,false,null).id()).isEqualTo(taskId);
+        var ordered=org.mockito.Mockito.inOrder(comparisonRepository,taskService);
+        ordered.verify(comparisonRepository).lockComparison(project,base.id(),target.id(),confirmed,left,right);
+        ordered.verify(comparisonRepository).findReusable(project,base.id(),target.id(),confirmed,left,right);
+        var command=ArgumentCaptor.forClass(TaskCreateCommand.class);
+        ordered.verify(taskService).create(command.capture());
+        assertThat(command.getValue().inputSnapshot().get("baseConfirmationId")).isEqualTo(left);
+        assertThat(command.getValue().inputSnapshot().get("targetConfirmationId")).isEqualTo(right);
+        assertThat(command.getValue().inputSnapshot().get("basis")).isEqualTo("CONFIRMED_FIX_LIST");
     }
 
     @Test
@@ -123,8 +157,6 @@ class ReportComparisonServiceTests {
         ReportView target = report(targetReportId, projectId, UUID.randomUUID(), OffsetDateTime.now(), TaskStatus.SUCCEEDED);
         when(reportRepository.findById(targetReportId)).thenReturn(Optional.of(target));
         when(reportRepository.findById(baseReportId)).thenReturn(Optional.of(base));
-        when(comparisonRepository.hasInputs(baseReportId)).thenReturn(true);
-        when(comparisonRepository.hasInputs(targetReportId)).thenReturn(true);
         ReportComparisonRunView run = run(projectId, taskId, baseReportId, targetReportId, TaskStatus.RUNNING);
         when(comparisonRepository.findReusable(projectId, baseReportId, targetReportId)).thenReturn(Optional.of(run));
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(taskView(taskId, projectId)));
@@ -206,8 +238,6 @@ class ReportComparisonServiceTests {
         ReportComparisonRunView reusable = run(projectId, UUID.randomUUID(), base.id(), target.id(), TaskStatus.RUNNING);
         when(reportRepository.findById(target.id())).thenReturn(Optional.of(target));
         when(reportRepository.findById(base.id())).thenReturn(Optional.of(base));
-        when(comparisonRepository.hasInputs(base.id())).thenReturn(true);
-        when(comparisonRepository.hasInputs(target.id())).thenReturn(true);
         when(comparisonRepository.findReusable(projectId, base.id(), target.id())).thenReturn(Optional.of(reusable));
         when(taskRepository.findById(reusable.taskId())).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service().create(target.id(), new ReportComparisonCreateRequest(base.id()), actorId, false, null))
@@ -230,21 +260,7 @@ class ReportComparisonServiceTests {
         assertComparisonRejected(report(UUID.randomUUID(), projectId, UUID.randomUUID(), now, TaskStatus.FAILED),
                 target, actorId, "REPORT_COMPARISON_BASE_NOT_READY");
 
-        ReportView noInputs = report(UUID.randomUUID(), projectId, UUID.randomUUID(), now, TaskStatus.SUCCEEDED);
-        when(reportRepository.findById(target.id())).thenReturn(Optional.of(target));
-        when(reportRepository.findById(noInputs.id())).thenReturn(Optional.of(noInputs));
-        when(comparisonRepository.hasInputs(noInputs.id())).thenReturn(false);
-        assertThatThrownBy(() -> service().create(target.id(), new ReportComparisonCreateRequest(noInputs.id()), actorId, false, null))
-                .isInstanceOf(ApiException.class).extracting("code").isEqualTo("REPORT_COMPARISON_UNSUPPORTED");
 
-        ReportView targetWithoutInputs = report(UUID.randomUUID(), projectId, UUID.randomUUID(), now, TaskStatus.SUCCEEDED);
-        ReportView base = report(UUID.randomUUID(), projectId, UUID.randomUUID(), now.minusDays(1), TaskStatus.SUCCEEDED);
-        when(reportRepository.findById(targetWithoutInputs.id())).thenReturn(Optional.of(targetWithoutInputs));
-        when(reportRepository.findById(base.id())).thenReturn(Optional.of(base));
-        when(comparisonRepository.hasInputs(base.id())).thenReturn(true);
-        when(comparisonRepository.hasInputs(targetWithoutInputs.id())).thenReturn(false);
-        assertThatThrownBy(() -> service().create(targetWithoutInputs.id(), new ReportComparisonCreateRequest(base.id()), actorId, false, null))
-                .isInstanceOf(ApiException.class).extracting("code").isEqualTo("REPORT_COMPARISON_UNSUPPORTED");
     }
 
     private void assertComparisonRejected(ReportView base, ReportView target, UUID actorId, String code) {
@@ -282,6 +298,6 @@ class ReportComparisonServiceTests {
 
     private ReportComparisonRunView run(UUID projectId, UUID taskId, UUID baseReportId, UUID targetReportId, TaskStatus status) {
         return new ReportComparisonRunView(UUID.randomUUID(), projectId, taskId, baseReportId, targetReportId, status,
-                Map.of(), null, null, null, null, OffsetDateTime.now(), OffsetDateTime.now());
+                Map.of(), null, null, null, null, OffsetDateTime.now(), OffsetDateTime.now(), cn.rvport.backend.reportcomparison.ReportComparisonBasis.REPORT_FACTS, null, null);
     }
 }

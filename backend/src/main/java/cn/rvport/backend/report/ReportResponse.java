@@ -19,9 +19,7 @@ public record ReportResponse(
         List<ReportArtifactSummaryResponse> artifacts,
         LatestComparableReportResponse latestComparableReport,
         ReportComparisonSummaryResponse latestComparison,
-        ReportInputSummaryResponse currentInputSummary,
-        boolean reportUpToDate,
-        ReportUpdateSummaryResponse reportDiffSummary,
+        Map<String,Object> review,
         boolean organizationAvailable,
         String organizationSchemaVersion,
         OffsetDateTime generatedAt,
@@ -32,12 +30,8 @@ public record ReportResponse(
             List<ReportArtifactSummaryResponse> artifacts,
             LatestComparableReportResponse latestComparableReport,
             ReportComparisonSummaryResponse latestComparison,
-            ReportInputSummaryResponse currentInputSummary,
-            ReportUpdateSummaryResponse reportDiffSummary
+            Map<String,Object> review
     ) {
-        ReportUpdateSummaryResponse diffSummary = reportDiffSummary == null
-                ? ReportUpdateSummaryResponse.missing(currentInputSummary == null ? 0 : currentInputSummary.confirmed())
-                : reportDiffSummary;
         return new ReportResponse(
                 view.id(),
                 view.projectId(),
@@ -51,9 +45,7 @@ public record ReportResponse(
                 artifacts == null ? List.of() : artifacts,
                 latestComparableReport,
                 latestComparison,
-                currentInputSummary,
-                diffSummary.upToDate(),
-                diffSummary,
+                review,
                 Boolean.TRUE.equals(view.summary().get("organizationAvailable")),
                 view.summary().get("schemaVersion") == null ? null : String.valueOf(view.summary().get("schemaVersion")),
                 view.generatedAt(),

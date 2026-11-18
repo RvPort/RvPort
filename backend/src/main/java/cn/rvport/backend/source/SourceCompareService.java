@@ -3,6 +3,8 @@ package cn.rvport.backend.source;
 import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.common.web.PageResponse;
 import cn.rvport.backend.project.ProjectAccessService;
+import cn.rvport.backend.report.review.CurrentFixListResolver;
+import cn.rvport.backend.report.review.ReviewWorkspaceRepository;
 import cn.rvport.backend.task.RvPortTaskTypes;
 import cn.rvport.backend.task.TaskCreateCommand;
 import cn.rvport.backend.task.TaskRepository;
@@ -29,19 +31,23 @@ public class SourceCompareService {
     private final ProjectAccessService projectAccessService;
     private final TaskService taskService;
     private final TaskRepository taskRepository;
+    private final CurrentFixListResolver fixLists;
+    private final ReviewWorkspaceRepository reviews;
 
     public SourceCompareService(
             SourceRepository sourceRepository,
             SourceCompareRepository sourceCompareRepository,
             ProjectAccessService projectAccessService,
             TaskService taskService,
-            TaskRepository taskRepository
+            TaskRepository taskRepository, CurrentFixListResolver fixLists, ReviewWorkspaceRepository reviews
     ) {
         this.sourceRepository = sourceRepository;
         this.sourceCompareRepository = sourceCompareRepository;
         this.projectAccessService = projectAccessService;
         this.taskService = taskService;
         this.taskRepository = taskRepository;
+        this.fixLists = fixLists;
+        this.reviews = reviews;
     }
 
     @Transactional
@@ -51,17 +57,19 @@ public class SourceCompareService {
                 .orElseThrow(() -> notFound("SOURCE_REVISION_NOT_FOUND", "源码版本不存在"));
         SourceRevisionView target = sourceRepository.findById(request.targetSourceRevisionId())
                 .orElseThrow(() -> notFound("SOURCE_REVISION_NOT_FOUND", "源码版本不存在"));
-        return createForRevisions(projectId, base, target, actorUserId);
+        return createForRevisions(projectId, base, target, request.baseConfirmationId(), request.targetConfirmationId(), actorUserId);
     }
 
     @Transactional
     public TaskResponse createLatest(UUID projectId, UUID actorUserId, boolean superAdmin, HttpServletRequest httpRequest) {
         projectAccessService.requireProjectAccess(projectId, actorUserId, superAdmin);
+        reviews.lockProject(projectId);
         SourceRevisionView target = sourceRepository.findActive(projectId)
                 .orElseThrow(() -> badRequest("SOURCE_REVISION_ACTIVE_NOT_FOUND", "项目没有可用的 active source revision"));
         SourceRevisionView base = sourceRepository.findPrevious(projectId, target.id(), target.createdAt())
                 .orElseThrow(() -> badRequest("SOURCE_REVISION_PREVIOUS_NOT_FOUND", "项目没有可比较的上一源码版本"));
-        return createForRevisions(projectId, base, target, actorUserId);
+        return createForRevisions(projectId, base, target, sourceCompareRepository.latestConfirmation(projectId, base.id())
+                .orElseThrow(this::confirmationRequired), fixLists.current(projectId).confirmationId(), actorUserId);
     }
 
     @Transactional(readOnly = true)
@@ -83,7 +91,11 @@ public class SourceCompareService {
             );
         }
         requireSameProject(projectId, previous);
-        return sourceCompareRepository.latestRecheckRun(projectId, previous.id(), current.id())
+        var targetList = fixLists.current(projectId);
+        var pairRun = sourceCompareRepository.latestConfirmation(projectId, previous.id())
+                .filter(ignored -> targetList.available())
+                .flatMap(id -> sourceCompareRepository.latestRecheckRun(projectId, id, targetList.confirmationId()));
+        return pairRun
                 .map(recheckRun -> withRecheckRun(projectId, current, previous, recheckRun))
                 .orElseGet(() -> new LatestSourceCompareResponse(
                         LatestSourceCompareStatus.NOT_STARTED,
@@ -134,13 +146,21 @@ public class SourceCompareService {
                 .orElseThrow(() -> notFound("DIFF_ITEM_NOT_FOUND", "差异项不存在"));
     }
 
-    private TaskResponse createForRevisions(UUID projectId, SourceRevisionView base, SourceRevisionView target, UUID actorUserId) {
+    private TaskResponse createForRevisions(UUID projectId, SourceRevisionView base, SourceRevisionView target,
+            UUID baseConfirmation, UUID targetConfirmation, UUID actorUserId) {
         requireSameProject(projectId, base);
         requireSameProject(projectId, target);
         if (Objects.equals(base.id(), target.id())) {
             throw badRequest("SOURCE_REVISION_COMPARE_SELF", "base 和 target 源码版本不能相同");
         }
-        RecheckRunView reusable = sourceCompareRepository.findReusableRecheckRun(projectId, base.id(), target.id()).orElse(null);
+        reviews.lockProject(projectId);
+        var current = fixLists.current(projectId);
+        if (!current.available() || !current.confirmationId().equals(targetConfirmation)) throw confirmationRequired();
+        UUID baseReport = sourceCompareRepository.confirmedReport(projectId, base.id(), baseConfirmation)
+                .orElseThrow(this::confirmationRequired);
+        UUID targetReport = sourceCompareRepository.confirmedReport(projectId, target.id(), targetConfirmation)
+                .orElseThrow(this::confirmationRequired);
+        RecheckRunView reusable = sourceCompareRepository.findReusableRecheckRun(projectId, baseConfirmation, targetConfirmation).orElse(null);
         if (reusable != null) {
             return taskRepository.findById(reusable.taskId())
                     .map(TaskResponse::from)
@@ -152,6 +172,8 @@ public class SourceCompareService {
         input.put("recheckRunId", recheckRunId);
         input.put("baseSourceRevisionId", base.id());
         input.put("targetSourceRevisionId", target.id());
+        input.put("baseConfirmationId", baseConfirmation);
+        input.put("targetConfirmationId", targetConfirmation);
         TaskResponse task = taskService.create(new TaskCreateCommand(
                 projectId,
                 RvPortTaskTypes.RECHECK_DIFF,
@@ -160,7 +182,8 @@ public class SourceCompareService {
                 null,
                 "复检差异任务已创建"
         ));
-        sourceCompareRepository.createRecheckRun(recheckRunId, projectId, task.id(), base.id(), target.id(), TaskStatus.QUEUED);
+        sourceCompareRepository.createRecheckRun(recheckRunId, projectId, task.id(), base.id(), target.id(),
+                baseReport, targetReport, baseConfirmation, targetConfirmation, TaskStatus.QUEUED);
         return task;
     }
 
@@ -213,6 +236,10 @@ public class SourceCompareService {
         if (!Objects.equals(revision.projectId(), projectId)) {
             throw notFound("SOURCE_REVISION_NOT_FOUND", "源码版本不存在");
         }
+    }
+
+    private ApiException confirmationRequired() {
+        return new ApiException(HttpStatus.CONFLICT, "FIX_LIST_CONFIRMATION_REQUIRED", "请先确认所选源码版本的待修复清单");
     }
 
     private ApiException notFound(String code, String message) {

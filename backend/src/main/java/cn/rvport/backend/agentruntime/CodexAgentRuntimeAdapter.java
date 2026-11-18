@@ -71,7 +71,11 @@ public class CodexAgentRuntimeAdapter implements AgentRuntimeAdapter {
         try (var lease = homes.create()) {
             if (budget.expired()) { return new CodexProcessResult(-1, true, "", "RVPORT_OCX_QUEUE_DEADLINE"); }
             Path home = lease.path();
-            for (String name : List.of("opencodex_runtime.py", "opencodex_guard.py", "apply_patch.lark")) {
+            var resources = new ArrayList<>(List.of("opencodex_runtime.py", "opencodex_guard.py", "apply_patch.lark"));
+            if (request.readOnlyInputs()) {
+                resources.add("report_review_sandbox.py");
+            }
+            for (String name : resources) {
                 try (var source = CodexAgentRuntimeAdapter.class.getResourceAsStream("/agentruntime/" + name)) {
                     if (source == null) { throw new IOException("OPENCODEX_RESOURCE_MISSING"); }
                     Files.copy(source, home.resolve(name));
@@ -83,6 +87,10 @@ public class CodexAgentRuntimeAdapter implements AgentRuntimeAdapter {
             environment.put("RVPORT_OCX_HOME", home.toString());
             environment.put("RVPORT_OCX_EXECUTABLE", proxyExecutable);
             environment.put("RVPORT_OCX_TIMEOUT_SECONDS", Double.toString(budget.remaining().toNanos() / 1_000_000_000.0));
+            // 代理监管器须读取自己的监听状态；仅实际读取源码的 CLI 进入报告沙箱。
+            if (request.readOnlyInputs()) {
+                environment.put("RVPORT_OCX_REVIEW_WORKSPACE", request.workspace().toAbsolutePath().toString());
+            }
             CodexProcessResult result = processRunner.run(command, environment, request.prompt(), request.workspace(), budget.remaining());
             return result.exitCode() == 124 ? new CodexProcessResult(result.exitCode(), true, result.stdout(), result.stderr(),
                     result.mergedOutput(), result.diagnostics()) : result;
@@ -94,7 +102,7 @@ public class CodexAgentRuntimeAdapter implements AgentRuntimeAdapter {
         if (budget.expired()) { return new CodexProcessResult(-1, true, "", ""); }
         return processRunner.run(
                 CodexAgentCommandFactory.command(request.runtime().getExecutablePath(), config, request.workspace()),
-                CodexAgentCommandFactory.environment(config),
+                request.executionEnvironment(CodexAgentCommandFactory.environment(config)),
                 request.prompt(),
                 request.workspace(),
                 budget.remaining()

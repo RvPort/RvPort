@@ -24,12 +24,8 @@ import cn.rvport.backend.jooq.tables.Findings;
 import cn.rvport.backend.jooq.tables.IssueEvents;
 import cn.rvport.backend.jooq.tables.IssueSources;
 import cn.rvport.backend.jooq.tables.Issues;
-import cn.rvport.backend.jooq.tables.KbAiExtensionResults;
-import cn.rvport.backend.jooq.tables.KbAiExtensionRuns;
 import cn.rvport.backend.jooq.tables.KbScanArtifacts;
 import cn.rvport.backend.jooq.tables.KbScanRuns;
-import cn.rvport.backend.jooq.tables.MigrationInputRefs;
-import cn.rvport.backend.jooq.tables.MigrationInputSets;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeResults;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeRuns;
 import cn.rvport.backend.jooq.tables.ModelProfiles;
@@ -38,13 +34,22 @@ import cn.rvport.backend.jooq.tables.OptimizationCycles;
 import cn.rvport.backend.jooq.tables.ProjectRuntimeEnvironments;
 import cn.rvport.backend.jooq.tables.Projects;
 import cn.rvport.backend.jooq.tables.RecheckRuns;
+import cn.rvport.backend.jooq.tables.ReportAiReviewResults;
 import cn.rvport.backend.jooq.tables.ReportComparisonDiffItems;
 import cn.rvport.backend.jooq.tables.ReportComparisonRuns;
 import cn.rvport.backend.jooq.tables.ReportFileContexts;
+import cn.rvport.backend.jooq.tables.ReportFixListConfirmations;
+import cn.rvport.backend.jooq.tables.ReportFixListItems;
 import cn.rvport.backend.jooq.tables.ReportInputs;
+import cn.rvport.backend.jooq.tables.ReportReviewDrafts;
+import cn.rvport.backend.jooq.tables.ReportReviewEvents;
+import cn.rvport.backend.jooq.tables.ReportReviewItems;
+import cn.rvport.backend.jooq.tables.ReportReviewOperations;
+import cn.rvport.backend.jooq.tables.ReportReviewRuns;
 import cn.rvport.backend.jooq.tables.Reports;
 import cn.rvport.backend.jooq.tables.SourceDeployRuns;
 import cn.rvport.backend.jooq.tables.SourceImports;
+import cn.rvport.backend.jooq.tables.SourceRevisionManifests;
 import cn.rvport.backend.jooq.tables.SourceRevisions;
 import cn.rvport.backend.jooq.tables.SpecializedAnalysisFindings;
 import cn.rvport.backend.jooq.tables.SpecializedAnalysisRuns;
@@ -173,16 +178,6 @@ public class Tables {
     public static final Issues ISSUES = Issues.ISSUES;
 
     /**
-     * The table <code>public.kb_ai_extension_results</code>.
-     */
-    public static final KbAiExtensionResults KB_AI_EXTENSION_RESULTS = KbAiExtensionResults.KB_AI_EXTENSION_RESULTS;
-
-    /**
-     * The table <code>public.kb_ai_extension_runs</code>.
-     */
-    public static final KbAiExtensionRuns KB_AI_EXTENSION_RUNS = KbAiExtensionRuns.KB_AI_EXTENSION_RUNS;
-
-    /**
      * The table <code>public.kb_scan_artifacts</code>.
      */
     public static final KbScanArtifacts KB_SCAN_ARTIFACTS = KbScanArtifacts.KB_SCAN_ARTIFACTS;
@@ -191,16 +186,6 @@ public class Tables {
      * The table <code>public.kb_scan_runs</code>.
      */
     public static final KbScanRuns KB_SCAN_RUNS = KbScanRuns.KB_SCAN_RUNS;
-
-    /**
-     * The table <code>public.migration_input_refs</code>.
-     */
-    public static final MigrationInputRefs MIGRATION_INPUT_REFS = MigrationInputRefs.MIGRATION_INPUT_REFS;
-
-    /**
-     * The table <code>public.migration_input_sets</code>.
-     */
-    public static final MigrationInputSets MIGRATION_INPUT_SETS = MigrationInputSets.MIGRATION_INPUT_SETS;
 
     /**
      * The table <code>public.model_profile_agent_probe_results</code>.
@@ -243,6 +228,11 @@ public class Tables {
     public static final RecheckRuns RECHECK_RUNS = RecheckRuns.RECHECK_RUNS;
 
     /**
+     * The table <code>public.report_ai_review_results</code>.
+     */
+    public static final ReportAiReviewResults REPORT_AI_REVIEW_RESULTS = ReportAiReviewResults.REPORT_AI_REVIEW_RESULTS;
+
+    /**
      * The table <code>public.report_comparison_diff_items</code>.
      */
     public static final ReportComparisonDiffItems REPORT_COMPARISON_DIFF_ITEMS = ReportComparisonDiffItems.REPORT_COMPARISON_DIFF_ITEMS;
@@ -258,9 +248,44 @@ public class Tables {
     public static final ReportFileContexts REPORT_FILE_CONTEXTS = ReportFileContexts.REPORT_FILE_CONTEXTS;
 
     /**
+     * The table <code>public.report_fix_list_confirmations</code>.
+     */
+    public static final ReportFixListConfirmations REPORT_FIX_LIST_CONFIRMATIONS = ReportFixListConfirmations.REPORT_FIX_LIST_CONFIRMATIONS;
+
+    /**
+     * The table <code>public.report_fix_list_items</code>.
+     */
+    public static final ReportFixListItems REPORT_FIX_LIST_ITEMS = ReportFixListItems.REPORT_FIX_LIST_ITEMS;
+
+    /**
      * The table <code>public.report_inputs</code>.
      */
     public static final ReportInputs REPORT_INPUTS = ReportInputs.REPORT_INPUTS;
+
+    /**
+     * The table <code>public.report_review_drafts</code>.
+     */
+    public static final ReportReviewDrafts REPORT_REVIEW_DRAFTS = ReportReviewDrafts.REPORT_REVIEW_DRAFTS;
+
+    /**
+     * The table <code>public.report_review_events</code>.
+     */
+    public static final ReportReviewEvents REPORT_REVIEW_EVENTS = ReportReviewEvents.REPORT_REVIEW_EVENTS;
+
+    /**
+     * The table <code>public.report_review_items</code>.
+     */
+    public static final ReportReviewItems REPORT_REVIEW_ITEMS = ReportReviewItems.REPORT_REVIEW_ITEMS;
+
+    /**
+     * The table <code>public.report_review_operations</code>.
+     */
+    public static final ReportReviewOperations REPORT_REVIEW_OPERATIONS = ReportReviewOperations.REPORT_REVIEW_OPERATIONS;
+
+    /**
+     * The table <code>public.report_review_runs</code>.
+     */
+    public static final ReportReviewRuns REPORT_REVIEW_RUNS = ReportReviewRuns.REPORT_REVIEW_RUNS;
 
     /**
      * The table <code>public.reports</code>.
@@ -276,6 +301,11 @@ public class Tables {
      * The table <code>public.source_imports</code>.
      */
     public static final SourceImports SOURCE_IMPORTS = SourceImports.SOURCE_IMPORTS;
+
+    /**
+     * The table <code>public.source_revision_manifests</code>.
+     */
+    public static final SourceRevisionManifests SOURCE_REVISION_MANIFESTS = SourceRevisionManifests.SOURCE_REVISION_MANIFESTS;
 
     /**
      * The table <code>public.source_revisions</code>.

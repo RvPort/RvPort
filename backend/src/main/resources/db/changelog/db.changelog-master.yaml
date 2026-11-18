@@ -161,3 +161,24 @@ databaseChangeLog:
   - include:
       file: changes/0130-personal-model-configuration.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/0131-report-review-workspace.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0132-report-source-manifests.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0133-report-review-agent-stage.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0134-report-review-integrity.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0135-report-comparison-basis.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0136-recheck-confirmed-snapshots.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0137-retire-node-confirmation.sql
+      relativeToChangelogFile: true

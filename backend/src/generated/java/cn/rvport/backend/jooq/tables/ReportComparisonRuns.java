@@ -9,6 +9,7 @@ import cn.rvport.backend.jooq.Keys;
 import cn.rvport.backend.jooq.Public;
 import cn.rvport.backend.jooq.tables.Projects.ProjectsPath;
 import cn.rvport.backend.jooq.tables.ReportComparisonDiffItems.ReportComparisonDiffItemsPath;
+import cn.rvport.backend.jooq.tables.ReportFixListConfirmations.ReportFixListConfirmationsPath;
 import cn.rvport.backend.jooq.tables.Reports.ReportsPath;
 import cn.rvport.backend.jooq.tables.Tasks.TasksPath;
 import cn.rvport.backend.jooq.tables.records.ReportComparisonRunsRecord;
@@ -131,6 +132,23 @@ public class ReportComparisonRuns extends TableImpl<ReportComparisonRunsRecord> 
      */
     public final TableField<ReportComparisonRunsRecord, OffsetDateTime> UPDATED_AT = createField(DSL.name("updated_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "");
 
+    /**
+     * The column <code>public.report_comparison_runs.basis</code>.
+     */
+    public final TableField<ReportComparisonRunsRecord, String> BASIS = createField(DSL.name("basis"), SQLDataType.CLOB.nullable(false).defaultValue(DSL.field(DSL.raw("'REPORT_FACTS'::text"), SQLDataType.CLOB)), this, "");
+
+    /**
+     * The column
+     * <code>public.report_comparison_runs.base_confirmation_id</code>.
+     */
+    public final TableField<ReportComparisonRunsRecord, UUID> BASE_CONFIRMATION_ID = createField(DSL.name("base_confirmation_id"), SQLDataType.UUID, this, "");
+
+    /**
+     * The column
+     * <code>public.report_comparison_runs.target_confirmation_id</code>.
+     */
+    public final TableField<ReportComparisonRunsRecord, UUID> TARGET_CONFIRMATION_ID = createField(DSL.name("target_confirmation_id"), SQLDataType.UUID, this, "");
+
     private ReportComparisonRuns(Name alias, Table<ReportComparisonRunsRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
     }
@@ -202,7 +220,7 @@ public class ReportComparisonRuns extends TableImpl<ReportComparisonRunsRecord> 
 
     @Override
     public List<Index> getIndexes() {
-        return Arrays.asList(Indexes.REPORT_COMPARISON_RUNS_PROJECT_BASE_TARGET_ACTIVE_UIDX, Indexes.REPORT_COMPARISON_RUNS_PROJECT_CREATED_IDX, Indexes.REPORT_COMPARISON_RUNS_PROJECT_TARGET_IDX, Indexes.REPORT_COMPARISON_RUNS_TASK_IDX);
+        return Arrays.asList(Indexes.REPORT_COMPARISON_BASIS_ACTIVE, Indexes.REPORT_COMPARISON_RUNS_PROJECT_CREATED_IDX, Indexes.REPORT_COMPARISON_RUNS_PROJECT_TARGET_IDX, Indexes.REPORT_COMPARISON_RUNS_TASK_IDX);
     }
 
     @Override
@@ -217,7 +235,22 @@ public class ReportComparisonRuns extends TableImpl<ReportComparisonRunsRecord> 
 
     @Override
     public List<ForeignKey<ReportComparisonRunsRecord, ?>> getReferences() {
-        return Arrays.asList(Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_BASE_REPORT_ID_FKEY, Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_PROJECT_ID_FKEY, Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_TARGET_REPORT_ID_FKEY, Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_TASK_ID_FKEY);
+        return Arrays.asList(Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_BASE_REPORT_ID_BASE_CONFIRMATION_ID_FKEY, Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_BASE_REPORT_ID_FKEY, Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_PROJECT_ID_FKEY, Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_TARGET_REPORT_ID_FKEY, Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_TARGET_REPORT_ID_TARGET_CONFIRMATIO_FKEY, Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_TASK_ID_FKEY);
+    }
+
+    private transient ReportFixListConfirmationsPath _reportComparisonRunsBaseReportIdBaseConfirmationIdFkey;
+
+    /**
+     * Get the implicit join path to the
+     * <code>public.report_fix_list_confirmations</code> table, via the
+     * <code>report_comparison_runs_base_report_id_base_confirmation_id_fkey</code>
+     * key.
+     */
+    public ReportFixListConfirmationsPath reportComparisonRunsBaseReportIdBaseConfirmationIdFkey() {
+        if (_reportComparisonRunsBaseReportIdBaseConfirmationIdFkey == null)
+            _reportComparisonRunsBaseReportIdBaseConfirmationIdFkey = new ReportFixListConfirmationsPath(this, Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_BASE_REPORT_ID_BASE_CONFIRMATION_ID_FKEY, null);
+
+        return _reportComparisonRunsBaseReportIdBaseConfirmationIdFkey;
     }
 
     private transient ReportsPath _reportComparisonRunsBaseReportIdFkey;
@@ -258,6 +291,21 @@ public class ReportComparisonRuns extends TableImpl<ReportComparisonRunsRecord> 
         return _reportComparisonRunsTargetReportIdFkey;
     }
 
+    private transient ReportFixListConfirmationsPath _reportComparisonRunsTargetReportIdTargetConfirmatioFkey;
+
+    /**
+     * Get the implicit join path to the
+     * <code>public.report_fix_list_confirmations</code> table, via the
+     * <code>report_comparison_runs_target_report_id_target_confirmatio_fkey</code>
+     * key.
+     */
+    public ReportFixListConfirmationsPath reportComparisonRunsTargetReportIdTargetConfirmatioFkey() {
+        if (_reportComparisonRunsTargetReportIdTargetConfirmatioFkey == null)
+            _reportComparisonRunsTargetReportIdTargetConfirmatioFkey = new ReportFixListConfirmationsPath(this, Keys.REPORT_COMPARISON_RUNS__REPORT_COMPARISON_RUNS_TARGET_REPORT_ID_TARGET_CONFIRMATIO_FKEY, null);
+
+        return _reportComparisonRunsTargetReportIdTargetConfirmatioFkey;
+    }
+
     private transient TasksPath _tasks;
 
     /**
@@ -286,6 +334,7 @@ public class ReportComparisonRuns extends TableImpl<ReportComparisonRunsRecord> 
     @Override
     public List<Check<ReportComparisonRunsRecord>> getChecks() {
         return Arrays.asList(
+            Internal.createCheck(this, DSL.name("report_comparison_runs_check"), "((((basis = 'REPORT_FACTS'::text) AND (base_confirmation_id IS NULL) AND (target_confirmation_id IS NULL)) OR ((basis = 'CONFIRMED_FIX_LIST'::text) AND (base_confirmation_id IS NOT NULL) AND (target_confirmation_id IS NOT NULL))))", true),
             Internal.createCheck(this, DSL.name("report_comparison_runs_status_chk"), "((status = ANY (ARRAY['PENDING'::text, 'QUEUED'::text, 'RUNNING'::text, 'SUCCEEDED'::text, 'FAILED'::text, 'CANCELLED'::text, 'TIMEOUT'::text])))", true)
         );
     }

@@ -11,6 +11,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 class MockModel(BaseHTTPRequestHandler):
+    def report_script(self):
+        return ('import json,pathlib; rows=[json.loads(s) for s in pathlib.Path("input/findings.jsonl").read_text().splitlines()]; '
+                          'out=[dict(inputId=r["inputId"],verdict="INSUFFICIENT_EVIDENCE",reason="证据不足",reasonEn="Insufficient evidence",evidenceRefs=r["evidenceRefs"]) for r in rows]; '
+                          'pathlib.Path("output/results.jsonl").write_text("".join(json.dumps(r)+chr(10) for r in out)); print("rvport-probe-ok")')
+
     def log_message(self, *_args):
         pass
 
@@ -70,12 +75,12 @@ class MockModel(BaseHTTPRequestHandler):
                          for item in history if item.get("role") == "user"]
         prompt = next((text for text in reversed(user_messages)
                        if any(marker in text for marker in ("UTF-8 中文传输校验", "custom-output.txt",
-                                                            "results-0001.jsonl", "comparison-result.json"))), "")
-        business = "kb" if "results-0001.jsonl" in prompt else "comparison" if "comparison-result.json" in prompt else None
+                                                            "output/results.jsonl", "comparison-result.json"))), "")
+        business = "report" if "output/results.jsonl" in prompt else "comparison" if "comparison-result.json" in prompt else None
         mode = "workspace-write" if "probe-output.json" in prompt else "workspace-read" if "probe-input.json" in prompt else "text"
         custom = "custom-output.txt" in prompt
         if not request.get("tools"):
-            mode, custom = "text", False  # 标题/摘要等辅助请求没有工具，不属于通用 probe。
+            mode, custom, business = "text", False, None  # 标题/摘要请求不能模拟工具调用。
         results = [item for item in history if item.get("role") == "tool" or item.get("type", "").endswith("call_output")]
         if results and not custom:
             assert "rvport-probe-ok" in json.dumps(results, ensure_ascii=False), "真实工具未返回 fixture marker"
@@ -83,11 +88,8 @@ class MockModel(BaseHTTPRequestHandler):
         if (mode != "text" or custom or business) and not results:
             names = [item.get("name", item.get("function", {}).get("name")) for item in request.get("tools", [])]
             command = "cat probe-input.json"
-            if business == "kb":
-                script = ('import json,pathlib; row=json.loads(pathlib.Path("input/findings-0001.jsonl").read_text()); '
-                          'row={"findingId":row["findingId"]}; '
-                          'row.update(aiSummary="rvport-probe-ok",aiSuggestion="review",confidence=0.9,actionType="REVIEW"); '
-                          'pathlib.Path("output/results-0001.jsonl").write_text(json.dumps(row)+"\\n"); print("rvport-probe-ok")')
+            if business == "report":
+                script = self.report_script()
                 command = 'python3 -c ' + shlex.quote(script)
             elif business == "comparison":
                 stats = {'status':'SUCCEEDED','exitCode':0,'totalTests':1,'executedTests':1,'passedTests':1,
@@ -197,8 +199,8 @@ def main():
         if args.business_only or args.concurrent_only:
             scenario = 'BUSINESS' if args.business_only else 'CONCURRENT'
             command = ["java", "-cp", f"{args.java_runtime}/classes:{args.java_runtime}/test-classes:{args.java_runtime}/lib/*",
-                       "cn.rvport.backend.agentruntime.AgentCliAcceptanceMain", args.cli_root, "CODEX",
-                       f"http://127.0.0.1:{server.server_port}/v1", "CHAT", "--business" if args.business_only else "--concurrent"]
+                       "cn.rvport.backend.agentruntime.AgentCliAcceptanceMain", args.cli_root, args.agent or "CODEX",
+                       f"http://127.0.0.1:{server.server_port}/v1", args.wire or "CHAT", "--business" if args.business_only else "--concurrent"]
             result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=130)
             (report / (scenario + '.log')).write_text(result.stdout + result.stderr)
             outcomes.append({'scenario':scenario,'exitCode':result.returncode,'requests':len(server.requests)})

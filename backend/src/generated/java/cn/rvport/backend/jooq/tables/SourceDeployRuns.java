@@ -305,7 +305,7 @@ public class SourceDeployRuns extends TableImpl<SourceDeployRunsRecord> {
     @Override
     public List<Check<SourceDeployRunsRecord>> getChecks() {
         return Arrays.asList(
-            Internal.createCheck(this, DSL.name("source_deploy_runs_status_chk"), "(((status)::text = ANY ((ARRAY['PENDING'::character varying, 'QUEUED'::character varying, 'RUNNING'::character varying, 'SUCCEEDED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying, 'TIMEOUT'::character varying])::text[])))", true),
+            Internal.createCheck(this, DSL.name("source_deploy_runs_status_chk"), "(((status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('QUEUED'::character varying)::text, ('RUNNING'::character varying)::text, ('SUCCEEDED'::character varying)::text, ('FAILED'::character varying)::text, ('CANCELLED'::character varying)::text, ('TIMEOUT'::character varying)::text])))", true),
             Internal.createCheck(this, DSL.name("source_deploy_runs_strategy_chk"), "(((deploy_strategy)::text = 'TAR_OVER_SSH'::text))", true)
         );
     }

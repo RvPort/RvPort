@@ -14,7 +14,10 @@ public record ReportComparisonSummaryResponse(
         Map<String, Object> summary,
         OffsetDateTime startedAt,
         OffsetDateTime finishedAt,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        ReportComparisonBasis basis,
+        UUID baseConfirmationId,
+        UUID targetConfirmationId
 ) {
     public static ReportComparisonSummaryResponse from(ReportComparisonRunView view) {
         if (view == null) {
@@ -29,7 +32,8 @@ public record ReportComparisonSummaryResponse(
                 view.summary(),
                 view.startedAt(),
                 view.finishedAt(),
-                view.createdAt()
+                view.createdAt(),
+                view.basis(), view.baseConfirmationId(), view.targetConfirmationId()
         );
     }
 }

@@ -1,17 +1,12 @@
 package cn.rvport.backend.report;
 
-import static cn.rvport.backend.jooq.tables.MigrationInputRefs.MIGRATION_INPUT_REFS;
 import static cn.rvport.backend.jooq.tables.ReportInputs.REPORT_INPUTS;
 import static cn.rvport.backend.jooq.tables.Reports.REPORTS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import cn.rvport.backend.jooq.tables.records.MigrationInputRefsRecord;
 import cn.rvport.backend.jooq.tables.records.ReportInputsRecord;
 import cn.rvport.backend.jooq.tables.records.ReportsRecord;
-import cn.rvport.backend.migration.MigrationInputRefView;
-import cn.rvport.backend.migration.MigrationInputSourceType;
-import cn.rvport.backend.migration.MigrationInputStatus;
 import cn.rvport.backend.task.TaskStatus;
 import cn.rvport.backend.testfixture.JooqMockDatabase;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -109,24 +104,34 @@ class ReportRepositoryTests {
     }
 
     @Test
-    void insertsReplacesAndListsInputSnapshots() throws Exception {
+    void listsPublishedInputSnapshots() throws Exception {
         try (JooqMockDatabase database = new JooqMockDatabase()) {
             ReportRepository repository = repository(database);
-            ReportRepository.ReportInputSnapshot snapshot = new ReportRepository.ReportInputSnapshot(migrationView(), Map.of("title", "SIMD"));
-            database.enqueueRows(1).enqueueRows(1).enqueueRows(1)
-                    .enqueueResult(database.result(new Field<?>[]{DSL.count()}, new Object[]{1L}))
+            database.enqueueResult(database.result(new Field<?>[]{DSL.count()}, new Object[]{1L}))
                     .enqueueRecord(input(JSONB.valueOf("{\"title\":\"SIMD\"}")))
-                    .enqueueRecord(input(JSONB.valueOf("bad")))
-                    .enqueueResult(database.result(new Field<?>[]{REPORT_INPUTS.INPUT_ID}, new Object[]{INPUT_ID}));
-            repository.insertInputs(REPORT_ID, List.of(snapshot));
-            repository.replaceInputs(REPORT_ID, List.of(snapshot));
-            ReportInputListRequest request = new ReportInputListRequest(2, 5, ReportInputType.MIGRATION_INPUT_REF, " SIMD ", "inputType", "desc");
+                    .enqueueRecord(input(JSONB.valueOf("bad")));
+            ReportInputListRequest request = new ReportInputListRequest(2, 5, ReportInputType.SCAN_FINDING, " SIMD ", "inputType", "desc");
             assertThat(repository.countInputs(REPORT_ID, request)).isEqualTo(1);
             assertThat(repository.listInputs(REPORT_ID, request).getFirst().inputSnapshot()).containsEntry("title", "SIMD");
             assertThat(repository.listAllInputs(REPORT_ID).getFirst().inputSnapshot()).isEmpty();
-            assertThat(repository.listMigrationInputIds(REPORT_ID)).containsExactly(INPUT_ID);
-            assertThat(database.executions().get(3).normalizedSql()).contains("input_type =", "cast", "lower");
+            assertThat(database.executions().get(0).normalizedSql()).contains("input_type =", "cast", "lower");
             database.verifyComplete();
+        }
+    }
+
+    @Test
+    void blankFiltersAndBothSortDirectionsRetainTheWholeReport() throws Exception {
+        try (var db = new JooqMockDatabase()) {
+            var repository = repository(db);
+            db.enqueueResult(db.result(REPORTS.fields())).enqueueResult(db.result(REPORT_INPUTS.fields()))
+                    .enqueueResult(db.result(REPORT_INPUTS.fields()));
+            repository.list(PROJECT_ID,new ReportListRequest(1,20,null,null," ",null,null,"riskLevel","asc"));
+            repository.listInputs(REPORT_ID,new ReportInputListRequest(1,20,null," ","inputType","desc"));
+            repository.listInputs(REPORT_ID,new ReportInputListRequest(1,20,null,null,"createdAt","asc"));
+            assertThat(db.executions().get(0).normalizedSql()).contains("risk_level asc").doesNotContain("risk_level =");
+            assertThat(db.executions().get(1).normalizedSql()).contains("input_type desc").doesNotContain("lower(");
+            assertThat(db.executions().get(2).normalizedSql()).contains("created_at asc");
+            db.verifyComplete();
         }
     }
 
@@ -142,46 +147,6 @@ class ReportRepositoryTests {
             assertThatThrownBy(() -> repository.listInputs(REPORT_ID,
                     new ReportInputListRequest(1, 20, null, null, "snapshot", "asc")))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Unsupported report input sort field");
-            database.verifyComplete();
-        }
-    }
-
-    @Test
-    void summarizesAndPreviewsCurrentInputsWithRiskParsing() throws Exception {
-        try (JooqMockDatabase database = new JooqMockDatabase()) {
-            ReportRepository repository = repository(database);
-            database.enqueueResult(database.result(new Field<?>[]{MIGRATION_INPUT_REFS.STATUS, MIGRATION_INPUT_REFS.SOURCE_TYPE,
-                            MIGRATION_INPUT_REFS.DETECTED_LEVEL, DSL.count()},
-                    new Object[]{MigrationInputStatus.CONFIRMED.name(), MigrationInputSourceType.KB_FINDING.name(), "HIGH", 2L}))
-                    .enqueueResult(database.result(new Field<?>[]{DSL.count()}, new Object[]{1L}))
-                    .enqueueRecord(migrationRecord());
-            assertThat(repository.summarizeCurrentInputs(PROJECT_ID, REVISION_ID).getFirst().count()).isEqualTo(2);
-            ReportInputPreviewListRequest request = new ReportInputPreviewListRequest(2, 5, REVISION_ID,
-                    MigrationInputSourceType.KB_FINDING, MigrationInputStatus.CONFIRMED, " high ", " simd ", "locationLabel", "asc");
-            assertThat(repository.countInputPreview(PROJECT_ID, REVISION_ID, request)).isEqualTo(1);
-            assertThat(repository.listInputPreview(PROJECT_ID, REVISION_ID, request)).hasSize(1);
-            assertThat(database.executions().get(1).normalizedSql()).contains("upper", "like", "source_type =", "status =", "lower");
-            assertThat(database.executions().get(2).normalizedSql()).contains("location_label asc nulls last", "offset ? rows");
-            assertThatThrownBy(() -> repository.countInputPreview(PROJECT_ID, REVISION_ID,
-                    new ReportInputPreviewListRequest(1, 20, null, null, null, "severe", null, null, null)))
-                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Unsupported report input preview risk level");
-            database.verifyComplete();
-        }
-    }
-
-    @Test
-    void supportsEveryPreviewSortAndRejectsUnknown() throws Exception {
-        try (JooqMockDatabase database = new JooqMockDatabase()) {
-            ReportRepository repository = repository(database);
-            String[] sorts = {"createdAt", "updatedAt", "sourceType", "detectedLevel", "status", "issueTitle", ""};
-            for (String ignored : sorts) database.enqueueResult(database.result(MIGRATION_INPUT_REFS.fields()));
-            for (String sort : sorts) repository.listInputPreview(PROJECT_ID, REVISION_ID,
-                    new ReportInputPreviewListRequest(null, null, null, null, null, null, null, sort, "desc"));
-            assertThat(database.executions().get(0).normalizedSql()).contains("created_at desc nulls last");
-            assertThat(database.executions().get(6).normalizedSql()).contains("updated_at desc nulls last", "created_at desc");
-            assertThatThrownBy(() -> repository.listInputPreview(PROJECT_ID, REVISION_ID,
-                    new ReportInputPreviewListRequest(1, 20, null, null, null, null, null, "note", "asc")))
-                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Unsupported report input preview sort field");
             database.verifyComplete();
         }
     }
@@ -215,20 +180,11 @@ class ReportRepositoryTests {
         ReportInputsRecord record = new ReportInputsRecord();
         record.setId(UUID.randomUUID());
         record.setReportId(REPORT_ID);
-        record.setInputType(ReportInputType.MIGRATION_INPUT_REF.name());
+        record.setInputType(ReportInputType.SCAN_FINDING.name());
         record.setInputId(INPUT_ID);
         record.setInputSnapshot(snapshot);
         record.setCreatedAt(NOW);
         return record;
     }
 
-    private static MigrationInputRefsRecord migrationRecord() {
-        return new MigrationInputRefsRecord(INPUT_ID, SET_ID, PROJECT_ID, REVISION_ID, "SIMD issue",
-                MigrationInputSourceType.KB_FINDING.name(), UUID.randomUUID(), "HIGH", "src/a.c:4", "fix",
-                MigrationInputStatus.CONFIRMED.name(), null, NOW, NOW, "R1", "src/a.c", "fn", "anchor", "fp");
-    }
-
-    private static MigrationInputRefView migrationView() {
-        return MigrationInputRefView.from(migrationRecord());
-    }
 }

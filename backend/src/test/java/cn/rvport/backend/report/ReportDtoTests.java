@@ -38,7 +38,7 @@ class ReportDtoTests {
             assertThat(mapped.summary()).containsEntry("count", 1);
         });
 
-        ReportInputView input = new ReportInputView(UUID.randomUUID(), reportId, ReportInputType.MIGRATION_INPUT_REF,
+        ReportInputView input = new ReportInputView(UUID.randomUUID(), reportId, ReportInputType.SCAN_FINDING,
                 UUID.randomUUID(), Map.of("title", "issue"), now);
         assertThat(ReportInputResponse.from(input)).satisfies(mapped -> {
             assertThat(mapped.inputId()).isEqualTo(input.inputId());
@@ -59,25 +59,9 @@ class ReportDtoTests {
         OffsetDateTime now = OffsetDateTime.now();
         ReportView view = new ReportView(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 ReportType.EVALUATION, TaskStatus.SUCCEEDED, "title", Map.of(), "INFO", UUID.randomUUID(), now, now);
-        ReportInputSummaryResponse summary = new ReportInputSummaryResponse(
-                3, 2, 1, 0, 1, Map.of(), Map.of(), Map.of());
-
-        ReportResponse response = ReportResponse.from(view, null, null, null, summary, null);
-
-        assertThat(response.artifacts()).isEmpty();
-        assertThat(response.reportDiffSummary().latestReportMissing()).isTrue();
-        assertThat(response.reportDiffSummary().currentConfirmedInputCount()).isEqualTo(2);
-        assertThat(response.reportUpToDate()).isFalse();
-        assertThat(ReportResponse.from(view, List.of(), null, null, null, null)
-                .reportDiffSummary().currentConfirmedInputCount()).isZero();
-        assertThat(new ReportUpdateSummaryResponse(false, 0, 0, 0, 0, 0,
-                List.of(), List.of(), List.of()).upToDate()).isTrue();
-        assertThat(new ReportUpdateSummaryResponse(false, 0, 1, 0, 0, 1,
-                List.of(), List.of(), List.of()).upToDate()).isFalse();
-        assertThat(new ReportUpdateSummaryResponse(false, 1, 0, 0, 1, 0,
-                List.of(), List.of(), List.of()).upToDate()).isFalse();
-        assertThat(new ReportUpdateSummaryResponse(false, 0, 0, 1, 0, 0,
-                List.of(), List.of(), List.of()).upToDate()).isFalse();
+        var review=Map.<String,Object>of("publishState","HISTORICAL_SUPERSEDED","writable",false);
+        ReportResponse response=ReportResponse.from(view,null,null,null,review);
+        assertThat(response.artifacts()).isEmpty(); assertThat(response.review()).isEqualTo(review);
     }
 
     @Test

@@ -102,7 +102,7 @@ class ReportComparisonRepositoryTests {
         ReportInputsRecord record = new ReportInputsRecord();
         record.setId(UUID.randomUUID());
         record.setReportId(TARGET_ID);
-        record.setInputType("MIGRATION_INPUT_REF");
+        record.setInputType("SCAN_FINDING");
         record.setInputId(ITEM_ID);
         record.setInputSnapshot(JSONB.valueOf("{\"risk\":\"HIGH\"}"));
         record.setCreatedAt(NOW);
@@ -211,7 +211,7 @@ class ReportComparisonRepositoryTests {
 
     private static ReportComparisonRunsRecord run(JSONB summary, TaskStatus status) {
         return new ReportComparisonRunsRecord(RUN_ID, PROJECT_ID, TASK_ID, BASE_ID, TARGET_ID, status.name(), summary,
-                null, null, NOW, null, NOW, NOW);
+                null, null, NOW, null, NOW, NOW, "REPORT_FACTS", null, null);
     }
 
     private static ReportsRecord reportRecord(UUID id, JSONB summary) {

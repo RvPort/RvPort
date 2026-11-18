@@ -66,8 +66,15 @@ public class ReportComparisonRepository {
     }
 
     public Optional<ReportComparisonRunView> findReusable(UUID projectId, UUID baseReportId, UUID targetReportId) {
+        return findReusable(projectId,baseReportId,targetReportId,ReportComparisonBasis.REPORT_FACTS,null,null);
+    }
+    public Optional<ReportComparisonRunView> findReusable(UUID projectId,UUID baseReportId,UUID targetReportId,
+            ReportComparisonBasis basis,UUID baseConfirmation,UUID targetConfirmation) {
         return dsl.selectFrom(REPORT_COMPARISON_RUNS)
                 .where(REPORT_COMPARISON_RUNS.PROJECT_ID.eq(projectId)
+                        .and(REPORT_COMPARISON_RUNS.BASIS.eq(basis.name()))
+                        .and(REPORT_COMPARISON_RUNS.BASE_CONFIRMATION_ID.isNotDistinctFrom(baseConfirmation))
+                        .and(REPORT_COMPARISON_RUNS.TARGET_CONFIRMATION_ID.isNotDistinctFrom(targetConfirmation))
                         .and(REPORT_COMPARISON_RUNS.BASE_REPORT_ID.eq(baseReportId))
                         .and(REPORT_COMPARISON_RUNS.TARGET_REPORT_ID.eq(targetReportId))
                         .and(REPORT_COMPARISON_RUNS.STATUS.in(
@@ -101,7 +108,14 @@ public class ReportComparisonRepository {
             UUID targetReportId,
             TaskStatus status
     ) {
+        return createRun(id,projectId,taskId,baseReportId,targetReportId,status,ReportComparisonBasis.REPORT_FACTS,null,null);
+    }
+    public ReportComparisonRunView createRun(UUID id,UUID projectId,UUID taskId,UUID baseReportId,UUID targetReportId,TaskStatus status,
+            ReportComparisonBasis basis,UUID baseConfirmation,UUID targetConfirmation) {
         var record = dsl.insertInto(REPORT_COMPARISON_RUNS)
+                .set(REPORT_COMPARISON_RUNS.BASIS,basis.name())
+                .set(REPORT_COMPARISON_RUNS.BASE_CONFIRMATION_ID,baseConfirmation)
+                .set(REPORT_COMPARISON_RUNS.TARGET_CONFIRMATION_ID,targetConfirmation)
                 .set(REPORT_COMPARISON_RUNS.ID, id)
                 .set(REPORT_COMPARISON_RUNS.PROJECT_ID, projectId)
                 .set(REPORT_COMPARISON_RUNS.TASK_ID, taskId)
@@ -154,6 +168,36 @@ public class ReportComparisonRepository {
                 .fetch(record -> ReportInputView.from(record, jsonbToMap(record.getInputSnapshot())));
     }
 
+    /** 串行化同一比较的并发创建；不同依据及确认版本仍可独立运行。 */
+    public void lockComparison(UUID project, UUID base, UUID target, ReportComparisonBasis basis, UUID left, UUID right) {
+        String key = "report-compare:" + project + ":" + base + ":" + target + ":" + basis + ":" + left + ":" + right;
+        dsl.fetch("select pg_advisory_xact_lock(hashtextextended(?, 0))", key);
+    }
+
+    public boolean hasConfirmation(UUID report,UUID confirmation) {
+        return dsl.fetchExists(dsl.selectOne().from("report_fix_list_confirmations")
+                .where(org.jooq.impl.DSL.condition("report_id=? and id=?",report,confirmation)));
+    }
+    public List<ReportInputView> confirmationInputs(UUID report,UUID confirmation) {
+        return dsl.fetch("select item_id,review_state,snapshot from report_fix_list_items where report_id=? and confirmation_id=? order by item_id",
+                report,confirmation).map(row->{
+            UUID id=row.get("item_id",UUID.class);
+            var raw=jsonbToMap(row.get("snapshot",JSONB.class));
+            Map<String,Object> snapshot=new java.util.LinkedHashMap<>(raw);
+            snapshot.put("sourceType",java.util.Objects.toString(raw.get("source_type"),"MANUAL"));
+            snapshot.put("stableFingerprint",raw.get("identity_hash")); snapshot.put("semanticDigest",raw.get("evidence_hash"));
+            snapshot.put("identityPath",raw.get("relative_path")); snapshot.put("sourceDetail",raw.get("original_snapshot"));
+            if (raw.get("original_snapshot") instanceof Map<?,?> original) {
+                snapshot.put("detectedLevel", original.get("riskLevel"));
+                if (snapshot.get("detectedLevel") == null) snapshot.put("detectedLevel", original.get("severity"));
+                snapshot.put("identitySymbol", original.get("symbol"));
+                snapshot.put("ruleId", original.get("ruleId"));
+                snapshot.put("recommendationSummary", original.get("recommendation"));
+            }
+            snapshot.put("issueTitle",raw.get("title")); snapshot.put("confirmationStatus",row.get("review_state",String.class));
+            return new ReportInputView(id,report,cn.rvport.backend.report.ReportInputType.SCAN_FINDING,id,snapshot,null);
+        });
+    }
     public boolean hasInputs(UUID reportId) {
         return dsl.fetchExists(REPORT_INPUTS, REPORT_INPUTS.REPORT_ID.eq(reportId));
     }

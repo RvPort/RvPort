@@ -7,7 +7,7 @@ import cn.rvport.backend.agentruntime.*;
 import cn.rvport.backend.codexprovider.*;
 import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.jooq.tables.records.*;
-import cn.rvport.backend.kb.ai.KbAiExtensionAgentRuntime;
+import cn.rvport.backend.report.review.ReportAiReviewRuntime;
 import cn.rvport.backend.security.CredentialCipher;
 import cn.rvport.backend.testcomparison.runtime.TestComparisonAgentRuntime;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -61,7 +61,7 @@ class PersonalModelBoundaryTests {
                 () -> service.list(null, actor), () -> service.create(null, actor),
                 () -> service.get(UUID.randomUUID(), actor), () -> service.listAssignments(actor),
                 () -> service.saveAssignments(null, actor), () -> service.getAgentTestRun(UUID.randomUUID(), actor),
-                () -> service.resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION, actor))) {
+                () -> service.resolveAgentForStage(ModelProfileStage.REPORT_AI_REVIEW, actor))) {
             assertThatThrownBy(action).hasMessage("disabled");
         }
         verifyNoInteractions(profiles, probes, cipher, runtimeService, runtimes);
@@ -119,7 +119,7 @@ class PersonalModelBoundaryTests {
     @Test void bothBusinessRuntimesRejectDamagedIdentityBeforeReadingOrExecutingConfiguration() {
         var modelService = mock(ModelProfileService.class);
         var registry = mock(AgentRuntimeAdapterRegistry.class);
-        var kb = new KbAiExtensionAgentRuntime(modelService, registry, new ObjectMapper());
+        var kb = new ReportAiReviewRuntime(modelService, registry, null, new ObjectMapper());
         var comparison = new TestComparisonAgentRuntime(modelService, registry, new ObjectMapper());
         UUID actor = UUID.randomUUID(), project = UUID.randomUUID();
         for (ModelExecutionSelection selection : Arrays.asList(null,

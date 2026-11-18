@@ -10,6 +10,8 @@ import cn.rvport.backend.jooq.Public;
 import cn.rvport.backend.jooq.tables.DiffItems.DiffItemsPath;
 import cn.rvport.backend.jooq.tables.KbScanRuns.KbScanRunsPath;
 import cn.rvport.backend.jooq.tables.Projects.ProjectsPath;
+import cn.rvport.backend.jooq.tables.ReportFixListConfirmations.ReportFixListConfirmationsPath;
+import cn.rvport.backend.jooq.tables.ReportReviewRuns.ReportReviewRunsPath;
 import cn.rvport.backend.jooq.tables.SourceRevisions.SourceRevisionsPath;
 import cn.rvport.backend.jooq.tables.Tasks.TasksPath;
 import cn.rvport.backend.jooq.tables.records.RecheckRunsRecord;
@@ -117,6 +119,26 @@ public class RecheckRuns extends TableImpl<RecheckRunsRecord> {
      */
     public final TableField<RecheckRunsRecord, OffsetDateTime> CREATED_AT = createField(DSL.name("created_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6).nullable(false).defaultValue(DSL.field(DSL.raw("now()"), SQLDataType.TIMESTAMPWITHTIMEZONE)), this, "");
 
+    /**
+     * The column <code>public.recheck_runs.base_report_id</code>.
+     */
+    public final TableField<RecheckRunsRecord, UUID> BASE_REPORT_ID = createField(DSL.name("base_report_id"), SQLDataType.UUID.nullable(false), this, "");
+
+    /**
+     * The column <code>public.recheck_runs.target_report_id</code>.
+     */
+    public final TableField<RecheckRunsRecord, UUID> TARGET_REPORT_ID = createField(DSL.name("target_report_id"), SQLDataType.UUID.nullable(false), this, "");
+
+    /**
+     * The column <code>public.recheck_runs.base_confirmation_id</code>.
+     */
+    public final TableField<RecheckRunsRecord, UUID> BASE_CONFIRMATION_ID = createField(DSL.name("base_confirmation_id"), SQLDataType.UUID.nullable(false), this, "");
+
+    /**
+     * The column <code>public.recheck_runs.target_confirmation_id</code>.
+     */
+    public final TableField<RecheckRunsRecord, UUID> TARGET_CONFIRMATION_ID = createField(DSL.name("target_confirmation_id"), SQLDataType.UUID.nullable(false), this, "");
+
     private RecheckRuns(Name alias, Table<RecheckRunsRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
     }
@@ -186,7 +208,7 @@ public class RecheckRuns extends TableImpl<RecheckRunsRecord> {
 
     @Override
     public List<Index> getIndexes() {
-        return Arrays.asList(Indexes.RECHECK_RUNS_PROJECT_BASE_TARGET_NONFAILED_UIDX, Indexes.RECHECK_RUNS_PROJECT_CREATED_IDX);
+        return Arrays.asList(Indexes.RECHECK_RUNS_CONFIRMED_PAIR_ACTIVE, Indexes.RECHECK_RUNS_PROJECT_CREATED_IDX);
     }
 
     @Override
@@ -201,7 +223,21 @@ public class RecheckRuns extends TableImpl<RecheckRunsRecord> {
 
     @Override
     public List<ForeignKey<RecheckRunsRecord, ?>> getReferences() {
-        return Arrays.asList(Keys.RECHECK_RUNS__RECHECK_RUNS_BASE_SCAN_RUN_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_BASE_SOURCE_REVISION_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_PROJECT_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_TARGET_SCAN_RUN_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_TARGET_SOURCE_REVISION_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_TASK_ID_FKEY);
+        return Arrays.asList(Keys.RECHECK_RUNS__RECHECK_RUNS_BASE_REPORT_ID_BASE_CONFIRMATION_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_BASE_SCAN_RUN_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_BASE_SOURCE_REVISION_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_PROJECT_ID_BASE_SOURCE_REVISION_ID_BASE_REPOR_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_PROJECT_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_PROJECT_ID_TARGET_SOURCE_REVISION_ID_TARGET_R_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_TARGET_REPORT_ID_TARGET_CONFIRMATION_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_TARGET_SCAN_RUN_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_TARGET_SOURCE_REVISION_ID_FKEY, Keys.RECHECK_RUNS__RECHECK_RUNS_TASK_ID_FKEY);
+    }
+
+    private transient ReportFixListConfirmationsPath _recheckRunsBaseReportIdBaseConfirmationIdFkey;
+
+    /**
+     * Get the implicit join path to the
+     * <code>public.report_fix_list_confirmations</code> table, via the
+     * <code>recheck_runs_base_report_id_base_confirmation_id_fkey</code> key.
+     */
+    public ReportFixListConfirmationsPath recheckRunsBaseReportIdBaseConfirmationIdFkey() {
+        if (_recheckRunsBaseReportIdBaseConfirmationIdFkey == null)
+            _recheckRunsBaseReportIdBaseConfirmationIdFkey = new ReportFixListConfirmationsPath(this, Keys.RECHECK_RUNS__RECHECK_RUNS_BASE_REPORT_ID_BASE_CONFIRMATION_ID_FKEY, null);
+
+        return _recheckRunsBaseReportIdBaseConfirmationIdFkey;
     }
 
     private transient KbScanRunsPath _recheckRunsBaseScanRunIdFkey;
@@ -231,6 +267,21 @@ public class RecheckRuns extends TableImpl<RecheckRunsRecord> {
         return _recheckRunsBaseSourceRevisionIdFkey;
     }
 
+    private transient ReportReviewRunsPath _recheckRunsProjectIdBaseSourceRevisionIdBaseReporFkey;
+
+    /**
+     * Get the implicit join path to the <code>public.report_review_runs</code>
+     * table, via the
+     * <code>recheck_runs_project_id_base_source_revision_id_base_repor_fkey</code>
+     * key.
+     */
+    public ReportReviewRunsPath recheckRunsProjectIdBaseSourceRevisionIdBaseReporFkey() {
+        if (_recheckRunsProjectIdBaseSourceRevisionIdBaseReporFkey == null)
+            _recheckRunsProjectIdBaseSourceRevisionIdBaseReporFkey = new ReportReviewRunsPath(this, Keys.RECHECK_RUNS__RECHECK_RUNS_PROJECT_ID_BASE_SOURCE_REVISION_ID_BASE_REPOR_FKEY, null);
+
+        return _recheckRunsProjectIdBaseSourceRevisionIdBaseReporFkey;
+    }
+
     private transient ProjectsPath _projects;
 
     /**
@@ -241,6 +292,36 @@ public class RecheckRuns extends TableImpl<RecheckRunsRecord> {
             _projects = new ProjectsPath(this, Keys.RECHECK_RUNS__RECHECK_RUNS_PROJECT_ID_FKEY, null);
 
         return _projects;
+    }
+
+    private transient ReportReviewRunsPath _recheckRunsProjectIdTargetSourceRevisionIdTargetRFkey;
+
+    /**
+     * Get the implicit join path to the <code>public.report_review_runs</code>
+     * table, via the
+     * <code>recheck_runs_project_id_target_source_revision_id_target_r_fkey</code>
+     * key.
+     */
+    public ReportReviewRunsPath recheckRunsProjectIdTargetSourceRevisionIdTargetRFkey() {
+        if (_recheckRunsProjectIdTargetSourceRevisionIdTargetRFkey == null)
+            _recheckRunsProjectIdTargetSourceRevisionIdTargetRFkey = new ReportReviewRunsPath(this, Keys.RECHECK_RUNS__RECHECK_RUNS_PROJECT_ID_TARGET_SOURCE_REVISION_ID_TARGET_R_FKEY, null);
+
+        return _recheckRunsProjectIdTargetSourceRevisionIdTargetRFkey;
+    }
+
+    private transient ReportFixListConfirmationsPath _recheckRunsTargetReportIdTargetConfirmationIdFkey;
+
+    /**
+     * Get the implicit join path to the
+     * <code>public.report_fix_list_confirmations</code> table, via the
+     * <code>recheck_runs_target_report_id_target_confirmation_id_fkey</code>
+     * key.
+     */
+    public ReportFixListConfirmationsPath recheckRunsTargetReportIdTargetConfirmationIdFkey() {
+        if (_recheckRunsTargetReportIdTargetConfirmationIdFkey == null)
+            _recheckRunsTargetReportIdTargetConfirmationIdFkey = new ReportFixListConfirmationsPath(this, Keys.RECHECK_RUNS__RECHECK_RUNS_TARGET_REPORT_ID_TARGET_CONFIRMATION_ID_FKEY, null);
+
+        return _recheckRunsTargetReportIdTargetConfirmationIdFkey;
     }
 
     private transient KbScanRunsPath _recheckRunsTargetScanRunIdFkey;
