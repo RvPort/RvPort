@@ -95,6 +95,14 @@
 
 ### D4 复用 OPENCODE，不新增 AgentType
 
+**部署形态决策记录（2026-11-20 评估定案）**：迁移 agent 与 QEMU/交叉工具链全部进现有 backend 镜像，由 backend-worker 以本地子进程方式执行，不新增 compose 服务与队列。评估过独立迁移 worker 镜像（"第二个 worker"形态）后否决，依据三个事实：
+
+1. `RVPORT_WORKER_CONCURRENCY_LIMIT` 默认 1——单 worker 串行下不存在迁移与其他任务的资源挤占；拆双 worker 反而使总并发翻倍，双 JVM + 交叉编译 + QEMU 的内存峰值叠加（12GB 级机器）比现状更危险；
+2. "第二个 worker"形态无安全增益——迁移容器仍运行完整后端代码并持有全部凭据，与方案风险 #4 的根因（容器 root + 全信 agent）无关；真隔离需精简执行器镜像 + 容器编排，超出本期范围；
+3. 工具链层以独立构建阶段 + final `COPY --from`（照 bitcode-toolchain 现成模式）即可保证 Java 迭代不触发工具链重下载；且同镜像分发总量（单镜像 ~5GB）低于双镜像（3GB + 5GB）。
+
+切换独立迁移 worker 的触发条件（满足其一再立项）：迁移并发常态化（多项目同时迁移、worker 并发需放开）；出现真实的 agent 安全隔离要求（届时正确形态是精简执行器镜像而非第二全量 worker）；镜像分发成为部署瓶颈。
+
 agent_runtimes 表每 agent_type 唯一行且 CHECK 收紧，新增类型需种子与 CHECK 迁移；而 OPENCODE 已满足全部需求（chat completions 兼容、自定义 agent md、subagent）。`KbMigrationAgentRuntime` 通过 `AgentRuntimeAdapterRegistry.get(AgentType.OPENCODE)` 调用，模型凭据经现有 env 注入链（`RVPORT_AGENT_*`），不接触明文 key。
 
 ### D5 stdout 合同与结果校验
