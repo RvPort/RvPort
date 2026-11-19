@@ -8,21 +8,21 @@
 
 ## 2. 数据库与 jOOQ
 
-- [ ] 2.1 新增 Liquibase 0138：`kb_migration_runs` 表（id、project_id、scan_run_id、task_id、status、summary、item_count、done_count、false_positive_count、pending_count、model_profile_id、agent_runtime_id、created/finished 时间戳；外键与按项目索引）。
-- [ ] 2.2 同 changeset 扩展三处 CHECK：`tasks_type_chk` 加 `KB_MIGRATION`、`stored_artifacts_owner_type_chk` 加 `KB_MIGRATION`、`model_stage_assignments_stage_chk` 加 `KB_MIGRATION`（照 0118 的 DROP IF EXISTS + ADD 模式）。
-- [ ] 2.3 Docker 内生成 jOOQ 表类；空库初始化、重复执行（幂等）、约束拒绝与回滚验证。
+- [x] 2.1 新增 Liquibase 0138：`kb_migration_runs` 表（id、project_id、scan_run_id、task_id、status、summary、item_count、done_count、false_positive_count、pending_count、model_profile_id、agent_runtime_id、created/finished 时间戳；外键与按项目索引）。
+- [x] 2.2 同 changeset 扩展三处 CHECK：`tasks_type_chk` 加 `KB_MIGRATION`、`stored_artifacts_owner_type_chk` 加 `KB_MIGRATION`、`model_stage_assignments_stage_chk` 加 `KB_MIGRATION`（照 0118 的 DROP IF EXISTS + ADD 模式）。
+- [x] 2.3 Docker 内生成 jOOQ 表类；空库初始化、重复执行（幂等）、约束拒绝与回滚验证。
 
 ## 3. 任务类型与阶段接线
 
-- [ ] 3.1 `RvPortTaskTypes.KB_MIGRATION` 常量；`TaskMetadataResolver` 三处 switch（stageId 复用 `kb-scan` 分组、resourceType=`kb_migration_run`、resourceId=input.migrationRunId；stageId 为自由分组字符串，无需改 `StageIds` 常量）。
-- [ ] 3.2 `TaskDomainFinalizationRepository.DOMAINS` 加 `new Domain("KB_MIGRATION", "kb_migration_runs", "finished_at", "summary", null, null)`。
-- [ ] 3.3 `ModelProfileStage.KB_MIGRATION` 枚举、`ModelProfileService` 阶段白名单与 stageLabel（"KB 迁移阶段"）；`StoredArtifactOwnerType.KB_MIGRATION`。
-- [ ] 3.4 单测：枚举/CHECK/白名单一致（含非法阶段拒绝、孤儿收敛覆盖新域表）。
+- [x] 3.1 `RvPortTaskTypes.KB_MIGRATION` 常量；`TaskMetadataResolver` 三处 switch（stageId 复用 `kb-scan` 分组、resourceType=`kb_migration_run`、resourceId=input.migrationRunId；stageId 为自由分组字符串，无需改 `StageIds` 常量）。
+- [x] 3.2 `TaskDomainFinalizationRepository.DOMAINS` 加 `new Domain("KB_MIGRATION", "kb_migration_runs", "finished_at", "summary", null, null)`。
+- [x] 3.3 `ModelProfileStage.KB_MIGRATION` 枚举、`ModelProfileService` 阶段白名单与 stageLabel（"KB 迁移阶段"）；`StoredArtifactOwnerType.KB_MIGRATION`。
+- [x] 3.4 单测：枚举/CHECK/白名单一致（含非法阶段拒绝、孤儿收敛覆盖新域表）。
 
 ## 4. 投影器 KbMigrationProjector
 
-- [ ] 4.1 实现 findings → items[] 投影：id=`evidence.scannerFindingId`、sourceFindingIds=DB UUID、D2 过滤（actionable/inactive/hint/去重）与 solver_type 映射（含 `.S` 后缀 asm_file、构建文件后缀分流、未知 kind 兜底 inline_asm）。
-- [ ] 4.2 单测（AVX fixture 与构造 fixture）：投影条目数与 actionable findings 一致；inactive/info 过滤；scannerFindingId 去重；一对多展开共享 sourceFindingIds；id 双轨（scanner id ≠ DB UUID）；roundtrip 无 ID 丢失；未知 kind 兜底；不取 category 冒充 factKind。
+- [x] 4.1 实现 findings → items[] 投影：id=`evidence.scannerFindingId`、sourceFindingIds=DB UUID、D2 过滤（actionable/inactive/hint/去重）与 solver_type 映射（含 `.S` 后缀 asm_file、构建文件后缀分流、未知 kind 兜底 inline_asm）。
+- [x] 4.2 单测（AVX fixture 与构造 fixture）：投影条目数与 actionable findings 一致；inactive/info 过滤；scannerFindingId 去重；一对多展开共享 sourceFindingIds；id 双轨（scanner id ≠ DB UUID）；roundtrip 无 ID 丢失；未知 kind 兜底；不取 category 冒充 factKind。
 
 ## 5. KbMigrationAgentRuntime 与 workspace
 
@@ -46,6 +46,6 @@
 
 ## 8. 覆盖率与验证
 
-- [ ] 8.1 Docker 内执行后端全量单测；整体与 `cn.rvport.backend.kb.migration` 模块行/分支覆盖率 ≥ 90%。
+- [x] 8.1 Docker 内执行后端全量单测；整体与 `cn.rvport.backend.kb.migration` 模块行/分支覆盖率 ≥ 90%。
 - [ ] 8.2 完整 Compose 冒烟：重建镜像 → `docker compose up -d --wait` → 以 test-projects 测试包工程发起 KB_MIGRATION → 产物可下载、任务日志可读。
 - [ ] 8.3 `openspec validate add-kb-migration-task --strict` 通过；不自动归档。

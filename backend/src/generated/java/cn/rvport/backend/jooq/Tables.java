@@ -24,6 +24,7 @@ import cn.rvport.backend.jooq.tables.Findings;
 import cn.rvport.backend.jooq.tables.IssueEvents;
 import cn.rvport.backend.jooq.tables.IssueSources;
 import cn.rvport.backend.jooq.tables.Issues;
+import cn.rvport.backend.jooq.tables.KbMigrationRuns;
 import cn.rvport.backend.jooq.tables.KbScanArtifacts;
 import cn.rvport.backend.jooq.tables.KbScanRuns;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeResults;
@@ -176,6 +177,11 @@ public class Tables {
      * The table <code>public.issues</code>.
      */
     public static final Issues ISSUES = Issues.ISSUES;
+
+    /**
+     * The table <code>public.kb_migration_runs</code>.
+     */
+    public static final KbMigrationRuns KB_MIGRATION_RUNS = KbMigrationRuns.KB_MIGRATION_RUNS;
 
     /**
      * The table <code>public.kb_scan_artifacts</code>.

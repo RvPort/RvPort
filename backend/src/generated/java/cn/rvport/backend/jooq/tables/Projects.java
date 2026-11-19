@@ -23,6 +23,7 @@ import cn.rvport.backend.jooq.tables.Environments.EnvironmentsPath;
 import cn.rvport.backend.jooq.tables.Findings.FindingsPath;
 import cn.rvport.backend.jooq.tables.IssueEvents.IssueEventsPath;
 import cn.rvport.backend.jooq.tables.Issues.IssuesPath;
+import cn.rvport.backend.jooq.tables.KbMigrationRuns.KbMigrationRunsPath;
 import cn.rvport.backend.jooq.tables.KbScanArtifacts.KbScanArtifactsPath;
 import cn.rvport.backend.jooq.tables.KbScanRuns.KbScanRunsPath;
 import cn.rvport.backend.jooq.tables.OptimizationCycles.OptimizationCyclesPath;
@@ -463,6 +464,19 @@ public class Projects extends TableImpl<ProjectsRecord> {
             _issues = new IssuesPath(this, null, Keys.ISSUES__ISSUES_PROJECT_ID_FKEY.getInverseKey());
 
         return _issues;
+    }
+
+    private transient KbMigrationRunsPath _kbMigrationRuns;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.kb_migration_runs</code> table
+     */
+    public KbMigrationRunsPath kbMigrationRuns() {
+        if (_kbMigrationRuns == null)
+            _kbMigrationRuns = new KbMigrationRunsPath(this, null, Keys.KB_MIGRATION_RUNS__KB_MIGRATION_RUNS_PROJECT_ID_FKEY.getInverseKey());
+
+        return _kbMigrationRuns;
     }
 
     private transient KbScanArtifactsPath _kbScanArtifacts;

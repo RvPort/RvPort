@@ -43,7 +43,7 @@ class KbMigrationProjectorTest {
         assertThat(item.blocking()).isTrue();
         assertThat(item.description()).isEqualTo("标题：原因");
         assertThat(item.suggestion()).isEqualTo("建议");
-        assertThat(item.evidence()).containsExactly(new KbMigrationProjector.EvidenceRef("src/sse.c", 56, "_mm256_add_epi32"));
+        assertThat(item.evidence()).containsExactly(new KbMigrationProjector.EvidenceRef("src/sse.c", 56, "sym-f1"));
     }
 
     @Test
@@ -143,6 +143,72 @@ class KbMigrationProjectorTest {
         assertThat(projection.items()).allSatisfy(item -> assertThat(item.status()).isEqualTo("TODO"));
         List<String> ids = projection.items().stream().map(KbMigrationProjector.Item::id).toList();
         assertThat(ids).doesNotHaveDuplicates();
+    }
+
+    @Test
+    void 边界分支覆盖() {
+        Map<String, Object> evidence = new HashMap<>();
+        evidence.put("scannerFindingId", "   ");
+        evidence.put("factKind", "compiler_flag");
+        evidence.put("actionable", "true");
+        evidence.put("blocking", "false");
+        FindingView nullDescription = new FindingView(
+                UUID.randomUUID(), UUID.randomUUID(), SCAN_RUN, UUID.randomUUID(),
+                "r1", "c1", "info", "只有标题", null, null, null, null, null,
+                evidence, null, "fp1", "DETECTED", null);
+
+        Map<String, Object> noSymbol = new HashMap<>();
+        noSymbol.put("scannerFindingId", "finding:nosym");
+        noSymbol.put("factKind", "architecture_probe");
+        noSymbol.put("actionable", true);
+        FindingView symbolFallback = new FindingView(
+                UUID.randomUUID(), UUID.randomUUID(), SCAN_RUN, UUID.randomUUID(),
+                "r2", "c2", "low", "t", "d", "src/none.c", 1, 1, "fallback-sym",
+                noSymbol, null, "fp2", "DETECTED", null);
+
+        KbMigrationProjector.Projection projection = KbMigrationProjector.project(SCAN_RUN,
+                List.of(nullDescription, symbolFallback));
+
+        assertThat(projection.items()).hasSize(2);
+        var first = projection.items().stream()
+                .filter(i -> "info".equals(i.severity())).findFirst().orElseThrow();
+        assertThat(first.solverType()).isEqualTo("build_makefile");
+        assertThat(first.description()).isEqualTo("只有标题");
+        assertThat(first.suggestion()).isNull();
+        assertThat(first.blocking()).isFalse();
+        assertThat(first.symbol()).isNull();
+        assertThat(first.id()).startsWith("finding:").isNotEqualTo("   ");
+        var second = projection.items().stream()
+                .filter(i -> i.solverType().equals("inline_asm")).findFirst().orElseThrow();
+        assertThat(second.symbol()).isEqualTo("fallback-sym");
+    }
+
+    @Test
+    void null证据与空白描述分支() {
+        FindingView nullEvidence = new FindingView(
+                UUID.randomUUID(), UUID.randomUUID(), SCAN_RUN, UUID.randomUUID(),
+                "r3", "c3", "high", "无证据", "  ", "src/x.c", 9, 9, "sym-x",
+                null, "sug", "fp3", "DETECTED", null);
+        Map<String, Object> oddTypes = new HashMap<>();
+        oddTypes.put("scannerFindingId", "finding:odd");
+        oddTypes.put("factKind", "header_include");
+        oddTypes.put("actionable", true);
+        oddTypes.put("blocking", 7);
+        FindingView odd = new FindingView(
+                UUID.randomUUID(), UUID.randomUUID(), SCAN_RUN, UUID.randomUUID(),
+                "r4", "c4", "medium", "t4", "d4", "src/y.h", 4, 4, "sym-y",
+                oddTypes, null, "fp4", "DETECTED", null);
+
+        KbMigrationProjector.Projection projection = KbMigrationProjector.project(SCAN_RUN, List.of(nullEvidence, odd));
+
+        assertThat(projection.items()).hasSize(2);
+        var first = projection.items().stream().filter(i -> "sym-x".equals(i.symbol())).findFirst().orElseThrow();
+        assertThat(first.solverType()).isEqualTo("inline_asm");
+        assertThat(first.description()).isEqualTo("无证据");
+        assertThat(first.evidence()).containsExactly(new KbMigrationProjector.EvidenceRef("src/x.c", 9, "sym-x"));
+        var second = projection.items().stream().filter(i -> "sym-y".equals(i.symbol())).findFirst().orElseThrow();
+        assertThat(second.blocking()).isNull();
+        assertThat(second.solverType()).isEqualTo("headers");
     }
 
     private String solverFor(String factKind, String file, String severity) {

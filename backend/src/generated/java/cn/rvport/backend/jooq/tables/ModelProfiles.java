@@ -8,6 +8,7 @@ import cn.rvport.backend.jooq.Indexes;
 import cn.rvport.backend.jooq.Keys;
 import cn.rvport.backend.jooq.Public;
 import cn.rvport.backend.jooq.tables.CodexProbeJobs.CodexProbeJobsPath;
+import cn.rvport.backend.jooq.tables.KbMigrationRuns.KbMigrationRunsPath;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeResults.ModelProfileAgentProbeResultsPath;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeRuns.ModelProfileAgentProbeRunsPath;
 import cn.rvport.backend.jooq.tables.ModelStageAssignments.ModelStageAssignmentsPath;
@@ -347,6 +348,19 @@ public class ModelProfiles extends TableImpl<ModelProfilesRecord> {
             _codexProbeJobs = new CodexProbeJobsPath(this, null, Keys.CODEX_PROBE_JOBS__CODEX_PROBE_OWNER_PROFILE_FK.getInverseKey());
 
         return _codexProbeJobs;
+    }
+
+    private transient KbMigrationRunsPath _kbMigrationRuns;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.kb_migration_runs</code> table
+     */
+    public KbMigrationRunsPath kbMigrationRuns() {
+        if (_kbMigrationRuns == null)
+            _kbMigrationRuns = new KbMigrationRunsPath(this, null, Keys.KB_MIGRATION_RUNS__KB_MIGRATION_RUNS_MODEL_PROFILE_ID_FKEY.getInverseKey());
+
+        return _kbMigrationRuns;
     }
 
     private transient ModelStageAssignmentsPath _modelAssignmentsOwnerProfileFk;

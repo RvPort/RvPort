@@ -24,6 +24,7 @@ import cn.rvport.backend.jooq.tables.Findings;
 import cn.rvport.backend.jooq.tables.IssueEvents;
 import cn.rvport.backend.jooq.tables.IssueSources;
 import cn.rvport.backend.jooq.tables.Issues;
+import cn.rvport.backend.jooq.tables.KbMigrationRuns;
 import cn.rvport.backend.jooq.tables.KbScanArtifacts;
 import cn.rvport.backend.jooq.tables.KbScanRuns;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeResults;
@@ -191,6 +192,11 @@ public class Public extends SchemaImpl {
      * The table <code>public.issues</code>.
      */
     public final Issues ISSUES = Issues.ISSUES;
+
+    /**
+     * The table <code>public.kb_migration_runs</code>.
+     */
+    public final KbMigrationRuns KB_MIGRATION_RUNS = KbMigrationRuns.KB_MIGRATION_RUNS;
 
     /**
      * The table <code>public.kb_scan_artifacts</code>.
@@ -453,6 +459,7 @@ public class Public extends SchemaImpl {
             IssueEvents.ISSUE_EVENTS,
             IssueSources.ISSUE_SOURCES,
             Issues.ISSUES,
+            KbMigrationRuns.KB_MIGRATION_RUNS,
             KbScanArtifacts.KB_SCAN_ARTIFACTS,
             KbScanRuns.KB_SCAN_RUNS,
             ModelProfileAgentProbeResults.MODEL_PROFILE_AGENT_PROBE_RESULTS,

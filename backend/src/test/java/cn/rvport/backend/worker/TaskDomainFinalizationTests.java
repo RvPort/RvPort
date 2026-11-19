@@ -27,8 +27,8 @@ class TaskDomainFinalizationTests {
         try (var db = new JooqMockDatabase()) {
             var repository = new TaskDomainFinalizationRepository(db.dsl());
             var task = task(TaskStatus.FAILED, "DEPENDENCY_ANALYSIS", "WORKER_LOST", true);
-            for (int i = 0; i < 15; i++) db.enqueueRows(1);
-            assertThat(repository.finish(task)).isEqualTo(15);
+            for (int i = 0; i < 16; i++) db.enqueueRows(1);
+            assertThat(repository.finish(task)).isEqualTo(16);
             for (var execution : db.executions()) {
                 assertThat(execution.normalizedSql()).contains("task_id = cast(? as uuid)", "status in")
                         .doesNotContain("sbom");
@@ -53,7 +53,7 @@ class TaskDomainFinalizationTests {
             }
             assertThat(db.executions()).isEmpty();
             for (var status : List.of(TaskStatus.CANCELLED, TaskStatus.TIMEOUT)) {
-                for (int i = 0; i < 16; i++) db.enqueueRows(0);
+                for (int i = 0; i < 17; i++) db.enqueueRows(0);
                 assertThat(repository.finish(task(status, "DEPENDENCY_AUTO_FIX", "invalid /code", false))).isZero();
                 assertThat(db.lastExecution().bindings()).contains(status == TaskStatus.CANCELLED ? "CANCELLED" : "FAILED");
             }
@@ -63,9 +63,9 @@ class TaskDomainFinalizationTests {
 
     @Test void reportFailureReleasesOnlyItsUnpublishedGeneration() throws Exception {
         try(var db=new JooqMockDatabase()) {
-            for(int i=0;i<16;i++) db.enqueueRows(1);
+            for(int i=0;i<17;i++) db.enqueueRows(1);
             var failed=task(TaskStatus.TIMEOUT,"REPORT_GENERATE","WORKER_LOST",true);
-            assertThat(new TaskDomainFinalizationRepository(db.dsl()).finish(failed)).isEqualTo(16);
+            assertThat(new TaskDomainFinalizationRepository(db.dsl()).finish(failed)).isEqualTo(17);
             assertThat(db.lastExecution().sql()).contains("report_review_runs","task_id","r.active","NOT_PUBLISHED");
             assertThat(db.lastExecution().bindings()).contains(failed.id());
             db.verifyComplete();

@@ -24,6 +24,7 @@ import cn.rvport.backend.jooq.tables.Findings;
 import cn.rvport.backend.jooq.tables.IssueEvents;
 import cn.rvport.backend.jooq.tables.IssueSources;
 import cn.rvport.backend.jooq.tables.Issues;
+import cn.rvport.backend.jooq.tables.KbMigrationRuns;
 import cn.rvport.backend.jooq.tables.KbScanArtifacts;
 import cn.rvport.backend.jooq.tables.KbScanRuns;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeResults;
@@ -175,6 +176,8 @@ public class Indexes {
     public static final Index ISSUES_FINGERPRINT_IDX = Internal.createIndex(DSL.name("issues_fingerprint_idx"), Issues.ISSUES, new OrderField[] { Issues.ISSUES.FINGERPRINT }, false);
     public static final Index ISSUES_PROJECT_SEVERITY_IDX = Internal.createIndex(DSL.name("issues_project_severity_idx"), Issues.ISSUES, new OrderField[] { Issues.ISSUES.PROJECT_ID, Issues.ISSUES.SEVERITY }, false);
     public static final Index ISSUES_PROJECT_STATUS_IDX = Internal.createIndex(DSL.name("issues_project_status_idx"), Issues.ISSUES, new OrderField[] { Issues.ISSUES.PROJECT_ID, Issues.ISSUES.STATUS }, false);
+    public static final Index KB_MIGRATION_RUNS_PROJECT_CREATED_IDX = Internal.createIndex(DSL.name("kb_migration_runs_project_created_idx"), KbMigrationRuns.KB_MIGRATION_RUNS, new OrderField[] { KbMigrationRuns.KB_MIGRATION_RUNS.PROJECT_ID, KbMigrationRuns.KB_MIGRATION_RUNS.CREATED_AT.desc() }, false);
+    public static final Index KB_MIGRATION_RUNS_SCAN_RUN_IDX = Internal.createIndex(DSL.name("kb_migration_runs_scan_run_idx"), KbMigrationRuns.KB_MIGRATION_RUNS, new OrderField[] { KbMigrationRuns.KB_MIGRATION_RUNS.SCAN_RUN_ID }, false);
     public static final Index KB_SCAN_ARTIFACTS_PROJECT_CREATED_IDX = Internal.createIndex(DSL.name("kb_scan_artifacts_project_created_idx"), KbScanArtifacts.KB_SCAN_ARTIFACTS, new OrderField[] { KbScanArtifacts.KB_SCAN_ARTIFACTS.PROJECT_ID, KbScanArtifacts.KB_SCAN_ARTIFACTS.CREATED_AT.desc() }, false);
     public static final Index KB_SCAN_ARTIFACTS_SCAN_RUN_IDX = Internal.createIndex(DSL.name("kb_scan_artifacts_scan_run_idx"), KbScanArtifacts.KB_SCAN_ARTIFACTS, new OrderField[] { KbScanArtifacts.KB_SCAN_ARTIFACTS.SCAN_RUN_ID }, false);
     public static final Index KB_SCAN_ARTIFACTS_STORED_ARTIFACT_IDX = Internal.createIndex(DSL.name("kb_scan_artifacts_stored_artifact_idx"), KbScanArtifacts.KB_SCAN_ARTIFACTS, new OrderField[] { KbScanArtifacts.KB_SCAN_ARTIFACTS.STORED_ARTIFACT_ID }, false);

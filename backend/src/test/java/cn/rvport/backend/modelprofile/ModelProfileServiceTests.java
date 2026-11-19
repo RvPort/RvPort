@@ -317,7 +317,7 @@ class ModelProfileServiceTests {
                 actorId
         );
 
-        assertThat(responses).hasSize(2);
+        assertThat(responses).hasSize(3);
         ModelProfileAssignmentResponse testCompare = responses.stream()
                 .filter(item -> "TEST_LOG_COMPARE".equals(item.stage()))
                 .findFirst()
@@ -326,6 +326,11 @@ class ModelProfileServiceTests {
         assertThat(testCompare.agentRuntimeId()).isEqualTo(runtimeId);
         assertThat(responses).anySatisfy(item -> {
             assertThat(item.stage()).isEqualTo("REPORT_AI_REVIEW");
+            assertThat(item.modelProfileId()).isNull();
+            assertThat(item.agentRuntimeId()).isNull();
+        });
+        assertThat(responses).anySatisfy(item -> {
+            assertThat(item.stage()).isEqualTo("KB_MIGRATION");
             assertThat(item.modelProfileId()).isNull();
             assertThat(item.agentRuntimeId()).isNull();
         });

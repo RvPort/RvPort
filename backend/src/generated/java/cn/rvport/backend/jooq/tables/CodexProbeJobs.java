@@ -258,7 +258,7 @@ public class CodexProbeJobs extends TableImpl<CodexProbeJobsRecord> {
     @Override
     public List<Check<CodexProbeJobsRecord>> getChecks() {
         return Arrays.asList(
-            Internal.createCheck(this, DSL.name("codex_probe_jobs_status"), "(((status)::text = ANY (ARRAY[('QUEUED'::character varying)::text, ('RUNNING'::character varying)::text, ('DONE'::character varying)::text, ('TIMED_OUT'::character varying)::text, ('CANCELLED'::character varying)::text])))", true)
+            Internal.createCheck(this, DSL.name("codex_probe_jobs_status"), "(((status)::text = ANY ((ARRAY['QUEUED'::character varying, 'RUNNING'::character varying, 'DONE'::character varying, 'TIMED_OUT'::character varying, 'CANCELLED'::character varying])::text[])))", true)
         );
     }
 
