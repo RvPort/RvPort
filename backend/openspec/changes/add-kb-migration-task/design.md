@@ -20,7 +20,7 @@
 
 - 不新增 AgentType（复用 OPENCODE）；不更新任何 CLI 版本。
 - 不修改 findings 状态或建立 marking 回填表（二期）；不做远程真机验证与板机凭据（二期）。
-- 不修改前端与扫描器；根 compose 仅新增 `backend-migration-worker` 服务（见 D4）。
+- 不修改前端、扫描器、根 compose；技能完整改编与镜像资产（QEMU、交叉工具链）属配套 change。
 - 不做 dry-run、多验证目标产物展开、missing_class 条目投影。
 
 ## Decisions
@@ -93,17 +93,7 @@
 - 执行前后对 `input/scan_result.json` 与 `input/manifest.json` 做 SHA-256 校验，防 agent 篡改输入。
 - 技能资源（`backend/src/main/resources/kb-migration/agents/`）本 change 内置最小可运行集：主迁移 agent + reviewer subagent；完整改编（四角色、QEMU 验证细则、指令映射表）随配套 change 替换内容，布局不变。
 
-### D4 独立迁移镜像与队列分流（用户决策 2026-11-19）
-
-采用"第二个 worker 镜像"形态，而非全新容器编排：
-
-- **镜像**：backend/Dockerfile 新增 `migration` 构建目标——在现有运行时阶段之上叠加 `qemu-user-static`（apt）与 RISC-V 交叉工具链（照 bitcode-toolchain 的 aria2c + 双 sha256 + 确定性解压模式，`RISCV_TOOLCHAIN_URL` 构建参数钉版本，保留本地预置逃生出口）。产出 `rvport-backend-migration:local`。技能 md 仍走 classpath（随 jar 版本化，不进镜像层）。
-- **队列分流**：`rvport.queue.task` 现为单 quorum 队列 `rvport.tasks.default`（routingKey=队列名，direct exchange）。新增 `rvport.tasks.kb-migration` quorum 队列 + DLQ 与绑定；`TaskQueueClient` 按任务类型选择 routingKey（`KB_MIGRATION` → 专属队列，其余不变）。监听侧队列名已配置化（`RVPORT_TASK_QUEUE_NAME`），migration worker 容器设该 env 即只消费迁移队列。
-- **compose 服务**：新增 `backend-migration-worker`（image `${BACKEND_MIGRATION_IMAGE:-rvport-backend-migration:local}`、`RVPORT_WORKER_ENABLED=true`、`RVPORT_TASK_QUEUE_NAME=rvport.tasks.kb-migration`（及对应 DLQ env）、独立 `mem_limit` 护栏、模型凭据 env 与既有 worker 同步维护——三份环境块的漂移风险在验收清单中显式检查）。
-- **取消与超时**：按 workerInstanceId 前缀的取消队列自动覆盖新 worker；进程治理（supervisor、`registerLocalProcess`、stdout 64KB 纪律）全部复用本地子进程模式。
-- **不做的**：不做跨容器 workspace 共享（迁移 worker 本地临时目录即可）；不做容器间 API 编排；迁移 worker 不需要 DB/Redis 之外的新依赖。
-
-### D4b 复用 OPENCODE，不新增 AgentType
+### D4 复用 OPENCODE，不新增 AgentType
 
 agent_runtimes 表每 agent_type 唯一行且 CHECK 收紧，新增类型需种子与 CHECK 迁移；而 OPENCODE 已满足全部需求（chat completions 兼容、自定义 agent md、subagent）。`KbMigrationAgentRuntime` 通过 `AgentRuntimeAdapterRegistry.get(AgentType.OPENCODE)` 调用，模型凭据经现有 env 注入链（`RVPORT_AGENT_*`），不接触明文 key。
 
