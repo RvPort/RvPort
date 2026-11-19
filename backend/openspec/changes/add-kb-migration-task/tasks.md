@@ -2,7 +2,7 @@
 
 ## 1. 实施边界与基线
 
-- [ ] 1.1 确认 backend 独立 OpenSpec 根、基线分支 dev；只修改 backend，不操作前端、tools、根 compose 或远程环境。
+- [ ] 1.1 确认 backend 独立 OpenSpec 根、基线分支 dev；只修改 backend 与根 compose 的迁移 worker 服务，不操作前端、tools 或远程环境。
 - [ ] 1.2 核对设计 D1–D7 与现有代码事实（findings 表、evidence JSONB 字段、`ReportAiReviewRuntime` 模式、`OpenCodeAgentRuntimeAdapter` 合同）；差异先改设计再实施。
 - [ ] 1.3 记录受影响生产包与覆盖率分母、生成/第三方排除理由；建立本轮独立测试报告目录。
 
@@ -18,6 +18,13 @@
 - [x] 3.2 `TaskDomainFinalizationRepository.DOMAINS` 加 `new Domain("KB_MIGRATION", "kb_migration_runs", "finished_at", "summary", null, null)`。
 - [x] 3.3 `ModelProfileStage.KB_MIGRATION` 枚举、`ModelProfileService` 阶段白名单与 stageLabel（"KB 迁移阶段"）；`StoredArtifactOwnerType.KB_MIGRATION`。
 - [x] 3.4 单测：枚举/CHECK/白名单一致（含非法阶段拒绝、孤儿收敛覆盖新域表）。
+
+## 3b. 独立迁移镜像与队列分流（D4）
+
+- [ ] 3b.1 队列分流：`RabbitQueueConfiguration` 声明 `rvport.tasks.kb-migration` quorum 队列 + DLQ + direct 绑定；`TaskQueueClient` 按任务类型选 routingKey（KB_MIGRATION → 专属队列，其余默认不变）。
+- [ ] 3b.2 Dockerfile 新增 `migration` 目标：现有运行时阶段之上叠 `qemu-user-static`（apt）与 RISC-V 交叉工具链（aria2c + 双 sha256 + 确定性解压，`RISCV_TOOLCHAIN_URL` 钉版本，保留预置逃生出口），产出 `rvport-backend-migration:local`；构建期自检（`qemu-riscv64 --version`、`riscv64-unknown-linux-gnu-gcc --version`）。
+- [ ] 3b.3 compose 新增 `backend-migration-worker` 服务：`RVPORT_WORKER_ENABLED=true`、`RVPORT_TASK_QUEUE_NAME=rvport.tasks.kb-migration`（含 DLQ env）、独立 `mem_limit`、模型凭据 env 与既有 worker 对齐；验收清单显式核对三份环境块无漂移。
+- [ ] 3b.4 单测：routingKey 分流正确性（KB_MIGRATION 走专属队列、其他类型不受影响）、队列声明属性（quorum/DLX 与默认队列一致）。
 
 ## 4. 投影器 KbMigrationProjector
 

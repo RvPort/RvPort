@@ -8,7 +8,8 @@
 
 ## What Changes
 
-- 新增任务类型 `KB_MIGRATION`：`RvPortTaskTypes` 常量、`tasks_type_chk` CHECK 扩展、`TaskMetadataResolver` 三处 switch、`TaskDomainFinalizationRepository.DOMAINS` 收敛条目、`StageIds` 阶段常量与 readiness 接线。
+- 新增任务类型 `KB_MIGRATION`：`RvPortTaskTypes` 常量、`tasks_type_chk` CHECK 扩展、`TaskMetadataResolver` 三处 switch、`TaskDomainFinalizationRepository.DOMAINS` 收敛条目（stageId 复用 `kb-scan` 分组，无需改 `StageIds` 常量）。
+- **独立迁移 worker（用户决策 2026-11-19）**：新增 compose 服务 `backend-migration-worker`，使用独立镜像（`rvport-backend-migration:local`，同一后端代码叠 QEMU 与 RISC-V 工具链层）；配套 `rvport.tasks.kb-migration` 专属 quorum 队列与按任务类型的 routingKey 分流——迁移任务的重负载（交叉编译 + QEMU 运行）与既有 worker 资源隔离，且进程治理（supervisor、取消、stdout 纪律）全部复用 worker 子进程模式。
 - 新增 `ModelProfileStage.KB_MIGRATION`：`model_stage_assignments_stage_chk` CHECK 扩展、`ModelProfileService` 阶段白名单与 stageLabel；复用 `resolveAgentForStage` 个人绑定链。
 - 新增 `StoredArtifactOwnerType.KB_MIGRATION` 与 `stored_artifacts_owner_type_chk` 扩展；产物 `MIGRATION_DIFF`（统一 diff）与 `MIGRATION_RESULT`（条目终态 JSON）入库并登记归档候选。
 - 新增表 `kb_migration_runs`（Liquibase 0138）：运行身份、快照引用（scan_run_id、条目计数、模型 profile/runtime 引用）、状态与摘要。
@@ -32,8 +33,8 @@
 
 ## Impact
 
-- 唯一 OpenSpec 根与实施范围为 `backend/`；本 change 路径为 `backend/openspec/changes/add-kb-migration-task/`。不修改前端、tools 与根 compose；技能完整改编、镜像内 QEMU/交叉工具链与 Dockerfile 变更属配套 change `add-kb-migration-runtime-assets`（后立），本 change 在 classpath 内置最小可运行技能资源。
+- 唯一 OpenSpec 根与实施范围为 `backend/`；本 change 路径为 `backend/openspec/changes/add-kb-migration-task/`。不修改前端与 tools；根 compose 新增 `backend-migration-worker` 服务（backend/Dockerfile 新增 `migration` 构建目标）。技能以 classpath 资源随 jar 分发，不依赖镜像内目录；镜像层新增内容（qemu-user-static、RISC-V 交叉工具链）随本 change 的 Dockerfile 目标交付。
 - 新增包 `cn.rvport.backend.kb.migration`（现有 `cn.rvport.backend.migration` 已被 MigrationInput 域占用，不可混用）。
-- 复用现有受管 agent runtime（OPENCODE）、个人模型绑定、任务/SSE、对象存储、路径脱敏（ServerPathGuard）与 worker 基础设施；不新增 AgentType、不更新 CLI 版本、不新增 compose 服务。
+- 复用现有受管 agent runtime（OPENCODE）、个人模型绑定、任务/SSE、对象存储、路径脱敏（ServerPathGuard）与 worker 进程治理基础设施；不新增 AgentType、不更新 CLI 版本；compose 仅新增 `backend-migration-worker` 一个服务（独立迁移镜像，专属队列消费）。
 - 二期明确不做：远程真机验证、板机凭据通道、marking 结构化回填表（不改 findings.status）、多验证目标产物展开、dry-run。
 - 单元测试在 Docker 内执行，整体及受影响模块行覆盖率至少 90%，分支覆盖率至少 90%；验收含完整本地 Compose 冒烟（发起 KB_MIGRATION → 产物可下载）。
