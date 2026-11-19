@@ -57,7 +57,16 @@ public class ReportComparisonService {
         }
         ReportView base = resolveBaseReport(target, request == null ? null : request.baseReportId(), actorUserId, superAdmin);
         validateComparable(base, target);
-        ReportComparisonRunView reusable = comparisonRepository.findReusable(target.projectId(), base.id(), target.id()).orElse(null);
+        var basis=request==null || request.basis()==null?ReportComparisonBasis.REPORT_FACTS:request.basis();
+        UUID left=request==null?null:request.baseConfirmationId(),right=request==null?null:request.targetConfirmationId();
+        boolean confirmed=basis==ReportComparisonBasis.CONFIRMED_FIX_LIST;
+        if(confirmed && (left==null || right==null) || !confirmed && (left!=null || right!=null))
+            throw badRequest("REPORT_COMPARISON_BASIS_INVALID","请指定与对比依据一致的确认版本");
+        if(confirmed && (!comparisonRepository.hasConfirmation(base.id(),left) || !comparisonRepository.hasConfirmation(target.id(),right)))
+            throw notFound("REPORT_CONFIRMATION_NOT_FOUND","报告确认版本不存在");
+        comparisonRepository.lockComparison(target.projectId(),base.id(),target.id(),basis,left,right);
+        var reusable=(confirmed?comparisonRepository.findReusable(target.projectId(),base.id(),target.id(),basis,left,right)
+                :comparisonRepository.findReusable(target.projectId(),base.id(),target.id())).orElse(null);
         if (reusable != null) {
             return taskRepository.findById(reusable.taskId())
                     .map(TaskResponse::from)
@@ -65,6 +74,7 @@ public class ReportComparisonService {
         }
         UUID comparisonRunId = UUID.randomUUID();
         Map<String, Object> input = new LinkedHashMap<>();
+        input.put("basis",basis.name()); if(confirmed) { input.put("baseConfirmationId",left); input.put("targetConfirmationId",right); }
         input.put("projectId", target.projectId());
         input.put("comparisonRunId", comparisonRunId);
         input.put("baseReportId", base.id());
@@ -77,7 +87,8 @@ public class ReportComparisonService {
                 null,
                 "报告对比任务已创建"
         ));
-        comparisonRepository.createRun(comparisonRunId, target.projectId(), task.id(), base.id(), target.id(), TaskStatus.QUEUED);
+        if(confirmed) comparisonRepository.createRun(comparisonRunId,target.projectId(),task.id(),base.id(),target.id(),TaskStatus.QUEUED,basis,left,right);
+        else comparisonRepository.createRun(comparisonRunId, target.projectId(), task.id(), base.id(), target.id(), TaskStatus.QUEUED);
         return task;
     }
 
@@ -158,9 +169,6 @@ public class ReportComparisonService {
         }
         if (base.status() != TaskStatus.SUCCEEDED) {
             throw badRequest("REPORT_COMPARISON_BASE_NOT_READY", "base 报告未生成完成");
-        }
-        if (!comparisonRepository.hasInputs(base.id()) || !comparisonRepository.hasInputs(target.id())) {
-            throw badRequest("REPORT_COMPARISON_UNSUPPORTED", "报告缺少输入快照，无法比较");
         }
     }
 

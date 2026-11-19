@@ -12,7 +12,6 @@ import cn.rvport.backend.kb.KbFindingInput;
 import cn.rvport.backend.kb.KbScanInput;
 import cn.rvport.backend.kb.KbScanView;
 import cn.rvport.backend.kb.KbScannerResult;
-import cn.rvport.backend.migration.MigrationInputService;
 import cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentRepository;
 import cn.rvport.backend.source.SourceRepository;
 import cn.rvport.backend.source.SourceRevisionType;
@@ -350,7 +349,7 @@ class KbScanRuntimeServiceUtilityTests {
                 mock(KbScanRepository.class), mock(SourceRepository.class), mock(ToolRunRepository.class),
                 new RvPortProperties(null, kbScan, new RvPortProperties.Worker(false)),
                 new ObjectMapper(), mock(StoredArtifactService.class), mock(ArchiveCandidateRegistrar.class),
-                mock(MigrationInputService.class), mock(BuildValidationRepository.class),
+                mock(BuildValidationRepository.class),
                 mock(ProjectRuntimeEnvironmentRepository.class));
     }
 

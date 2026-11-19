@@ -28,6 +28,7 @@ public class OptimizationCycleService {
     private final ProjectContextService projectContextService;
     private final ProjectRuntimeEnvironmentService runtimeService;
     private final OptimizationValidationService validationService;
+    private final cn.rvport.backend.report.review.CurrentFixListResolver fixLists;
 
     @Autowired
     public OptimizationCycleService(
@@ -36,14 +37,14 @@ public class OptimizationCycleService {
             ProjectAccessService projectAccessService,
             ProjectContextService projectContextService,
             ProjectRuntimeEnvironmentService runtimeService,
-            OptimizationValidationService validationService
+            OptimizationValidationService validationService,cn.rvport.backend.report.review.CurrentFixListResolver fixLists
     ) {
         this.optimizationCycleRepository = optimizationCycleRepository;
         this.sourceRepository = sourceRepository;
         this.projectAccessService = projectAccessService;
         this.projectContextService = projectContextService;
         this.runtimeService = runtimeService;
-        this.validationService = validationService;
+        this.validationService = validationService; this.fixLists=fixLists;
     }
 
     @Transactional
@@ -140,7 +141,7 @@ public class OptimizationCycleService {
                 cycle.createdAt(),
                 cycle.updatedAt(),
                 current ? validation.applyTo(history) : history,
-                history, validation, validation.nextAction()
+                history, validation, validation.nextAction(),current?fixLists.current(cycle.projectId()):null
         );
     }
 

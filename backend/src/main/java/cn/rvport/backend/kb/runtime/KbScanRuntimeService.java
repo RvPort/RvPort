@@ -17,8 +17,6 @@ import cn.rvport.backend.kb.KbScanInput;
 import cn.rvport.backend.kb.KbScanRepository;
 import cn.rvport.backend.kb.KbScanView;
 import cn.rvport.backend.kb.KbScannerResult;
-import cn.rvport.backend.migration.MigrationInputService;
-import cn.rvport.backend.migration.MigrationInputSourceType;
 import cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentRepository;
 import cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentView;
 import cn.rvport.backend.source.SourceRepository;
@@ -72,7 +70,6 @@ public class KbScanRuntimeService {
     private final ObjectMapper objectMapper;
     private final StoredArtifactService storedArtifactService;
     private final ArchiveCandidateRegistrar archiveCandidateRegistrar;
-    private final MigrationInputService migrationInputService;
     private final BuildValidationRepository buildValidationRepository;
     private final ProjectRuntimeEnvironmentRepository runtimeEnvironmentRepository;
     @org.springframework.beans.factory.annotation.Autowired
@@ -86,7 +83,6 @@ public class KbScanRuntimeService {
             ObjectMapper objectMapper,
             StoredArtifactService storedArtifactService,
             ArchiveCandidateRegistrar archiveCandidateRegistrar,
-            MigrationInputService migrationInputService,
             BuildValidationRepository buildValidationRepository,
             ProjectRuntimeEnvironmentRepository runtimeEnvironmentRepository
     ) {
@@ -97,7 +93,6 @@ public class KbScanRuntimeService {
         this.objectMapper = objectMapper;
         this.storedArtifactService = storedArtifactService;
         this.archiveCandidateRegistrar = archiveCandidateRegistrar;
-        this.migrationInputService = migrationInputService;
         this.buildValidationRepository = buildValidationRepository;
         this.runtimeEnvironmentRepository = runtimeEnvironmentRepository;
     }
@@ -178,19 +173,14 @@ public class KbScanRuntimeService {
             sanitizeTextArtifact(sourceRoot, outputRoot(), reportFile);
             sanitizeTextArtifact(sourceRoot, outputRoot(), logFile);
             List<KbFindingInput> findings = mapFindings(run, sourceRoot, result);
-            var migrationInputSync = context.publish(() -> {
+            context.publish(() -> {
                 kbScanRepository.replaceFindings(run.id(), findings);
-                return migrationInputService.syncSourceRefs(
-                    run.projectId(),
-                    run.sourceRevisionId(),
-                    MigrationInputSourceType.KB_FINDING,
-                    kbScanRepository.listFindingIds(run.id())
-                );
+                return null;
             });
             Map<String, Object> summary = sanitizeMap(
                     safeSummary(result, findings.size(), compileCommands.summary()), sourceRoot, outputRoot());
-            summary.put("migrationInputCreated", migrationInputSync.createdItems().size());
-            summary.put("migrationInputSkipped", migrationInputSync.skipped());
+
+
             List<StoredArtifactView> artifacts = new ArrayList<>();
             artifacts.add(saveArtifact(context, run, KbScanArtifactType.SCAN_RESULT_JSON, resultFile, Map.of("findingCount", findings.size(), "schemaVersion", result.schemaVersion())));
             if (Files.exists(reportFile)) {

@@ -49,8 +49,6 @@ class LiquibaseMigrationTests {
                 "issue_events",
                 "reports",
                 "report_inputs",
-                "migration_input_sets",
-                "migration_input_refs",
                 "recheck_runs",
                 "diff_items",
                 "build_runs",
@@ -60,10 +58,14 @@ class LiquibaseMigrationTests {
                 "model_profiles",
                 "agent_runtimes",
                 "model_stage_assignments",
+                "report_review_runs","report_review_items","report_review_drafts","report_review_events","report_review_operations",
+                "report_fix_list_confirmations","report_fix_list_items","report_ai_review_results","source_revision_manifests",
                 "archives",
                 "archive_items",
                 "audit_logs"));
         assertTablesDoNotExist(jdbcTemplate, List.of(
+                "migration_input_sets","migration_input_refs",
+                "kb_ai_extension_runs","kb_ai_extension_results",
                 "sbom_runs",
                 "sbom_components",
                 "sbom_analysis_runs",
@@ -78,18 +80,13 @@ class LiquibaseMigrationTests {
                 "test_cases",
                 "email_verification_tokens"));
 
+        assertUniqueIndexExists(jdbcTemplate, "report_review_one_current");
+        assertUniqueIndexExists(jdbcTemplate, "report_review_one_active");
+        assertUniqueIndexExists(jdbcTemplate, "recheck_runs_confirmed_pair_active");
+        assertUniqueIndexDoesNotExist(jdbcTemplate, "recheck_runs_project_base_target_nonfailed_uidx");
         assertUniqueIndexExists(jdbcTemplate, "users_username_uidx");
         assertUniqueIndexExists(jdbcTemplate, "users_email_uidx");
         assertCheckConstraintExists(jdbcTemplate, "users", "users_username_length_chk");
-        assertCheckConstraintExists(jdbcTemplate, "migration_input_sets", "migration_input_sets_status_chk");
-        assertCheckConstraintExists(jdbcTemplate, "migration_input_refs", "migration_input_refs_status_chk");
-        assertCheckConstraintExists(jdbcTemplate, "migration_input_refs", "migration_input_refs_source_type_chk");
-        assertUniqueIndexExists(jdbcTemplate, "migration_input_sets_source_revision_active_uidx");
-        assertUniqueIndexExists(jdbcTemplate, "migration_input_refs_set_source_uidx");
-        assertIndexExists(jdbcTemplate, "migration_input_refs_project_source_revision_created_idx");
-        assertIndexExists(jdbcTemplate, "migration_input_refs_project_source_revision_source_type_idx");
-        assertIndexExists(jdbcTemplate, "migration_input_refs_project_source_revision_status_idx");
-        assertIndexExists(jdbcTemplate, "migration_input_refs_project_source_revision_detected_level_idx");
         assertUniqueIndexDoesNotExist(jdbcTemplate, "projects_name_uidx");
         assertUniqueIndexExists(jdbcTemplate, "model_profiles_name_uidx");
         assertUniqueIndexExists(jdbcTemplate, "agent_runtimes_type_uidx");

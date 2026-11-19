@@ -2,7 +2,6 @@ package cn.rvport.backend.optimization;
 
 import static cn.rvport.backend.jooq.tables.BuildRuns.BUILD_RUNS;
 import static cn.rvport.backend.jooq.tables.DiffItems.DIFF_ITEMS;
-import static cn.rvport.backend.jooq.tables.MigrationInputRefs.MIGRATION_INPUT_REFS;
 import static cn.rvport.backend.jooq.tables.OptimizationCycles.OPTIMIZATION_CYCLES;
 import static cn.rvport.backend.jooq.tables.RecheckRuns.RECHECK_RUNS;
 import static cn.rvport.backend.jooq.tables.Reports.REPORTS;
@@ -135,7 +134,6 @@ public class OptimizationCycleRepository {
 
     public OptimizationCycleSummaryResponse summary(UUID projectId, UUID sourceRevisionId, UUID previousSourceRevisionId) {
         return new OptimizationCycleSummaryResponse(
-                migrationInputs(projectId, sourceRevisionId),
                 latestReport(projectId, sourceRevisionId).orElse(null),
                 latestRecheck(projectId, previousSourceRevisionId, sourceRevisionId).orElse(null),
                 stageSummary(SOURCE_DEPLOY_RUNS.ID, SOURCE_DEPLOY_RUNS.STATUS, SOURCE_DEPLOY_RUNS.STARTED_AT,
@@ -151,13 +149,6 @@ public class OptimizationCycleRepository {
         );
     }
 
-    private OptimizationCycleSummaryResponse.MigrationInputSummary migrationInputs(UUID projectId, UUID sourceRevisionId) {
-        Map<String, Long> byStatus = grouped(MIGRATION_INPUT_REFS, MIGRATION_INPUT_REFS.STATUS,
-                MIGRATION_INPUT_REFS.PROJECT_ID.eq(projectId)
-                        .and(MIGRATION_INPUT_REFS.SOURCE_REVISION_ID.eq(sourceRevisionId)));
-        long total = byStatus.values().stream().mapToLong(Long::longValue).sum();
-        return new OptimizationCycleSummaryResponse.MigrationInputSummary(total, byStatus);
-    }
 
     private Optional<OptimizationCycleSummaryResponse.LatestReportSummary> latestReport(UUID projectId, UUID sourceRevisionId) {
         return dsl.selectFrom(REPORTS)

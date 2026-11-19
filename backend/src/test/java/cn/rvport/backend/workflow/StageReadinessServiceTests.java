@@ -20,10 +20,8 @@ import cn.rvport.backend.buildvalidation.BuildValidationScope;
 import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.dependency.DependencyAnalysisRepository;
 import cn.rvport.backend.kb.KbScanRepository;
-import cn.rvport.backend.migration.MigrationInputRefView;
-import cn.rvport.backend.migration.MigrationInputService;
+import cn.rvport.backend.report.review.ReportInputSelectionPolicy;
 import cn.rvport.backend.migration.MigrationInputSourceType;
-import cn.rvport.backend.migration.MigrationInputStatus;
 import cn.rvport.backend.project.ProjectAccessService;
 import cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentResponse;
 import cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentService;
@@ -84,7 +82,7 @@ class StageReadinessServiceTests {
     @Mock
     private ReportRepository reportRepository;
     @Mock
-    private MigrationInputService migrationInputService;
+    private ReportInputSelectionPolicy reportInputs;
     @Mock
     private ArchiveCandidateService archiveCandidateService;
     @Mock
@@ -291,79 +289,21 @@ class StageReadinessServiceTests {
                 });
     }
 
-    @Test
-    void reportKbPrerequisiteRejectsStaleHistoryAndCurrentFailure() {
-        UUID project = UUID.randomUUID();
-        UUID source = UUID.randomUUID();
-        when(contextService.snapshot(project)).thenReturn(new ProjectContextSnapshot(source, 7L));
-        when(runtimeEnvironmentService.summary(project)).thenReturn(runtime(project, 7L));
-        var kb = org.mockito.Mockito.mock(cn.rvport.backend.kb.KbScanContextService.class);
-        var service = service();
-        ReflectionTestUtils.setField(service, "scanContextService", kb);
-        for (TaskStatus status : TaskStatus.values()) {
-            when(kb.currentRun(project, source)).thenReturn(Optional.of(cn.rvport.backend.kb.KbContextFixtures.scan(
-                    project, source, status, cn.rvport.backend.kb.KbContextFixtures.CONTEXT)));
-            var response = service.readiness(project, StageIds.REPORT, UUID.randomUUID(), false);
-            assertThat(response.prerequisites()).filteredOn(item -> item.key().equals(StagePrerequisiteKeys.KB_SCAN))
-                    .singleElement().satisfies(item -> assertThat(item.status()).isEqualTo(switch (status) {
-                        case SUCCEEDED -> StagePrerequisiteStatus.SATISFIED;
-                        case PENDING, QUEUED, RUNNING -> StagePrerequisiteStatus.RUNNING;
-                        default -> StagePrerequisiteStatus.FAILED;
-                    }));
-        }
-        when(kb.currentRun(project, source)).thenReturn(Optional.empty());
-        assertThat(service.readiness(project, StageIds.REPORT, UUID.randomUUID(), false).prerequisites())
-                .filteredOn(item -> item.key().equals(StagePrerequisiteKeys.KB_SCAN)).singleElement()
-                .satisfies(item -> assertThat(item.status()).isEqualTo(StagePrerequisiteStatus.MISSING));
-    }
-
-    @Test
-    void reportReadinessTreatsZeroIncludedFindingsAsSatisfied() {
-        UUID projectId = UUID.randomUUID();
-        UUID sourceRevisionId = UUID.randomUUID();
-        when(contextService.snapshot(projectId)).thenReturn(new ProjectContextSnapshot(sourceRevisionId, 1L));
-        when(runtimeEnvironmentService.summary(projectId)).thenReturn(runtime(projectId, 1L));
-        when(migrationInputService.currentConfirmedRefsForSystem(projectId, sourceRevisionId)).thenReturn(List.of());
-
-        StageReadinessService service = service();
-        UUID actorId = UUID.randomUUID();
-        StageReadinessResponse response = service.readiness(projectId, StageIds.REPORT, actorId, false);
-
-        assertThat(response.prerequisites())
-                .filteredOn(item -> item.key().equals(StagePrerequisiteKeys.INCLUDED_FINDINGS))
-                .singleElement()
-                .satisfies(item -> {
-                    assertThat(item.status()).isEqualTo(StagePrerequisiteStatus.SATISFIED);
-                    assertThat(item.reasonCode()).isEqualTo("INCLUDED_FINDINGS_READY");
-                    assertThat(item.details()).containsEntry("count", 0L);
-                });
-        assertThatCode(() -> service.requireSatisfied(
-                projectId,
-                StageIds.REPORT,
-                List.of(StagePrerequisiteKeys.INCLUDED_FINDINGS),
-                actorId,
-                false
-        )).doesNotThrowAnyException();
-    }
-
-    @Test
-    void reportReadinessRetainsIncludedFindingCount() {
-        UUID projectId = UUID.randomUUID();
-        UUID sourceRevisionId = UUID.randomUUID();
-        when(contextService.snapshot(projectId)).thenReturn(new ProjectContextSnapshot(sourceRevisionId, 1L));
-        when(runtimeEnvironmentService.summary(projectId)).thenReturn(runtime(projectId, 1L));
-        when(migrationInputService.currentConfirmedRefsForSystem(projectId, sourceRevisionId))
-                .thenReturn(List.of(migrationInput(projectId, sourceRevisionId), migrationInput(projectId, sourceRevisionId)));
-
-        StageReadinessResponse response = service().readiness(projectId, StageIds.REPORT, UUID.randomUUID(), false);
-
-        assertThat(response.prerequisites())
-                .filteredOn(item -> item.key().equals(StagePrerequisiteKeys.INCLUDED_FINDINGS))
-                .singleElement()
-                .satisfies(item -> {
-                    assertThat(item.status()).isEqualTo(StagePrerequisiteStatus.SATISFIED);
-                    assertThat(item.details()).containsEntry("count", 2L);
-                });
+    @Test void reportUsesSameFourSourceSelectionAndAllowsSuccessfulZeroFindings() {
+        UUID project=UUID.randomUUID(),source=UUID.randomUUID();
+        when(contextService.snapshot(project)).thenReturn(new ProjectContextSnapshot(source,7L));
+        when(runtimeEnvironmentService.summary(project)).thenReturn(runtime(project,7L));
+        var missing=new ReportInputSelectionPolicy.Source("KB_FINDING",null,null,null,"ANALYSIS_NOT_READY",Map.of(),List.of(),List.of());
+        var memory=new ReportInputSelectionPolicy.Source("MEMORY_ORDER_FINDING",UUID.randomUUID(),"COMPLETE","v1",null,Map.of(),List.of(),List.of());
+        var service=service();
+        when(reportInputs.current(project)).thenReturn(new ReportInputSelectionPolicy.Selection(project,source,"ctx",List.of(missing,memory)));
+        var prerequisites=service.readiness(project,StageIds.REPORT,UUID.randomUUID(),false).prerequisites();
+        assertThat(prerequisites).anySatisfy(f->{assertThat(f.key()).isEqualTo("KB_SCAN");assertThat(f.status()).isEqualTo(StagePrerequisiteStatus.MISSING);});
+        assertThat(prerequisites).anySatisfy(f->{assertThat(f.key()).isEqualTo("INCLUDED_FINDINGS");assertThat(f.details()).containsEntry("count",0L);
+            assertThat(f.status()).isEqualTo(StagePrerequisiteStatus.SATISFIED);});
+        when(reportInputs.current(project)).thenReturn(new ReportInputSelectionPolicy.Selection(project,source,"ctx",List.of(missing)));
+        assertThatThrownBy(()->service.requireSatisfied(project,StageIds.REPORT,List.of("INCLUDED_FINDINGS"),UUID.randomUUID(),false))
+                .isInstanceOf(PrerequisiteNotSatisfiedException.class);
     }
 
     @Test
@@ -700,7 +640,7 @@ class StageReadinessServiceTests {
                 kbScanRepository,
                 dependencyAnalysisRepository,
                 reportRepository,
-                migrationInputService,
+                reportInputs,
                 archiveCandidateService,
                 automatedTestRepository
         ));
@@ -717,7 +657,7 @@ class StageReadinessServiceTests {
                 kbScanRepository,
                 dependencyAnalysisRepository,
                 reportRepository,
-                migrationInputService,
+                reportInputs,
                 archiveCandidateService,
                 automatedTestRepository,
                 specializedAnalysisRepository,
@@ -729,7 +669,7 @@ class StageReadinessServiceTests {
         return withKbContext(new StageReadinessService(
                 projectAccessService, contextService, sourceRepository, runtimeEnvironmentService,
                 sourceDeployRepository, buildValidationRepository, kbScanRepository,
-                dependencyAnalysisRepository, reportRepository, migrationInputService,
+                dependencyAnalysisRepository, reportRepository, reportInputs,
                 archiveCandidateService, automatedTestRepository, specializedAnalysisRepository,
                 specializedToolHealthService, specializedBitcodeCapabilityResolver));
     }
@@ -809,28 +749,4 @@ class StageReadinessServiceTests {
         );
     }
 
-    private MigrationInputRefView migrationInput(UUID projectId, UUID sourceRevisionId) {
-        OffsetDateTime now = OffsetDateTime.now();
-        return new MigrationInputRefView(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                projectId,
-                sourceRevisionId,
-                "issue",
-                MigrationInputSourceType.KB_FINDING,
-                UUID.randomUUID(),
-                "HIGH",
-                "src/main.c:1",
-                "fix",
-                "rule",
-                "src/main.c",
-                null,
-                null,
-                "fingerprint",
-                MigrationInputStatus.CONFIRMED,
-                null,
-                now,
-                now
-        );
-    }
 }

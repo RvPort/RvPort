@@ -88,7 +88,7 @@ class ReportComparisonRuntimeServiceTests {
         ArgumentCaptor<List<ReportComparisonRepository.DiffItemCreateCommand>> captor = ArgumentCaptor.captor();
         verify(comparisonRepository).replaceDiffItems(eq(projectId), eq(comparisonRunId), captor.capture());
         assertThat(captor.getValue()).extracting(ReportComparisonRepository.DiffItemCreateCommand::diffStatus)
-                .containsExactlyInAnyOrder("UNCHANGED", "CHANGED", "RESOLVED", "NEW");
+                .containsExactlyInAnyOrder("UNCHANGED", "CHANGED", "NOT_OBSERVED", "NEW");
         assertThat(captor.getValue()).filteredOn(item -> item.diffStatus().equals("UNCHANGED"))
                 .singleElement()
                 .satisfies(item -> assertThat(item.matchReason()).isEqualTo("EXACT_FINGERPRINT"));
@@ -111,7 +111,7 @@ class ReportComparisonRuntimeServiceTests {
     }
 
     @Test
-    void rejectsEmptyInputSnapshotsAsUnsupportedEdgeCase() {
+    void emptyBaseReportsOnlyNewItems() {
         UUID projectId = UUID.randomUUID();
         UUID comparisonRunId = UUID.randomUUID();
         UUID baseReportId = UUID.randomUUID();
@@ -121,11 +121,10 @@ class ReportComparisonRuntimeServiceTests {
         when(comparisonRepository.listAllInputs(baseReportId)).thenReturn(List.of());
         when(comparisonRepository.listAllInputs(targetReportId)).thenReturn(List.of(input(targetReportId, "new", "fp", "src/a.c", "main", "LOW", "fix")));
 
-        assertThatThrownBy(() -> service().run(new ReportComparisonTaskInput(projectId, comparisonRunId, baseReportId, targetReportId), context))
-                .isInstanceOf(TaskExecutionException.class)
-                .hasMessage("报告缺少可比较的输入快照");
+        service().run(new ReportComparisonTaskInput(projectId,comparisonRunId,baseReportId,targetReportId),context);
+        verify(comparisonRepository).replaceDiffItems(eq(projectId),eq(comparisonRunId),org.mockito.ArgumentMatchers.argThat(rows->
+                rows.size()==1 && "NEW".equals(rows.getFirst().diffStatus())));
 
-        verify(comparisonRepository).markFailed(eq(comparisonRunId), eq("REPORT_NO_CONFIRMED_INPUTS"), eq("报告缺少可比较的输入快照"), any());
     }
 
     @Test
@@ -267,7 +266,7 @@ class ReportComparisonRuntimeServiceTests {
     }
 
     @Test
-    void rejectsEmptyTargetSnapshots() {
+    void emptyTargetDoesNotClaimResolution() {
         UUID projectId = UUID.randomUUID();
         UUID runId = UUID.randomUUID();
         UUID baseId = UUID.randomUUID();
@@ -277,9 +276,10 @@ class ReportComparisonRuntimeServiceTests {
         when(comparisonRepository.listAllInputs(baseId)).thenReturn(List.of(input(baseId, "old", "fp", "src/a.c", "main", "LOW", "fix")));
         when(comparisonRepository.listAllInputs(targetId)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service().run(new ReportComparisonTaskInput(projectId, runId, baseId, targetId), context))
-                .isInstanceOf(TaskExecutionException.class)
-                .hasMessage("报告缺少可比较的输入快照");
+        service().run(new ReportComparisonTaskInput(projectId,runId,baseId,targetId),context);
+        verify(comparisonRepository).replaceDiffItems(eq(projectId),eq(runId),org.mockito.ArgumentMatchers.argThat(rows->
+                rows.size()==1 && "NOT_OBSERVED".equals(rows.getFirst().diffStatus())));
+
     }
 
     @Test
@@ -301,7 +301,7 @@ class ReportComparisonRuntimeServiceTests {
         ArgumentCaptor<List<ReportComparisonRepository.DiffItemCreateCommand>> captor = ArgumentCaptor.captor();
         verify(comparisonRepository).replaceDiffItems(eq(projectId), eq(runId), captor.capture());
         assertThat(captor.getValue()).extracting(ReportComparisonRepository.DiffItemCreateCommand::diffStatus)
-                .containsExactlyInAnyOrder("UNCHANGED", "RESOLVED");
+                .containsExactlyInAnyOrder("UNCHANGED", "NOT_OBSERVED");
     }
 
     @Test
@@ -328,7 +328,7 @@ class ReportComparisonRuntimeServiceTests {
 
     @Test
     void normalizesNullIdentityAndNullComparableValue() {
-        ReportComparisonRuntimeService service = service();
+        SnapshotComparison service = new SnapshotComparison();
         String normalized = ReflectionTestUtils.invokeMethod(service, "normalize", (Object) null);
         String value = ReflectionTestUtils.invokeMethod(service, "value", null, "key");
         assertThat(normalized).isEmpty();
@@ -350,9 +350,9 @@ class ReportComparisonRuntimeServiceTests {
         detail.put("title", "Anchor");
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("sourceDetail", detail);
-        ReportInputView oldInput = new ReportInputView(UUID.randomUUID(), baseId, ReportInputType.MIGRATION_INPUT_REF,
+        ReportInputView oldInput = new ReportInputView(UUID.randomUUID(), baseId, ReportInputType.SCAN_FINDING,
                 UUID.randomUUID(), snapshot, OffsetDateTime.now());
-        ReportInputView newInput = new ReportInputView(UUID.randomUUID(), targetId, ReportInputType.MIGRATION_INPUT_REF,
+        ReportInputView newInput = new ReportInputView(UUID.randomUUID(), targetId, ReportInputType.SCAN_FINDING,
                 UUID.randomUUID(), new LinkedHashMap<>(snapshot), OffsetDateTime.now());
         when(comparisonRepository.listAllInputs(baseId)).thenReturn(List.of(oldInput));
         when(comparisonRepository.listAllInputs(targetId)).thenReturn(List.of(newInput));
@@ -376,9 +376,9 @@ class ReportComparisonRuntimeServiceTests {
         UUID targetId = UUID.randomUUID();
         when(reportRepository.findById(baseId)).thenReturn(java.util.Optional.of(report(baseId, projectId, UUID.randomUUID())));
         when(reportRepository.findById(targetId)).thenReturn(java.util.Optional.of(report(targetId, projectId, UUID.randomUUID())));
-        ReportInputView oldInput = new ReportInputView(UUID.randomUUID(), baseId, ReportInputType.MIGRATION_INPUT_REF,
+        ReportInputView oldInput = new ReportInputView(UUID.randomUUID(), baseId, ReportInputType.SCAN_FINDING,
                 UUID.randomUUID(), null, OffsetDateTime.now());
-        ReportInputView newInput = new ReportInputView(UUID.randomUUID(), targetId, ReportInputType.MIGRATION_INPUT_REF,
+        ReportInputView newInput = new ReportInputView(UUID.randomUUID(), targetId, ReportInputType.SCAN_FINDING,
                 UUID.randomUUID(), Map.of(), OffsetDateTime.now());
         when(comparisonRepository.listAllInputs(baseId)).thenReturn(List.of(oldInput));
         when(comparisonRepository.listAllInputs(targetId)).thenReturn(List.of(newInput));
@@ -388,6 +388,42 @@ class ReportComparisonRuntimeServiceTests {
         verify(comparisonRepository).replaceDiffItems(eq(projectId), eq(runId), any());
     }
 
+    @Test void comparesOnlyTheRequestedConfirmedVersionsIncludingExclusionsAndEmptyLists() {
+        var project=UUID.randomUUID(); var run=UUID.randomUUID();
+        var base=UUID.randomUUID(); var target=UUID.randomUUID();
+        var oldVersion=UUID.randomUUID(); var newVersion=UUID.randomUUID();
+        var request=new ReportComparisonTaskInput(project,run,base,target,
+                cn.rvport.backend.reportcomparison.ReportComparisonBasis.CONFIRMED_FIX_LIST,oldVersion,newVersion);
+        when(reportRepository.findById(base)).thenReturn(java.util.Optional.of(report(base,project,UUID.randomUUID())));
+        when(reportRepository.findById(target)).thenReturn(java.util.Optional.of(report(target,project,UUID.randomUUID())));
+        assertThatThrownBy(()->service().run(request,context)).isInstanceOf(TaskExecutionException.class);
+        when(comparisonRepository.hasConfirmation(base,oldVersion)).thenReturn(true);
+        assertThatThrownBy(()->service().run(request,context)).isInstanceOf(TaskExecutionException.class);
+        when(comparisonRepository.hasConfirmation(target,newVersion)).thenReturn(true);
+        when(comparisonRepository.confirmationInputs(base,oldVersion)).thenReturn(List.of(
+                disposition(base,"keep","TO_FIX"),disposition(base,"gone","TO_FIX"),disposition(base,"skip","EXCLUDED")));
+        when(comparisonRepository.confirmationInputs(target,newVersion)).thenReturn(List.of(
+                disposition(target,"keep","EXCLUDED"),disposition(target,"added","TO_FIX"),disposition(target,"hidden","EXCLUDED")));
+        service().run(request,context);
+        ArgumentCaptor<List<ReportComparisonRepository.DiffItemCreateCommand>> diffs=ArgumentCaptor.captor();
+        verify(comparisonRepository).replaceDiffItems(eq(project),eq(run),diffs.capture());
+        assertThat(diffs.getValue()).extracting(ReportComparisonRepository.DiffItemCreateCommand::diffStatus)
+                .containsExactlyInAnyOrder("EXCLUDED","NO_LONGER_SELECTED","NEW");
+        assertThat(diffs.getValue()).filteredOn(row->"EXCLUDED".equals(row.diffStatus())).singleElement().satisfies(row->{
+            assertThat(row.oldSnapshot()).containsEntry("confirmationStatus","TO_FIX");
+            assertThat(row.newSnapshot()).containsEntry("confirmationStatus","EXCLUDED");
+        });
+        when(comparisonRepository.confirmationInputs(base,oldVersion)).thenReturn(List.of());
+        when(comparisonRepository.confirmationInputs(target,newVersion)).thenReturn(List.of());
+        service().run(request,context);
+        verify(comparisonRepository).replaceDiffItems(project,run,List.of());
+        org.mockito.Mockito.verify(comparisonRepository,org.mockito.Mockito.never()).listAllInputs(any());
+    }
+    private ReportInputView disposition(UUID report,String title,String state) {
+        var data=snapshot(title,title,title,"symbol","LOW","repair","rule",title);
+        data.put("confirmationStatus",state);
+        return new ReportInputView(UUID.randomUUID(),report,ReportInputType.SCAN_FINDING,UUID.randomUUID(),data,OffsetDateTime.now());
+    }
     private ReportComparisonRuntimeService service() {
         return new ReportComparisonRuntimeService(reportRepository, comparisonRepository, archiveCandidateRegistrar);
     }
@@ -399,7 +435,7 @@ class ReportComparisonRuntimeServiceTests {
 
     private ReportComparisonRunView run(UUID projectId, UUID runId, UUID baseReportId, UUID targetReportId) {
         return new ReportComparisonRunView(runId, projectId, UUID.randomUUID(), baseReportId, targetReportId, TaskStatus.SUCCEEDED,
-                Map.of(), null, null, OffsetDateTime.now(), OffsetDateTime.now(), OffsetDateTime.now(), OffsetDateTime.now());
+                Map.of(), null, null, OffsetDateTime.now(), OffsetDateTime.now(), OffsetDateTime.now(), OffsetDateTime.now(), cn.rvport.backend.reportcomparison.ReportComparisonBasis.REPORT_FACTS, null, null);
     }
 
     private ReportInputView input(UUID reportId, String title, String fingerprint, String path, String symbol, String level, String recommendation) {
@@ -410,7 +446,7 @@ class ReportComparisonRuntimeServiceTests {
         return new ReportInputView(
                 UUID.randomUUID(),
                 reportId,
-                ReportInputType.MIGRATION_INPUT_REF,
+                ReportInputType.SCAN_FINDING,
                 UUID.randomUUID(),
                 snapshot(title, fingerprint, path, symbol, level, recommendation, ruleId, anchor),
                 OffsetDateTime.now()

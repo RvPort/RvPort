@@ -22,7 +22,7 @@ class ReportComparisonResponseTests {
         UUID targetId = UUID.randomUUID();
         ReportComparisonRunView run = new ReportComparisonRunView(
                 comparisonId, projectId, taskId, baseId, targetId, TaskStatus.SUCCEEDED,
-                Map.of("fixed", 2), null, null, now, now, now, now);
+                Map.of("fixed", 2), null, null, now, now, now, now, ReportComparisonBasis.CONFIRMED_FIX_LIST, UUID.randomUUID(), UUID.randomUUID());
         ReportView base = report(baseId, projectId, "base", now);
         ReportView target = report(targetId, projectId, "target", now);
         ReportComparisonDiffSummaryResponse diffSummary = new ReportComparisonDiffSummaryResponse(
@@ -32,6 +32,9 @@ class ReportComparisonResponseTests {
         ReportComparisonSummaryResponse summary = ReportComparisonSummaryResponse.from(run);
 
         assertThat(response.id()).isEqualTo(comparisonId);
+        assertThat(response.basis()).isEqualTo(ReportComparisonBasis.CONFIRMED_FIX_LIST);
+        assertThat(response.baseConfirmationId()).isEqualTo(run.baseConfirmationId());
+        assertThat(summary.targetConfirmationId()).isEqualTo(run.targetConfirmationId());
         assertThat(response.baseReport().title()).isEqualTo("base");
         assertThat(response.targetReport().title()).isEqualTo("target");
         assertThat(response.diffSummary()).isSameAs(diffSummary);
@@ -56,7 +59,7 @@ class ReportComparisonResponseTests {
         OffsetDateTime now = OffsetDateTime.now();
         ReportComparisonRunView run = new ReportComparisonRunView(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                TaskStatus.RUNNING, Map.of(), null, null, now, null, now, now);
+                TaskStatus.RUNNING, Map.of(), null, null, now, null, now, now, cn.rvport.backend.reportcomparison.ReportComparisonBasis.REPORT_FACTS, null, null);
 
         ReportComparisonResponse response = ReportComparisonResponse.from(run, null, null, null);
 

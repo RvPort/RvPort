@@ -8,10 +8,10 @@ import cn.rvport.backend.jooq.Indexes;
 import cn.rvport.backend.jooq.Keys;
 import cn.rvport.backend.jooq.Public;
 import cn.rvport.backend.jooq.tables.CodexProbeJobs.CodexProbeJobsPath;
-import cn.rvport.backend.jooq.tables.KbAiExtensionRuns.KbAiExtensionRunsPath;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeResults.ModelProfileAgentProbeResultsPath;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeRuns.ModelProfileAgentProbeRunsPath;
 import cn.rvport.backend.jooq.tables.ModelStageAssignments.ModelStageAssignmentsPath;
+import cn.rvport.backend.jooq.tables.ReportReviewRuns.ReportReviewRunsPath;
 import cn.rvport.backend.jooq.tables.Users.UsersPath;
 import cn.rvport.backend.jooq.tables.records.ModelProfilesRecord;
 
@@ -349,19 +349,6 @@ public class ModelProfiles extends TableImpl<ModelProfilesRecord> {
         return _codexProbeJobs;
     }
 
-    private transient KbAiExtensionRunsPath _kbAiExtensionRuns;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_runs</code> table
-     */
-    public KbAiExtensionRunsPath kbAiExtensionRuns() {
-        if (_kbAiExtensionRuns == null)
-            _kbAiExtensionRuns = new KbAiExtensionRunsPath(this, null, Keys.KB_AI_EXTENSION_RUNS__KB_AI_EXTENSION_RUNS_MODEL_PROFILE_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionRuns;
-    }
-
     private transient ModelStageAssignmentsPath _modelAssignmentsOwnerProfileFk;
 
     /**
@@ -429,6 +416,19 @@ public class ModelProfiles extends TableImpl<ModelProfilesRecord> {
             _modelStageAssignmentsModelProfileIdFkey = new ModelStageAssignmentsPath(this, null, Keys.MODEL_STAGE_ASSIGNMENTS__MODEL_STAGE_ASSIGNMENTS_MODEL_PROFILE_ID_FKEY.getInverseKey());
 
         return _modelStageAssignmentsModelProfileIdFkey;
+    }
+
+    private transient ReportReviewRunsPath _reportReviewRuns;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_review_runs</code> table
+     */
+    public ReportReviewRunsPath reportReviewRuns() {
+        if (_reportReviewRuns == null)
+            _reportReviewRuns = new ReportReviewRunsPath(this, null, Keys.REPORT_REVIEW_RUNS__REPORT_REVIEW_RUNS_CONFIGURATION_USER_ID_MODEL_PROFILE_ID_FKEY.getInverseKey());
+
+        return _reportReviewRuns;
     }
 
     @Override

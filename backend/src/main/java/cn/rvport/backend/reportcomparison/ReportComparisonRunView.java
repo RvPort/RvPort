@@ -19,7 +19,10 @@ public record ReportComparisonRunView(
         OffsetDateTime startedAt,
         OffsetDateTime finishedAt,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        ReportComparisonBasis basis,
+        UUID baseConfirmationId,
+        UUID targetConfirmationId
 ) {
     static ReportComparisonRunView from(ReportComparisonRunsRecord record, Map<String, Object> summary) {
         return new ReportComparisonRunView(
@@ -35,7 +38,8 @@ public record ReportComparisonRunView(
                 record.getStartedAt(),
                 record.getFinishedAt(),
                 record.getCreatedAt(),
-                record.getUpdatedAt()
+                record.getUpdatedAt(),
+                ReportComparisonBasis.valueOf(record.getBasis()), record.getBaseConfirmationId(), record.getTargetConfirmationId()
         );
     }
 }

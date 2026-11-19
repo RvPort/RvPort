@@ -39,7 +39,7 @@ abstract class ConfigurableAgentRuntimeAdapter implements AgentRuntimeAdapter {
         Map<String, String> environment = environment(request);
         environment.putAll(additionalEnvironment(request));
         if (budget.expired()) { return new CodexProcessResult(-1, true, "", ""); }
-        return processRunner.run(command, environment, null, request.workspace(), budget.remaining());
+        return processRunner.run(command, request.executionEnvironment(environment), null, request.workspace(), budget.remaining());
     }
 
     protected abstract List<String> fallbackArgs(AgentRuntimeExecutionRequest request) throws IOException;

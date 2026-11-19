@@ -2,7 +2,6 @@ package cn.rvport.backend.optimization;
 
 import static cn.rvport.backend.jooq.tables.BuildRuns.BUILD_RUNS;
 import static cn.rvport.backend.jooq.tables.DiffItems.DIFF_ITEMS;
-import static cn.rvport.backend.jooq.tables.MigrationInputRefs.MIGRATION_INPUT_REFS;
 import static cn.rvport.backend.jooq.tables.SourceDeployRuns.SOURCE_DEPLOY_RUNS;
 import static cn.rvport.backend.jooq.tables.TestRuns.TEST_RUNS;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -146,9 +145,8 @@ class OptimizationCycleRepositoryTests {
     void summarizesEmptyStagesWithoutFabricatingLatestRuns() throws Exception {
         try (JooqMockDatabase database = new JooqMockDatabase()) {
             OptimizationCycleRepository repository = repository(database);
-            for (int index = 0; index < 10; index++) database.enqueueResult(database.result(new Field<?>[0]));
+            for (int index = 0; index < 9; index++) database.enqueueResult(database.result(new Field<?>[0]));
             OptimizationCycleSummaryResponse summary = repository.summary(PROJECT_ID, REVISION_ID, null);
-            assertThat(summary.migrationInputs().total()).isZero();
             assertThat(summary.report()).isNull();
             assertThat(summary.recheck()).isNull();
             assertThat(summary.sourceDeploy()).isEqualTo(OptimizationCycleSummaryResponse.StageRunSummary.empty());
@@ -160,30 +158,10 @@ class OptimizationCycleRepositoryTests {
     }
 
     @Test
-    void summaryGroupsNullAndBlankStatusesUnderUnknown() throws Exception {
-        try (JooqMockDatabase database = new JooqMockDatabase()) {
-            OptimizationCycleRepository repository = repository(database);
-            database.enqueueResult(database.result(
-                    new Field<?>[]{MIGRATION_INPUT_REFS.STATUS, DSL.count()},
-                    new Object[]{null, 1L}, new Object[]{" ", 2L}));
-            for (int index = 0; index < 9; index++) {
-                database.enqueueResult(database.result(new Field<?>[0]));
-            }
-
-            OptimizationCycleSummaryResponse summary = repository.summary(PROJECT_ID, REVISION_ID, null);
-
-            assertThat(summary.migrationInputs().total()).isEqualTo(2L);
-            assertThat(summary.migrationInputs().byStatus()).containsEntry("UNKNOWN", 2L);
-            database.verifyComplete();
-        }
-    }
-
-    @Test
     void summarizesPopulatedReportRecheckStagesAndComparison() throws Exception {
         try (JooqMockDatabase database = new JooqMockDatabase()) {
             OptimizationCycleRepository repository = repository(database);
-            database.enqueueResult(group(database, MIGRATION_INPUT_REFS.STATUS, "CONFIRMED", 2L))
-                    .enqueueRecord(report())
+            database.enqueueRecord(report())
                     .enqueueRecord(recheck())
                     .enqueueResult(database.result(new Field<?>[]{DSL.count()}, new Object[]{3L}))
                     .enqueueResult(group(database, DIFF_ITEMS.DIFF_STATUS, "FIXED", 2L))
@@ -197,7 +175,6 @@ class OptimizationCycleRepositoryTests {
                     .enqueueResult(stage(database, TEST_RUNS.ID, TEST_RUNS.STATUS, TEST_RUNS.STARTED_AT, TEST_RUNS.FINISHED_AT))
                     .enqueueRecord(comparison());
             OptimizationCycleSummaryResponse summary = repository.summary(PROJECT_ID, REVISION_ID, PREVIOUS_REVISION_ID);
-            assertThat(summary.migrationInputs().byStatus()).containsEntry("CONFIRMED", 2L);
             assertThat(summary.report().highRiskCount()).isEqualTo(3);
             assertThat(summary.report().workloadSummary()).isEqualTo("large");
             assertThat(summary.recheck().diffTotal()).isEqualTo(3);
@@ -230,7 +207,7 @@ class OptimizationCycleRepositoryTests {
 
     private static RecheckRunsRecord recheck() {
         return new RecheckRunsRecord(RUN_ID, PROJECT_ID, TASK_ID, PREVIOUS_REVISION_ID, REVISION_ID, null, null,
-                JSONB.valueOf("{}"), TaskStatus.SUCCEEDED.name(), NOW);
+                JSONB.valueOf("{}"), TaskStatus.SUCCEEDED.name(), NOW, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
     }
 
     private static TestComparisonRunsRecord comparison() {

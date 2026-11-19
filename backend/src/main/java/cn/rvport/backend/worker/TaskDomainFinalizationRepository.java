@@ -23,7 +23,6 @@ public class TaskDomainFinalizationRepository {
             new Domain("DEPENDENCY_ANALYSIS", "dependency_analysis_runs", "finished_at", "summary", null, null),
             new Domain("DEPENDENCY_AUTO_FIX", "dependency_auto_fix_runs", "finished_at", "summary", "error_summary", null),
             new Domain("KB_SCAN", "kb_scan_runs", "finished_at", "summary", null, null),
-            new Domain("KB_AI_EXTENSION", "kb_ai_extension_runs", "finished_at", "summary", null, null),
             new Domain("FLOATING_POINT_ANALYSIS", "specialized_analysis_runs", "finished_at", "summary", null, null),
             new Domain("MEMORY_ORDER_ANALYSIS", "specialized_analysis_runs", "finished_at", "summary", null, null),
             new Domain("BUILD_VALIDATION", "build_runs", "finished_at", "build_facts", null, "failure_category"),
@@ -50,6 +49,12 @@ public class TaskDomainFinalizationRepository {
             count += finish(domain, task);
         }
         count += finish(TOOLS, task);
+        if ("REPORT_GENERATE".equals(task.type())) {
+            count += dsl.execute("""
+                    update report_review_runs r set active=false,ai_summary=jsonb_build_object('execution','FAILED','taskStatus',?::text)
+                    from reports p where p.id=r.report_id and p.task_id=? and r.active and r.publish_state='NOT_PUBLISHED'
+                    """,task.status().name(),task.id());
+        }
         if ("DEPENDENCY_AUTO_FIX".equals(task.type())) {
             // Item status has no TIMEOUT value; task/run retain TIMEOUT and the item records failure.
             count += dsl.update(DSL.table("dependency_auto_fix_items"))

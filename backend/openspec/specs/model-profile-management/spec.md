@@ -1,7 +1,9 @@
 ## Purpose
 
-定义 RvPort 后端模型 profile 管理、模型可用性测试和阶段模型绑定的配置边界，使测试结果比较等阶段只能从受控模型配置中解析运行参数。
+定义个人模型 profile 管理、通用 Agent 兼容性测试及 TEST_LOG_COMPARE、REPORT_AI_REVIEW 阶段绑定，使业务任务按触发者个人配置解析受控模型和平台 Agent runtime。
+
 ## Requirements
+
 ### Requirement: 模型 Profile 管理必须支持多个模型配置
 后端 SHALL 提供已认证配置所有者模型 profile 管理能力，用于维护多个可供阶段绑定使用的 OpenAI-compatible 模型配置。
 
@@ -63,16 +65,16 @@
 - **AND** 响应 MUST NOT 泄漏 API key、授权头或服务器真实路径
 
 ### Requirement: 阶段模型绑定必须从已配置 Profile 中选择
-后端 SHALL 提供阶段模型绑定能力，使 `TEST_LOG_COMPARE` 测试结果比较阶段和 `KB_AI_EXTENSION` 知识库 AI 扩展阶段可以选择一个已启用模型 profile 和一个已启用 agent runtime。
+后端 SHALL 提供阶段模型绑定能力，使 `TEST_LOG_COMPARE` 测试结果比较阶段和 `REPORT_AI_REVIEW` 报告 AI 复核阶段可以选择一个已启用模型 profile 和一个已启用 agent runtime。
 
 #### Scenario: 查询阶段模型绑定
 - **WHEN** 已认证配置所有者调用阶段模型绑定查询 API
-- **THEN** 后端 SHALL 返回 `TEST_LOG_COMPARE` 和 `KB_AI_EXTENSION` 阶段及其当前绑定的模型 profile 摘要和 agent runtime 摘要
+- **THEN** 后端 SHALL 返回 `TEST_LOG_COMPARE` 和 `REPORT_AI_REVIEW` 阶段及其当前绑定的模型 profile 摘要和 agent runtime 摘要
 - **AND** 未绑定时 SHALL 明确返回空绑定状态
 
 #### Scenario: 保存阶段模型绑定
 - **WHEN** 已认证配置所有者保存阶段模型绑定
-- **THEN** 后端 SHALL 校验阶段名称属于后端白名单，当前允许 `TEST_LOG_COMPARE` 和 `KB_AI_EXTENSION`
+- **THEN** 后端 SHALL 校验阶段名称属于后端白名单，当前允许 `TEST_LOG_COMPARE` 和 `REPORT_AI_REVIEW`
 - **AND** 后端 SHALL 校验绑定的模型 profile 属于当前用户、存在且已启用
 - **AND** 后端 SHALL 校验绑定的 agent runtime 存在且已启用
 - **AND** 后端 SHALL 保存当前所有者与阶段到模型 profile 和 agent runtime 的唯一绑定
@@ -83,7 +85,7 @@
 - **AND** 后端 MUST NOT 保存部分非法绑定
 
 #### Scenario: 运行时解析阶段模型
-- **WHEN** 后续测试结果比较 agent runtime 需要执行模型任务
+- **WHEN** 用户触发 AI 增强报告复核，或后续测试结果比较需要执行模型任务
 - **THEN** 后端 SHALL 创建时通过配置主体的个人阶段绑定解析模型 profile 和 agent runtime，执行时使用已持久化引用并复核归属
 - **AND** 如果阶段未绑定、绑定 profile 已禁用或绑定 agent runtime 已禁用，后端 SHALL 返回明确业务错误
 - **AND** 业务任务请求 MUST NOT 直接提交 base URL、API key、agent 类型、可执行路径或任意模型参数
@@ -123,20 +125,10 @@
 - **AND** 结果 SHALL 包含 `AGENT_WORKSPACE_TOOL` 或等效分项状态
 - **AND** 结果 SHALL 包含当前测试的 `agentType` 和 `agentRuntimeId`
 
-#### Scenario: 历史测试比较输出 schema 结果
-- **WHEN** 配置所有者读取历史 TEST_LOG_COMPARE 专项测试结果
-- **THEN** 后端 SHALL 保留历史阶段专项结果，不在新通用 probe 中执行该检查
-- **AND** 原有结果包含 TEST_COMPARE_SCHEMA 时 SHALL 保持该历史事实
-
-#### Scenario: 历史 KB AI 扩展输出 schema 结果
-- **WHEN** 配置所有者读取历史 KB_AI_EXTENSION 专项测试结果
-- **THEN** 后端 SHALL 保留历史阶段专项结果，不在新通用 probe 中执行该检查
-- **AND** 原有结果包含 KB_AI_EXTENSION_SCHEMA 时 SHALL 保持该历史事实
-
 #### Scenario: 返回聚合兼容性状态
 - **WHEN** 模型 profile 测试完成
 - **THEN** API 响应 SHALL 返回 agent 类型、agent runtime ID、基础可用状态、agent 兼容状态及通用 workspace 读取和写入状态
-- **AND** 历史阶段兼容字段 SHALL 仅用于读取历史事实，不参与新通用 probe 的结果或聚合判断
+- **AND** SHALL 删除旧阶段专项 schema 兼容字段，只保存当前通用 probe 结果
 - **AND** 后端 SHALL 保存最近一次测试的脱敏摘要、分项结果和测试时间
 - **AND** 响应 MUST NOT 返回 API key、授权头、完整 agent 命令或服务器真实路径
 
@@ -214,30 +206,6 @@
 - **WHEN** 已绑定的模型与 Agent Runtime 生成不符合业务阶段 schema 的输出
 - **THEN** 该阶段任务 SHALL 按自身错误语义失败
 - **AND** 后端 MUST NOT 将该失败写成模型与 Agent Runtime 的通用不兼容结果
-
-### Requirement: 阶段模型绑定必须支持 KB_AI_EXTENSION
-模型 profile 管理 SHALL 支持 `KB_AI_EXTENSION` 阶段绑定，使 KB AI 扩展扫描只能使用配置所有者配置的受控模型 profile 和 agent runtime。
-
-#### Scenario: 查询 KB AI 扩展阶段绑定
-- **WHEN** 已认证配置所有者调用阶段模型绑定查询 API
-- **THEN** 响应 SHALL 包含 `KB_AI_EXTENSION` 阶段及其当前绑定的模型 profile 摘要和 agent runtime 摘要
-- **AND** 未绑定时 SHALL 明确返回空绑定状态
-
-#### Scenario: 保存 KB AI 扩展阶段绑定
-- **WHEN** 已认证配置所有者保存 `KB_AI_EXTENSION` 阶段绑定
-- **THEN** 后端 SHALL 校验绑定的模型 profile 属于当前用户、存在且已启用
-- **AND** 后端 SHALL 校验绑定的 agent runtime 存在且已启用
-- **AND** 后端 SHALL 保存当前所有者与该阶段到模型 profile 和 agent runtime 的唯一绑定
-
-#### Scenario: KB AI 扩展解析阶段模型
-- **WHEN** 后端准备执行 KB AI 扩展扫描
-- **THEN** 后端 SHALL 创建时通过触发者的 `KB_AI_EXTENSION` 个人绑定解析并保存引用，执行时校验持久化主体和引用
-- **AND** 业务任务请求 MUST NOT 直接提交 base URL、API key、agent 类型、可执行路径或任意模型参数
-
-#### Scenario: KB AI 扩展阶段配置不可用
-- **WHEN** 阶段未绑定、绑定 profile 已禁用、绑定 agent runtime 已禁用或 profile 缺少必要连接信息
-- **THEN** 后端 SHALL 返回 KB AI 扩展功能不可用错误
-- **AND** 响应 MUST NOT 泄漏 provider secret、agent 命令或内部执行细节
 
 ### Requirement: Agent Probe 必须从稳定的结构化输出边界解析结果
 模型 Profile Agent Probe SHALL 优先从 Agent Runtime 的 stdout 提取结构化结果，并仅在 stdout 不包含满足当前检查契约的 JSON 时，才从移除传输包装后的 merged output 回退提取。诊断日志中的通道标签、ANSI 控制字符和输出缓冲分块 MUST NOT 导致有效 Agent 结果被误判为不兼容。
@@ -420,3 +388,14 @@ Codex CHAT 调用 SHALL 在 worker 领取时重新检查 profile/runtime 有效�
 - **WHEN** 通过认证与 CSRF 校验的 admin 调用旧测试路径
 - **THEN** 后端 SHALL 按未注册 API 返回 404，不创建任务、不调用模型、不返回 profile 或结果
 - **AND** 路由注册表与当前 OpenAPI 中 MUST NOT 存在旧入口
+
+### Requirement: 报告复核阶段必须保持个人绑定边界
+后端 SHALL 为 REPORT_AI_REVIEW 提供个人绑定和当前用户可用性判断，保持 TEST_LOG_COMPARE 及通用 Probe 语义不变。
+
+#### Scenario: 新绑定配置
+- **WHEN** 用户首次使用新报告 AI 模式
+- **THEN** SHALL 要求本人的 REPORT_AI_REVIEW 绑定；不从旧阶段自动搬迁，缺绑定可使用普通模式。
+
+#### Scenario: 旧阶段写入
+- **WHEN** 个人 API 收到 KB_AI_EXTENSION 新绑定请求
+- **THEN** SHALL 拒绝且不部分写入，目录仅提供新可用阶段；不提供旧阶段专项数据解码兼容。

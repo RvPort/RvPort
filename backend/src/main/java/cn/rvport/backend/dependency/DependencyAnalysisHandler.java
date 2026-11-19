@@ -13,8 +13,6 @@ import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.environment.runtime.EnvironmentCollectionResult;
 import cn.rvport.backend.environment.runtime.EnvironmentTaskInput;
 import cn.rvport.backend.environment.runtime.SshRuntimeService;
-import cn.rvport.backend.migration.MigrationInputService;
-import cn.rvport.backend.migration.MigrationInputSourceType;
 import cn.rvport.backend.task.RvPortTaskTypes;
 import cn.rvport.backend.task.TaskErrorCode;
 import cn.rvport.backend.task.TaskExecutionException;
@@ -62,7 +60,6 @@ public class DependencyAnalysisHandler implements TaskHandler {
     private final StoredArtifactService storedArtifactService;
     private final ArchiveCandidateRegistrar archiveCandidateRegistrar;
     private final ObjectMapper objectMapper;
-    private final MigrationInputService migrationInputService;
 
     public DependencyAnalysisHandler(
             DependencyAnalysisRepository repository,
@@ -74,8 +71,7 @@ public class DependencyAnalysisHandler implements TaskHandler {
             DependencyFactExtractor extractor,
             StoredArtifactService storedArtifactService,
             ArchiveCandidateRegistrar archiveCandidateRegistrar,
-            ObjectMapper objectMapper,
-            MigrationInputService migrationInputService
+            ObjectMapper objectMapper
     ) {
         this.repository = repository;
         this.buildValidationRepository = buildValidationRepository;
@@ -87,7 +83,6 @@ public class DependencyAnalysisHandler implements TaskHandler {
         this.storedArtifactService = storedArtifactService;
         this.archiveCandidateRegistrar = archiveCandidateRegistrar;
         this.objectMapper = objectMapper;
-        this.migrationInputService = migrationInputService;
     }
 
     @Override
@@ -140,20 +135,15 @@ public class DependencyAnalysisHandler implements TaskHandler {
             List<Object> warnings = new ArrayList<>();
             String compileDatabaseJson = compileDatabaseJson(run, buildRun, warnings);
             List<DependencyAnalysisResultItem> items = extractor.extract(run, buildRun, mergedLog, sourceComponents, targetComponents, compileDatabaseJson);
-            var migrationInputSync = context.publish(() -> {
+            context.publish(() -> {
                 repository.replaceResultItems(run.id(), items);
-                return migrationInputService.syncSourceRefs(
-                    run.projectId(),
-                    run.sourceRevisionId(),
-                    MigrationInputSourceType.DEPENDENCY_RESULT,
-                    repository.listResultItemIds(run.id())
-                );
+                return null;
             });
             context.progress(70, "生成依赖分析制品");
             Map<String, Object> refreshSummary = environmentRefreshSummary(sourceSnapshot, targetSnapshot);
             Map<String, Object> summary = artifactSummary(items, refreshSummary);
-            summary.put("migrationInputCreated", migrationInputSync.createdItems().size());
-            summary.put("migrationInputSkipped", migrationInputSync.skipped());
+
+
             Map<String, Object> json = artifactJson(run, buildRun, sourceSnapshot, targetSnapshot, items, warnings, summary);
             StoredArtifactView jsonArtifact = storedArtifactService.storeJson(
                     run.projectId(),

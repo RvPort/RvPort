@@ -53,6 +53,7 @@ public class ProjectWorkflowStatusService {
     private final BuildValidationRepository buildValidationRepository;
     private final DependencyAnalysisRepository dependencyAnalysisRepository;
     private final ReportRepository reportRepository;
+    @Autowired private cn.rvport.backend.report.review.CurrentFixListResolver fixLists;
     private final AutomatedTestRepository automatedTestRepository;
     private final OptimizationCycleRepository optimizationCycleRepository;
     private final ProjectArchiveRepository archiveRepository;
@@ -114,14 +115,15 @@ public class ProjectWorkflowStatusService {
         stages.add(dependency(projectId, context));
         stages.add(specialized(projectId, context, SpecializedAnalyzerType.FLOATING_POINT, FLOATING_POINT));
         stages.add(specialized(projectId, context, SpecializedAnalyzerType.MEMORY_ORDER, MEMORY_ORDER));
-        WorkflowStageResponse report = report(projectId, context);
+        var currentList=fixLists.current(projectId);
+        WorkflowStageResponse report = report(projectId, context,currentList);
         stages.add(report);
-        stages.add(manual(report, activeSource));
+        stages.add(manual(report, activeSource,currentList));
         stages.add(build(projectId, runtime, context));
         stages.add(test(projectId, context));
         stages.add(optimize(projectId, context, runtime));
         stages.add(archive(projectId, context));
-        return new WorkflowResponse(recommended(stages), stages);
+        return new WorkflowResponse(recommended(stages), stages,currentList);
     }
 
     private WorkflowStageResponse environment(UUID projectId, ProjectRuntimeEnvironmentResponse runtime) {
@@ -226,16 +228,17 @@ public class ProjectWorkflowStatusService {
         };
     }
 
-    private WorkflowStageResponse report(UUID projectId, ProjectContextSnapshot context) {
+    private WorkflowStageResponse report(UUID projectId, ProjectContextSnapshot context,cn.rvport.backend.report.review.CurrentFixListResolver.Current list) {
         if (context.sourceRevisionId() == null) {
             return pending(REPORT, "ACTIVE_SOURCE_MISSING");
         }
-        return reportRepository.latestEvaluation(projectId, context.sourceRevisionId())
-                .map(value -> fromStatus(REPORT, value.status(), "REPORT"))
-                .orElseGet(() -> pending(REPORT, "REPORT_MISSING"));
+        if(list.reportId()!=null && !List.of("REPORT_READ_ONLY","REPORT_CONTEXT_CHANGED").contains(list.reasonCode())) return done(REPORT,"REPORT_READY");
+        return reportRepository.latestEvaluation(projectId,context.sourceRevisionId())
+                .map(value->value.status()==TaskStatus.SUCCEEDED?pending(REPORT,"REPORT_CONTEXT_CHANGED"):fromStatus(REPORT,value.status(),"REPORT"))
+                .orElseGet(()->pending(REPORT,"REPORT_MISSING"));
     }
 
-    private WorkflowStageResponse manual(WorkflowStageResponse report, SourceRevisionResponse activeSource) {
+    private WorkflowStageResponse manual(WorkflowStageResponse report, SourceRevisionResponse activeSource,cn.rvport.backend.report.review.CurrentFixListResolver.Current list) {
         if (activeSource == null) {
             return pending(MANUAL, "ACTIVE_SOURCE_MISSING");
         }
@@ -246,7 +249,7 @@ public class ProjectWorkflowStatusService {
             return blocked(MANUAL, "REPORT_FAILED");
         }
         return report.status() == WorkflowStageStatus.DONE
-                ? pending(MANUAL, "MANUAL_FIX_AVAILABLE")
+                ? pending(MANUAL,list.available()?(list.itemCount()==0?"CONFIRMED_EMPTY":"MANUAL_FIX_AVAILABLE"):list.reasonCode())
                 : pending(MANUAL, "REPORT_REQUIRED");
     }
 

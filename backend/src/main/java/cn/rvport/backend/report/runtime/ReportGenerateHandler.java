@@ -1,6 +1,7 @@
 package cn.rvport.backend.report.runtime;
 
 import cn.rvport.backend.report.ReportGenerateInput;
+import cn.rvport.backend.report.review.ReportReviewRuntimeService;
 import cn.rvport.backend.task.RvPortTaskTypes;
 import cn.rvport.backend.worker.TaskExecutionContext;
 import cn.rvport.backend.worker.TaskHandler;
@@ -10,9 +11,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class ReportGenerateHandler implements TaskHandler {
 
-    private final ReportRuntimeService runtimeService;
+    private final ReportReviewRuntimeService runtimeService;
 
-    public ReportGenerateHandler(ReportRuntimeService runtimeService) {
+    public ReportGenerateHandler(ReportReviewRuntimeService runtimeService) {
         this.runtimeService = runtimeService;
     }
 

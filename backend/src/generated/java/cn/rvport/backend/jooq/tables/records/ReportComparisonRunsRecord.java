@@ -204,6 +204,52 @@ public class ReportComparisonRunsRecord extends UpdatableRecordImpl<ReportCompar
         return (OffsetDateTime) get(12);
     }
 
+    /**
+     * Setter for <code>public.report_comparison_runs.basis</code>.
+     */
+    public void setBasis(String value) {
+        set(13, value);
+    }
+
+    /**
+     * Getter for <code>public.report_comparison_runs.basis</code>.
+     */
+    public String getBasis() {
+        return (String) get(13);
+    }
+
+    /**
+     * Setter for
+     * <code>public.report_comparison_runs.base_confirmation_id</code>.
+     */
+    public void setBaseConfirmationId(UUID value) {
+        set(14, value);
+    }
+
+    /**
+     * Getter for
+     * <code>public.report_comparison_runs.base_confirmation_id</code>.
+     */
+    public UUID getBaseConfirmationId() {
+        return (UUID) get(14);
+    }
+
+    /**
+     * Setter for
+     * <code>public.report_comparison_runs.target_confirmation_id</code>.
+     */
+    public void setTargetConfirmationId(UUID value) {
+        set(15, value);
+    }
+
+    /**
+     * Getter for
+     * <code>public.report_comparison_runs.target_confirmation_id</code>.
+     */
+    public UUID getTargetConfirmationId() {
+        return (UUID) get(15);
+    }
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -227,7 +273,7 @@ public class ReportComparisonRunsRecord extends UpdatableRecordImpl<ReportCompar
     /**
      * Create a detached, initialised ReportComparisonRunsRecord
      */
-    public ReportComparisonRunsRecord(UUID id, UUID projectId, UUID taskId, UUID baseReportId, UUID targetReportId, String status, JSONB summary, String errorCode, String errorMessage, OffsetDateTime startedAt, OffsetDateTime finishedAt, OffsetDateTime createdAt, OffsetDateTime updatedAt) {
+    public ReportComparisonRunsRecord(UUID id, UUID projectId, UUID taskId, UUID baseReportId, UUID targetReportId, String status, JSONB summary, String errorCode, String errorMessage, OffsetDateTime startedAt, OffsetDateTime finishedAt, OffsetDateTime createdAt, OffsetDateTime updatedAt, String basis, UUID baseConfirmationId, UUID targetConfirmationId) {
         super(ReportComparisonRuns.REPORT_COMPARISON_RUNS);
 
         setId(id);
@@ -243,6 +289,9 @@ public class ReportComparisonRunsRecord extends UpdatableRecordImpl<ReportCompar
         setFinishedAt(finishedAt);
         setCreatedAt(createdAt);
         setUpdatedAt(updatedAt);
+        setBasis(basis);
+        setBaseConfirmationId(baseConfirmationId);
+        setTargetConfirmationId(targetConfirmationId);
         resetTouchedOnNotNull();
     }
 }

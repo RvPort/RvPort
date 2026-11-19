@@ -10,8 +10,6 @@ import cn.rvport.backend.jooq.Public;
 import cn.rvport.backend.jooq.tables.BuildRuns.BuildRunsPath;
 import cn.rvport.backend.jooq.tables.Environments.EnvironmentsPath;
 import cn.rvport.backend.jooq.tables.Findings.FindingsPath;
-import cn.rvport.backend.jooq.tables.KbAiExtensionResults.KbAiExtensionResultsPath;
-import cn.rvport.backend.jooq.tables.KbAiExtensionRuns.KbAiExtensionRunsPath;
 import cn.rvport.backend.jooq.tables.KbScanArtifacts.KbScanArtifactsPath;
 import cn.rvport.backend.jooq.tables.Projects.ProjectsPath;
 import cn.rvport.backend.jooq.tables.RecheckRuns.RecheckRunsPath;
@@ -296,32 +294,6 @@ public class KbScanRuns extends TableImpl<KbScanRunsRecord> {
             _findings = new FindingsPath(this, null, Keys.FINDINGS__FINDINGS_SCAN_RUN_ID_FKEY.getInverseKey());
 
         return _findings;
-    }
-
-    private transient KbAiExtensionResultsPath _kbAiExtensionResults;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_results</code> table
-     */
-    public KbAiExtensionResultsPath kbAiExtensionResults() {
-        if (_kbAiExtensionResults == null)
-            _kbAiExtensionResults = new KbAiExtensionResultsPath(this, null, Keys.KB_AI_EXTENSION_RESULTS__KB_AI_EXTENSION_RESULTS_KB_SCAN_RUN_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionResults;
-    }
-
-    private transient KbAiExtensionRunsPath _kbAiExtensionRuns;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_runs</code> table
-     */
-    public KbAiExtensionRunsPath kbAiExtensionRuns() {
-        if (_kbAiExtensionRuns == null)
-            _kbAiExtensionRuns = new KbAiExtensionRunsPath(this, null, Keys.KB_AI_EXTENSION_RUNS__KB_AI_EXTENSION_RUNS_KB_SCAN_RUN_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionRuns;
     }
 
     private transient KbScanArtifactsPath _kbScanArtifacts;

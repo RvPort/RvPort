@@ -274,11 +274,9 @@
                                         <include>*SpecializedAnalysisResponse</include>
                                         <include>*SpecializedAnalysisRuntimeService</include>
                                         <include>*SpecializedFindingResponse</include>
-                                        <include>*MigrationInputSourceResolver</include>
                                         <include>*ProjectOverviewResponse</include>
                                         <include>*ProjectOverviewResponse$WorkflowStageResponse</include>
                                         <include>*ProjectWorkflowStatusService</include>
-                                        <include>*ReportDocumentOrganizer</include>
                                         <include>*ReportRuntimeService</include>
                                     </includes>
                                     <limits>

@@ -29,7 +29,7 @@ DSH rc.8 的 `watchUserPatches` 调用 HMR 的 `registerConfig`；该接口存�
 
 升级后必须完成 DSH/Codex/OpenCode 三项 probe、工具往返、超时/取消清理及整套后端测试。安装校验器的单元测试位于 `src/test/python/test_agent_cli_lock.py`；覆盖率 source 必须加入 `agent-cli`。Java 覆盖范围为全部 `src/main/java`，仅排除生成的 `cn/rvport/backend/jooq`；资源脚本包括 `analysis`、`bitcode`、`agentruntime`，以及本目录校验器，未加载源码也纳入统计。
 
-受影响完整 Java 包包括 `agentruntime`、`agentruntime.bridge`、`codexprovider`、`modelprofile`、`kb.ai`、`testcomparison.runtime`，以及实际改动的 worker/取消组件。整体和受影响包行/分支分别至少 90%，保留既有更严格 class 门槛。第三方 node_modules 不属于项目自有代码，不纳入源码覆盖率。
+受影响完整 Java 包包括 `agentruntime`、`agentruntime.bridge`、`codexprovider`、`modelprofile`、`report.review`、`testcomparison.runtime`，以及实际改动的 worker/取消组件。整体和受影响包行/分支分别至少 90%，保留既有更严格 class 门槛。第三方 node_modules 不属于项目自有代码，不纳入源码覆盖率。
 
 backend 与 worker 必须使用同一验收镜像。部署需另行授权；回滚镜像会恢复旧 CLI 限制，不重写历史探测结果。
 
@@ -37,7 +37,7 @@ backend 与 worker 必须使用同一验收镜像。部署需另行授权；回�
 
 ## 协议路由与能力边界
 
-`RESPONSES` profile 原生直连；Codex 的 `CHAT` profile 由现有 worker 为每次执行启动固定 OpenCodex 2.94.0，完成 Responses → Chat Completions 转换。项目只实现配置、纯准入和生命周期监管，旧 Java 转换器已删除。Codex 始终使用 `wire_api="responses"`；DSH/OpenCode 保留原生 Adapter。probe、KB_AI_EXTENSION 和 TEST_LOG_COMPARE 共用 Adapter，前端无需新增配置、接口或代理服务。连通性检查仍按 profile 的原始协议请求，不自动降级。
+`RESPONSES` profile 原生直连；Codex 的 `CHAT` profile 由现有 worker 为每次执行启动固定 OpenCodex 2.94.0，完成 Responses → Chat Completions 转换。项目只实现配置、纯准入和生命周期监管，旧 Java 转换器已删除。Codex 始终使用 `wire_api="responses"`；DSH/OpenCode 保留原生 Adapter。probe、REPORT_AI_REVIEW 和 TEST_LOG_COMPARE 共用 Adapter，前端无需新增配置、接口或代理服务。连通性检查仍按 profile 的原始协议请求，不自动降级。
 
 | 能力 | CHAT 桥接行为 |
 |---|---|

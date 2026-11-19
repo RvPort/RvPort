@@ -13,7 +13,6 @@ import cn.rvport.backend.jooq.tables.DependencyAnalysisResultItems.DependencyAna
 import cn.rvport.backend.jooq.tables.DependencyAnalysisRuns.DependencyAnalysisRunsPath;
 import cn.rvport.backend.jooq.tables.DependencyAutoFixRuns.DependencyAutoFixRunsPath;
 import cn.rvport.backend.jooq.tables.EnvironmentSnapshots.EnvironmentSnapshotsPath;
-import cn.rvport.backend.jooq.tables.KbAiExtensionRuns.KbAiExtensionRunsPath;
 import cn.rvport.backend.jooq.tables.KbScanArtifacts.KbScanArtifactsPath;
 import cn.rvport.backend.jooq.tables.KbScanRuns.KbScanRunsPath;
 import cn.rvport.backend.jooq.tables.Projects.ProjectsPath;
@@ -423,19 +422,6 @@ public class Tasks extends TableImpl<TasksRecord> {
         return _environmentSnapshots;
     }
 
-    private transient KbAiExtensionRunsPath _kbAiExtensionRuns;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_runs</code> table
-     */
-    public KbAiExtensionRunsPath kbAiExtensionRuns() {
-        if (_kbAiExtensionRuns == null)
-            _kbAiExtensionRuns = new KbAiExtensionRunsPath(this, null, Keys.KB_AI_EXTENSION_RUNS__KB_AI_EXTENSION_RUNS_TASK_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionRuns;
-    }
-
     private transient KbScanArtifactsPath _kbScanArtifacts;
 
     /**
@@ -677,7 +663,7 @@ public class Tasks extends TableImpl<TasksRecord> {
             Internal.createCheck(this, DSL.name("tasks_retry_count_chk"), "((retry_count >= 0))", true),
             Internal.createCheck(this, DSL.name("tasks_status_chk"), "((status = ANY (ARRAY['PENDING'::text, 'QUEUED'::text, 'RUNNING'::text, 'SUCCEEDED'::text, 'FAILED'::text, 'CANCELLED'::text, 'TIMEOUT'::text])))", true),
             Internal.createCheck(this, DSL.name("tasks_timeout_seconds_chk"), "(((timeout_seconds IS NULL) OR (timeout_seconds > 0)))", true),
-            Internal.createCheck(this, DSL.name("tasks_type_chk"), "((type = ANY (ARRAY['SOURCE_GIT_SYNC'::text, 'SOURCE_DEPLOY'::text, 'ENV_TEST_CONNECTION'::text, 'ENV_COLLECT'::text, 'ENV_RUN_SCRIPT'::text, 'DEPENDENCY_ANALYSIS'::text, 'DEPENDENCY_AUTO_FIX'::text, 'KB_SCAN'::text, 'REPORT_GENERATE'::text, 'REPORT_COMPARE'::text, 'RECHECK_DIFF'::text, 'BUILD_VALIDATION'::text, 'AUTOMATED_TEST'::text, 'TEST_LOG_COMPARE'::text, 'ARCHIVE_PROJECT'::text, 'KB_AI_EXTENSION'::text, 'FLOATING_POINT_ANALYSIS'::text, 'MEMORY_ORDER_ANALYSIS'::text])))", true)
+            Internal.createCheck(this, DSL.name("tasks_type_chk"), "((type = ANY (ARRAY['SOURCE_GIT_SYNC'::text, 'SOURCE_DEPLOY'::text, 'ENV_TEST_CONNECTION'::text, 'ENV_COLLECT'::text, 'ENV_RUN_SCRIPT'::text, 'DEPENDENCY_ANALYSIS'::text, 'DEPENDENCY_AUTO_FIX'::text, 'KB_SCAN'::text, 'REPORT_GENERATE'::text, 'REPORT_COMPARE'::text, 'RECHECK_DIFF'::text, 'BUILD_VALIDATION'::text, 'AUTOMATED_TEST'::text, 'TEST_LOG_COMPARE'::text, 'ARCHIVE_PROJECT'::text, 'FLOATING_POINT_ANALYSIS'::text, 'MEMORY_ORDER_ANALYSIS'::text])))", true)
         );
     }
 

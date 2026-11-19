@@ -37,21 +37,38 @@ public class SourceCompareRepository {
         this.objectMapper = objectMapper;
     }
 
-    public Optional<RecheckRunView> latestRecheckRun(UUID projectId, UUID baseSourceRevisionId, UUID targetSourceRevisionId) {
+    public Optional<UUID> confirmedReport(UUID projectId, UUID revisionId, UUID confirmationId) {
+        return dsl.fetchOptional("""
+                select c.report_id from report_fix_list_confirmations c
+                join report_review_runs r on r.report_id=c.report_id
+                where r.project_id=? and r.source_revision_id=? and c.id=?
+                """, projectId, revisionId, confirmationId).map(row -> row.get(0, UUID.class));
+    }
+
+    public Optional<UUID> latestConfirmation(UUID projectId, UUID revisionId) {
+        return dsl.fetchOptional("""
+                select c.id from report_fix_list_confirmations c
+                join report_review_runs r on r.report_id=c.report_id
+                where r.project_id=? and r.source_revision_id=?
+                order by c.confirmed_at desc,c.id desc limit 1
+                """, projectId, revisionId).map(row -> row.get(0, UUID.class));
+    }
+
+    public Optional<RecheckRunView> latestRecheckRun(UUID projectId, UUID baseConfirmationId, UUID targetConfirmationId) {
         return dsl.selectFrom(RECHECK_RUNS)
                 .where(RECHECK_RUNS.PROJECT_ID.eq(projectId)
-                        .and(RECHECK_RUNS.BASE_SOURCE_REVISION_ID.eq(baseSourceRevisionId))
-                        .and(RECHECK_RUNS.TARGET_SOURCE_REVISION_ID.eq(targetSourceRevisionId)))
+                        .and(RECHECK_RUNS.BASE_CONFIRMATION_ID.eq(baseConfirmationId))
+                        .and(RECHECK_RUNS.TARGET_CONFIRMATION_ID.eq(targetConfirmationId)))
                 .orderBy(RECHECK_RUNS.CREATED_AT.desc(), RECHECK_RUNS.ID.desc())
                 .limit(1)
                 .fetchOptional(record -> RecheckRunView.from(record, jsonbToMap(record.getSummary())));
     }
 
-    public Optional<RecheckRunView> findReusableRecheckRun(UUID projectId, UUID baseSourceRevisionId, UUID targetSourceRevisionId) {
+    public Optional<RecheckRunView> findReusableRecheckRun(UUID projectId, UUID baseConfirmationId, UUID targetConfirmationId) {
         return dsl.selectFrom(RECHECK_RUNS)
                 .where(RECHECK_RUNS.PROJECT_ID.eq(projectId)
-                        .and(RECHECK_RUNS.BASE_SOURCE_REVISION_ID.eq(baseSourceRevisionId))
-                        .and(RECHECK_RUNS.TARGET_SOURCE_REVISION_ID.eq(targetSourceRevisionId))
+                        .and(RECHECK_RUNS.BASE_CONFIRMATION_ID.eq(baseConfirmationId))
+                        .and(RECHECK_RUNS.TARGET_CONFIRMATION_ID.eq(targetConfirmationId))
                         .and(RECHECK_RUNS.STATUS.in(
                                 TaskStatus.PENDING.name(),
                                 TaskStatus.QUEUED.name(),
@@ -69,13 +86,18 @@ public class SourceCompareRepository {
                 .fetchOptional(record -> RecheckRunView.from(record, jsonbToMap(record.getSummary())));
     }
 
-    public RecheckRunView createRecheckRun(UUID id, UUID projectId, UUID taskId, UUID baseSourceRevisionId, UUID targetSourceRevisionId, TaskStatus status) {
+    public RecheckRunView createRecheckRun(UUID id, UUID projectId, UUID taskId, UUID baseSourceRevisionId, UUID targetSourceRevisionId,
+            UUID baseReportId, UUID targetReportId, UUID baseConfirmationId, UUID targetConfirmationId, TaskStatus status) {
         RecheckRunsRecord record = dsl.insertInto(RECHECK_RUNS)
                 .set(RECHECK_RUNS.ID, id)
                 .set(RECHECK_RUNS.PROJECT_ID, projectId)
                 .set(RECHECK_RUNS.TASK_ID, taskId)
                 .set(RECHECK_RUNS.BASE_SOURCE_REVISION_ID, baseSourceRevisionId)
                 .set(RECHECK_RUNS.TARGET_SOURCE_REVISION_ID, targetSourceRevisionId)
+                .set(RECHECK_RUNS.BASE_REPORT_ID, baseReportId)
+                .set(RECHECK_RUNS.TARGET_REPORT_ID, targetReportId)
+                .set(RECHECK_RUNS.BASE_CONFIRMATION_ID, baseConfirmationId)
+                .set(RECHECK_RUNS.TARGET_CONFIRMATION_ID, targetConfirmationId)
                 .set(RECHECK_RUNS.STATUS, status.name())
                 .set(RECHECK_RUNS.SUMMARY, JSONB.valueOf("{}"))
                 .returning()

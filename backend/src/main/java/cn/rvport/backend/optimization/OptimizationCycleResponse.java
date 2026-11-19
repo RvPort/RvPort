@@ -18,6 +18,7 @@ public record OptimizationCycleResponse(
         OptimizationCycleSummaryResponse summary,
         OptimizationCycleSummaryResponse historicalSummary,
         OptimizationValidation validation,
-        OptimizationValidation.NextAction nextAction
+        OptimizationValidation.NextAction nextAction,
+        cn.rvport.backend.report.review.CurrentFixListResolver.Current currentFixList
 ) {
 }

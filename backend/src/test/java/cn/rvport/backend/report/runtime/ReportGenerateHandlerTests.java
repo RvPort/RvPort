@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import cn.rvport.backend.report.ReportGenerateInput;
+import cn.rvport.backend.report.review.ReportReviewRuntimeService;
 import cn.rvport.backend.task.RvPortTaskTypes;
 import cn.rvport.backend.worker.TaskExecutionContext;
 import java.util.UUID;
@@ -16,7 +17,7 @@ class ReportGenerateHandlerTests {
 
     @Test
     void exposesTaskTypeAndDelegatesInput() {
-        ReportRuntimeService service = Mockito.mock(ReportRuntimeService.class);
+        ReportReviewRuntimeService service = Mockito.mock(ReportReviewRuntimeService.class);
         TaskExecutionContext context = Mockito.mock(TaskExecutionContext.class);
         ReportGenerateInput input = new ReportGenerateInput(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
         when(context.input(ReportGenerateInput.class)).thenReturn(input);
@@ -30,7 +31,7 @@ class ReportGenerateHandlerTests {
 
     @Test
     void propagatesRuntimeFailure() {
-        ReportRuntimeService service = Mockito.mock(ReportRuntimeService.class);
+        ReportReviewRuntimeService service = Mockito.mock(ReportReviewRuntimeService.class);
         TaskExecutionContext context = Mockito.mock(TaskExecutionContext.class);
         ReportGenerateInput input = new ReportGenerateInput(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
         when(context.input(ReportGenerateInput.class)).thenReturn(input);

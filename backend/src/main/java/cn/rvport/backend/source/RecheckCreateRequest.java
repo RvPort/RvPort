@@ -5,6 +5,8 @@ import java.util.UUID;
 
 public record RecheckCreateRequest(
         @NotNull UUID baseSourceRevisionId,
-        @NotNull UUID targetSourceRevisionId
+        @NotNull UUID targetSourceRevisionId,
+        @NotNull UUID baseConfirmationId,
+        @NotNull UUID targetConfirmationId
 ) {
 }

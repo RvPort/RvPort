@@ -225,7 +225,7 @@ class SpecializedAnalysisServiceTests {
         assertThat(service.findings(projectId, SpecializedAnalyzerType.FLOATING_POINT, runId,
                 new SpecializedFindingListRequest(1, 20, null, null, null, null, null, null, null, null),
                 actorId, false).items()).singleElement()
-                .extracting(value -> value.reportInclusion().confirmedForNextReport()).isEqualTo(false);
+                .extracting(value -> value.reportInclusion().includedInLatestReport()).isEqualTo(false);
     }
 
     @ParameterizedTest

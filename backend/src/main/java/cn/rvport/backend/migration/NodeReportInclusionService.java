@@ -1,7 +1,7 @@
 package cn.rvport.backend.migration;
 
-import cn.rvport.backend.report.ReportRepository;
-import cn.rvport.backend.report.ReportView;
+import cn.rvport.backend.report.review.ReviewWorkspaceRepository;
+import cn.rvport.backend.report.review.ReportInputSelectionPolicy;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,12 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class NodeReportInclusionService {
 
-    private final MigrationInputRepository migrationInputRepository;
-    private final ReportRepository reportRepository;
+    private final ReviewWorkspaceRepository reviews;
+    private final ReportInputSelectionPolicy selection;
 
-    public NodeReportInclusionService(MigrationInputRepository migrationInputRepository, ReportRepository reportRepository) {
-        this.migrationInputRepository = migrationInputRepository;
-        this.reportRepository = reportRepository;
+    public NodeReportInclusionService(ReviewWorkspaceRepository reviews, ReportInputSelectionPolicy selection) {
+        this.reviews = reviews;
+        this.selection = selection;
     }
 
     @Transactional(readOnly = true)
@@ -43,31 +43,8 @@ public class NodeReportInclusionService {
         if (sourceRefIds == null || sourceRefIds.isEmpty()) {
             return Map.of();
         }
-        Map<UUID, MigrationInputRefView> refs = migrationInputRepository.findBySourceRefs(projectId, sourceRevisionId, sourceType, sourceRefIds);
-        if (refs == null) {
-            refs = Map.of();
-        }
-        ReportView latestReport = reportRepository.latestSucceeded(projectId, sourceRevisionId).orElse(null);
-        List<UUID> rawIncludedRefIds = latestReport == null ? List.of() : reportRepository.listMigrationInputIds(latestReport.id());
-        Set<UUID> includedRefIds = rawIncludedRefIds == null ? Set.of() : new HashSet<>(rawIncludedRefIds);
-
-        Map<UUID, NodeReportInclusionState> result = new LinkedHashMap<>();
-        for (UUID sourceRefId : sourceRefIds) {
-            MigrationInputRefView ref = refs.get(sourceRefId);
-            if (ref == null) {
-                result.put(sourceRefId, NodeReportInclusionState.empty());
-                continue;
-            }
-            boolean confirmed = ref.status() == MigrationInputStatus.CONFIRMED;
-            boolean included = includedRefIds.contains(ref.id());
-            result.put(sourceRefId, new NodeReportInclusionState(
-                    ref.id(),
-                    ref.status(),
-                    confirmed,
-                    included,
-                    included ? latestReport.id() : null
-            ));
-        }
-        return result;
+        var context = selection.current(projectId);
+        if (!sourceRevisionId.equals(context.sourceRevisionId())) return Map.of();
+        return reviews.includedSourceRefs(projectId, sourceRevisionId, context.contextHash(), sourceType.name(), sourceRefIds);
     }
 }

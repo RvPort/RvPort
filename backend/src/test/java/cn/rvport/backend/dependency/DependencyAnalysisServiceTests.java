@@ -17,7 +17,6 @@ import cn.rvport.backend.buildvalidation.BuildValidationRunView;
 import cn.rvport.backend.buildvalidation.BuildValidationScope;
 import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.migration.MigrationInputSourceType;
-import cn.rvport.backend.migration.MigrationInputStatus;
 import cn.rvport.backend.migration.NodeReportInclusionService;
 import cn.rvport.backend.migration.NodeReportInclusionState;
 import cn.rvport.backend.project.ProjectAccessService;
@@ -224,7 +223,7 @@ class DependencyAnalysisServiceTests {
         DependencyAnalysisResultListRequest request = new DependencyAnalysisResultListRequest(
                 null, null, null, null, null, null, "createdAt", "DESC");
         NodeReportInclusionState state = new NodeReportInclusionState(
-                UUID.randomUUID(), MigrationInputStatus.CONFIRMED, true, true, UUID.randomUUID());
+                true, UUID.randomUUID());
         when(repository.findById(run.id())).thenReturn(Optional.of(run));
         when(repository.countResultItems(run.id(), request)).thenReturn(1L);
         when(repository.listResultItems(run.id(), request)).thenReturn(List.of(item));
@@ -234,11 +233,10 @@ class DependencyAnalysisServiceTests {
 
         var first = service.results(run.id(), request, UUID.randomUUID(), false);
         assertThat(first.items()).singleElement().satisfies(response -> {
-            assertThat(response.confirmedForNextReport()).isTrue();
             assertThat(response.includedInLatestReport()).isTrue();
         });
         assertThat(service.results(run.id(), request, UUID.randomUUID(), false).items())
-                .singleElement().satisfies(response -> assertThat(response.confirmedForNextReport()).isFalse());
+                .singleElement().satisfies(response -> assertThat(response.includedInLatestReport()).isFalse());
     }
 
     @Test

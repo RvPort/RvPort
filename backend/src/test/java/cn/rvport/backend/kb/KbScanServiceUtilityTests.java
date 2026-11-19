@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import cn.rvport.backend.artifact.StoredArtifactService;
 import cn.rvport.backend.audit.AuditLogService;
 import cn.rvport.backend.config.RvPortProperties;
-import cn.rvport.backend.kb.ai.KbAiExtensionRepository;
 import cn.rvport.backend.migration.NodeReportInclusionService;
 import cn.rvport.backend.project.ProjectAccessService;
 import cn.rvport.backend.source.SourceRepository;
@@ -86,8 +85,7 @@ class KbScanServiceUtilityTests {
         return new KbScanService(
                 mock(KbScanRepository.class), mock(SourceRepository.class), mock(ProjectAccessService.class),
                 mock(TaskService.class), mock(AuditLogService.class), properties,
-                mock(StoredArtifactService.class), mock(NodeReportInclusionService.class),
-                mock(KbAiExtensionRepository.class));
+                mock(StoredArtifactService.class), mock(NodeReportInclusionService.class));
     }
 
     @SuppressWarnings("unchecked")

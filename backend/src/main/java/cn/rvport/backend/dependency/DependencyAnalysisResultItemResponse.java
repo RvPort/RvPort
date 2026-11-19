@@ -1,6 +1,5 @@
 package cn.rvport.backend.dependency;
 
-import cn.rvport.backend.migration.MigrationInputStatus;
 import cn.rvport.backend.migration.NodeReportInclusionState;
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -25,9 +24,6 @@ public record DependencyAnalysisResultItemResponse(
         String recommendation,
         DependencyConfidence confidence,
         Map<String, Object> evidence,
-        UUID migrationInputRefId,
-        MigrationInputStatus migrationInputStatus,
-        boolean confirmedForNextReport,
         boolean includedInLatestReport,
         UUID latestReportId,
         OffsetDateTime createdAt
@@ -57,9 +53,6 @@ public record DependencyAnalysisResultItemResponse(
                 view.recommendation(),
                 view.confidence(),
                 view.evidence(),
-                state.migrationInputRefId(),
-                state.migrationInputStatus(),
-                state.confirmedForNextReport(),
                 state.includedInLatestReport(),
                 state.latestReportId(),
                 view.createdAt()
@@ -87,9 +80,6 @@ public record DependencyAnalysisResultItemResponse(
                 recommendation,
                 confidence,
                 evidence,
-                state.migrationInputRefId(),
-                state.migrationInputStatus(),
-                state.confirmedForNextReport(),
                 state.includedInLatestReport(),
                 state.latestReportId(),
                 createdAt

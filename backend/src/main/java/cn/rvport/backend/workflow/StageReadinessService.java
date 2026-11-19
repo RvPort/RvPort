@@ -12,7 +12,7 @@ import cn.rvport.backend.buildvalidation.BuildValidationScope;
 import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.dependency.DependencyAnalysisRepository;
 import cn.rvport.backend.kb.KbScanRepository;
-import cn.rvport.backend.migration.MigrationInputService;
+import cn.rvport.backend.report.review.ReportInputSelectionPolicy;
 import cn.rvport.backend.project.ProjectAccessService;
 import cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentResponse;
 import cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentService;
@@ -47,7 +47,7 @@ public class StageReadinessService {
     private final KbScanRepository kbScanRepository;
     private final DependencyAnalysisRepository dependencyAnalysisRepository;
     private final ReportRepository reportRepository;
-    private final MigrationInputService migrationInputService;
+    private final ReportInputSelectionPolicy reportInputs;
     private final ArchiveCandidateService archiveCandidateService;
     private final AutomatedTestRepository automatedTestRepository;
     private final SpecializedAnalysisRepository specializedAnalysisRepository;
@@ -65,7 +65,7 @@ public class StageReadinessService {
             KbScanRepository kbScanRepository,
             DependencyAnalysisRepository dependencyAnalysisRepository,
             ReportRepository reportRepository,
-            MigrationInputService migrationInputService,
+            ReportInputSelectionPolicy reportInputs,
             ArchiveCandidateService archiveCandidateService,
             AutomatedTestRepository automatedTestRepository,
             SpecializedAnalysisRepository specializedAnalysisRepository,
@@ -81,7 +81,7 @@ public class StageReadinessService {
         this.kbScanRepository = kbScanRepository;
         this.dependencyAnalysisRepository = dependencyAnalysisRepository;
         this.reportRepository = reportRepository;
-        this.migrationInputService = migrationInputService;
+        this.reportInputs = reportInputs;
         this.archiveCandidateService = archiveCandidateService;
         this.automatedTestRepository = automatedTestRepository;
         this.specializedAnalysisRepository = specializedAnalysisRepository;
@@ -99,13 +99,13 @@ public class StageReadinessService {
             KbScanRepository kbScanRepository,
             DependencyAnalysisRepository dependencyAnalysisRepository,
             ReportRepository reportRepository,
-            MigrationInputService migrationInputService,
+            ReportInputSelectionPolicy reportInputs,
             ArchiveCandidateService archiveCandidateService,
             AutomatedTestRepository automatedTestRepository
     ) {
         this(projectAccessService, contextService, sourceRepository, runtimeEnvironmentService, sourceDeployRepository,
                 buildValidationRepository, kbScanRepository, dependencyAnalysisRepository, reportRepository,
-                migrationInputService, archiveCandidateService, automatedTestRepository, null, null, null);
+                reportInputs, archiveCandidateService, automatedTestRepository, null, null, null);
     }
 
     StageReadinessService(
@@ -113,14 +113,14 @@ public class StageReadinessService {
             SourceRepository sourceRepository, ProjectRuntimeEnvironmentService runtimeEnvironmentService,
             SourceDeployRepository sourceDeployRepository, BuildValidationRepository buildValidationRepository,
             KbScanRepository kbScanRepository, DependencyAnalysisRepository dependencyAnalysisRepository,
-            ReportRepository reportRepository, MigrationInputService migrationInputService,
+            ReportRepository reportRepository, ReportInputSelectionPolicy reportInputs,
             ArchiveCandidateService archiveCandidateService, AutomatedTestRepository automatedTestRepository,
             SpecializedAnalysisRepository specializedAnalysisRepository,
             SpecializedAnalysisToolHealthService specializedToolHealthService
     ) {
         this(projectAccessService, contextService, sourceRepository, runtimeEnvironmentService, sourceDeployRepository,
                 buildValidationRepository, kbScanRepository, dependencyAnalysisRepository, reportRepository,
-                migrationInputService, archiveCandidateService, automatedTestRepository, specializedAnalysisRepository,
+                reportInputs, archiveCandidateService, automatedTestRepository, specializedAnalysisRepository,
                 specializedToolHealthService, null);
     }
 
@@ -245,32 +245,23 @@ public class StageReadinessService {
     }
 
     private List<StagePrerequisiteResponse> report(UUID projectId, ProjectContextSnapshot context) {
-        if (context.sourceRevisionId() == null) {
-            return List.of(
-                    StagePrerequisiteResponse.of(StagePrerequisiteKeys.KB_SCAN, StagePrerequisiteStatus.MISSING, null, "ACTIVE_SOURCE_MISSING"),
-                    StagePrerequisiteResponse.of(StagePrerequisiteKeys.DEPENDENCY_ANALYSIS, StagePrerequisiteStatus.MISSING, null, "ACTIVE_SOURCE_MISSING"),
-                    StagePrerequisiteResponse.of(StagePrerequisiteKeys.INCLUDED_FINDINGS, StagePrerequisiteStatus.MISSING, null, "ACTIVE_SOURCE_MISSING"),
-                    StagePrerequisiteResponse.of(StagePrerequisiteKeys.COMPARABLE_REPORT, StagePrerequisiteStatus.MISSING, null, "COMPARABLE_REPORT_MISSING")
-            );
+        if(context.sourceRevisionId()==null) return List.of(StagePrerequisiteResponse.of(
+                StagePrerequisiteKeys.INCLUDED_FINDINGS,StagePrerequisiteStatus.MISSING,null,"ACTIVE_SOURCE_MISSING"));
+        var selected=reportInputs.current(projectId);
+        var result=new java.util.ArrayList<StagePrerequisiteResponse>();
+        for(var source:selected.sources()) {
+            String key=switch(source.type()) {
+                case "KB_FINDING" -> StagePrerequisiteKeys.KB_SCAN;
+                case "DEPENDENCY_RESULT" -> StagePrerequisiteKeys.DEPENDENCY_ANALYSIS;
+                default -> source.type();
+            };
+            result.add(StagePrerequisiteResponse.of(key,source.available()?StagePrerequisiteStatus.SATISFIED:StagePrerequisiteStatus.MISSING,
+                    source.runId(),source.available()?"ANALYSIS_READY":source.reasonCode(),Map.of("count",source.candidates().size())));
         }
-        long included = migrationInputService.currentConfirmedRefsForSystem(projectId, context.sourceRevisionId()).size();
-        return List.of(
-                runStatus(StagePrerequisiteKeys.KB_SCAN, "KB_SCAN", scanContextService.currentRun(projectId, context.sourceRevisionId())
-                        .map(run -> new RunRef(run.id(), run.status()))),
-                runStatus(StagePrerequisiteKeys.DEPENDENCY_ANALYSIS, "DEPENDENCY_ANALYSIS", dependencyAnalysisRepository.findLatestRun(projectId, context.sourceRevisionId(), context.runtimeEnvironmentVersion())
-                        .map(run -> new RunRef(run.id(), run.status()))),
-                StagePrerequisiteResponse.of(
-                        StagePrerequisiteKeys.INCLUDED_FINDINGS,
-                        StagePrerequisiteStatus.SATISFIED,
-                        null,
-                        "INCLUDED_FINDINGS_READY",
-                        Map.of("count", included)
-                ),
-                reportRepository.latestSucceeded(projectId, null)
-                        .filter(report -> !Objects.equals(report.sourceRevisionId(), context.sourceRevisionId()))
-                        .map(report -> StagePrerequisiteResponse.of(StagePrerequisiteKeys.COMPARABLE_REPORT, StagePrerequisiteStatus.SATISFIED, report.id(), "COMPARABLE_REPORT_READY"))
-                        .orElseGet(() -> StagePrerequisiteResponse.of(StagePrerequisiteKeys.COMPARABLE_REPORT, StagePrerequisiteStatus.MISSING, null, "COMPARABLE_REPORT_MISSING"))
-        );
+        result.add(StagePrerequisiteResponse.of(StagePrerequisiteKeys.INCLUDED_FINDINGS,
+                selected.canGenerate()?StagePrerequisiteStatus.SATISFIED:StagePrerequisiteStatus.MISSING,null,
+                selected.canGenerate()?"INCLUDED_FINDINGS_READY":"REPORT_ANALYSIS_NOT_READY",Map.of("count",(long)selected.candidates().size())));
+        return List.copyOf(result);
     }
 
     private List<StagePrerequisiteResponse> build(UUID projectId, ProjectRuntimeEnvironmentView runtime) {

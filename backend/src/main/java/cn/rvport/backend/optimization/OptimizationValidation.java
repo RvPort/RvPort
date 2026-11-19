@@ -19,7 +19,7 @@ public record OptimizationValidation(
                              @JsonProperty("description_en") String descriptionEn) { }
 
     public OptimizationCycleSummaryResponse applyTo(OptimizationCycleSummaryResponse history) {
-        return new OptimizationCycleSummaryResponse(history.migrationInputs(), history.report(), history.recheck(),
+        return new OptimizationCycleSummaryResponse(history.report(), history.recheck(),
                 history.sourceDeploy(), build, test, testComparison);
     }
 

@@ -7,7 +7,6 @@ package cn.rvport.backend.jooq.tables;
 import cn.rvport.backend.jooq.Indexes;
 import cn.rvport.backend.jooq.Keys;
 import cn.rvport.backend.jooq.Public;
-import cn.rvport.backend.jooq.tables.KbAiExtensionResults.KbAiExtensionResultsPath;
 import cn.rvport.backend.jooq.tables.KbScanRuns.KbScanRunsPath;
 import cn.rvport.backend.jooq.tables.Projects.ProjectsPath;
 import cn.rvport.backend.jooq.tables.SourceRevisions.SourceRevisionsPath;
@@ -273,19 +272,6 @@ public class Findings extends TableImpl<FindingsRecord> {
             _sourceRevisions = new SourceRevisionsPath(this, Keys.FINDINGS__FINDINGS_SOURCE_REVISION_ID_FKEY, null);
 
         return _sourceRevisions;
-    }
-
-    private transient KbAiExtensionResultsPath _kbAiExtensionResults;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_results</code> table
-     */
-    public KbAiExtensionResultsPath kbAiExtensionResults() {
-        if (_kbAiExtensionResults == null)
-            _kbAiExtensionResults = new KbAiExtensionResultsPath(this, null, Keys.KB_AI_EXTENSION_RESULTS__KB_AI_EXTENSION_RESULTS_FINDING_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionResults;
     }
 
     @Override

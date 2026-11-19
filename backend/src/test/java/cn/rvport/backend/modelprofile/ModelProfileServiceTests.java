@@ -325,11 +325,15 @@ class ModelProfileServiceTests {
         assertThat(testCompare.modelProfileId()).isEqualTo(profileId);
         assertThat(testCompare.agentRuntimeId()).isEqualTo(runtimeId);
         assertThat(responses).anySatisfy(item -> {
-            assertThat(item.stage()).isEqualTo("KB_AI_EXTENSION");
+            assertThat(item.stage()).isEqualTo("REPORT_AI_REVIEW");
             assertThat(item.modelProfileId()).isNull();
             assertThat(item.agentRuntimeId()).isNull();
         });
         verify(repository).upsertAssignment(ModelProfileStage.TEST_LOG_COMPARE, profileId, runtimeId, actorId);
+        assertThatThrownBy(() -> service().saveAssignments(new ModelStageAssignmentRequest(List.of(
+                new ModelStageAssignmentRequest.Entry("KB_AI_EXTENSION", profileId, runtimeId))), actorId))
+                .isInstanceOf(cn.rvport.backend.common.error.ApiException.class);
+
 
         assertThatThrownBy(() -> service().saveAssignments(
                 new ModelStageAssignmentRequest(List.of(new ModelStageAssignmentRequest.Entry("GENERAL_ASSISTANT", profileId, runtimeId))),
@@ -499,7 +503,7 @@ class ModelProfileServiceTests {
         assertThatThrownBy(() -> service().saveAssignments(new ModelStageAssignmentRequest(null), UUID.randomUUID()))
                 .isInstanceOf(ApiException.class);
         UUID runtimeId = UUID.randomUUID();
-        ModelStageAssignmentRequest.Entry entry = new ModelStageAssignmentRequest.Entry("KB_AI_EXTENSION", profileId, runtimeId);
+        ModelStageAssignmentRequest.Entry entry = new ModelStageAssignmentRequest.Entry("REPORT_AI_REVIEW", profileId, runtimeId);
         assertThatThrownBy(() -> service().saveAssignments(new ModelStageAssignmentRequest(List.of(entry, entry)), UUID.randomUUID()))
                 .isInstanceOf(ApiException.class);
         when(repository.findEnabledById(org.mockito.ArgumentMatchers.eq(profileId), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.empty());
@@ -514,20 +518,20 @@ class ModelProfileServiceTests {
         ModelProfilesRecord profile = record(profileId, "Profile", true, "codex", "OPENAI_COMPATIBLE",
                 "https://llm.example/v1", "model", "CHAT", encrypted("secret"), 30, 1800);
         AgentRuntimesRecord runtime = runtime(runtimeId, "OPENCODE", "opencode");
-        var assignment = new ModelProfileRepository.AssignmentView("KB_AI_EXTENSION", profileId, profile,
+        var assignment = new ModelProfileRepository.AssignmentView("REPORT_AI_REVIEW", profileId, profile,
                 runtimeId, runtime, OffsetDateTime.now());
-        when(repository.findAssignment(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(assignment));
-        assertThat(service().resolveForStage(ModelProfileStage.KB_AI_EXTENSION, OWNER_ID).apiKey()).isEqualTo("secret");
-        assertThat(service().resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION, OWNER_ID).runtime()).isEqualTo(runtime);
+        when(repository.findAssignment(org.mockito.ArgumentMatchers.eq(ModelProfileStage.REPORT_AI_REVIEW), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(assignment));
+        assertThat(service().resolveForStage(ModelProfileStage.REPORT_AI_REVIEW, OWNER_ID).apiKey()).isEqualTo("secret");
+        assertThat(service().resolveAgentForStage(ModelProfileStage.REPORT_AI_REVIEW, OWNER_ID).runtime()).isEqualTo(runtime);
 
-        var noAgent = new ModelProfileRepository.AssignmentView("KB_AI_EXTENSION", profileId, profile,
+        var noAgent = new ModelProfileRepository.AssignmentView("REPORT_AI_REVIEW", profileId, profile,
                 runtimeId, null, OffsetDateTime.now());
-        when(repository.findAssignment(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(noAgent));
-        assertThatThrownBy(() -> service().resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION, OWNER_ID))
+        when(repository.findAssignment(org.mockito.ArgumentMatchers.eq(ModelProfileStage.REPORT_AI_REVIEW), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(noAgent));
+        assertThatThrownBy(() -> service().resolveAgentForStage(ModelProfileStage.REPORT_AI_REVIEW, OWNER_ID))
                 .isInstanceOf(ApiException.class).hasMessageContaining("Agent runtime");
         runtime.setEnabled(false);
-        when(repository.findAssignment(org.mockito.ArgumentMatchers.eq(ModelProfileStage.KB_AI_EXTENSION), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(assignment));
-        assertThatThrownBy(() -> service().resolveAgentForStage(ModelProfileStage.KB_AI_EXTENSION, OWNER_ID))
+        when(repository.findAssignment(org.mockito.ArgumentMatchers.eq(ModelProfileStage.REPORT_AI_REVIEW), org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Optional.of(assignment));
+        assertThatThrownBy(() -> service().resolveAgentForStage(ModelProfileStage.REPORT_AI_REVIEW, OWNER_ID))
                 .isInstanceOf(ApiException.class);
     }
 

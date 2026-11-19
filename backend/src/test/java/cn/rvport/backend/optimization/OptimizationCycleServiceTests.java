@@ -29,7 +29,7 @@ class OptimizationCycleServiceTests {
     private final OptimizationCycleService service = new OptimizationCycleService(
             optimizationCycleRepository,
             sourceRepository,
-            projectAccessService, contexts, runtimes, validations
+            projectAccessService, contexts, runtimes, validations,org.mockito.Mockito.mock(cn.rvport.backend.report.review.CurrentFixListResolver.class)
     );
 
     @org.junit.jupiter.api.BeforeEach

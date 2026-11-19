@@ -267,8 +267,8 @@ public class DiffItems extends TableImpl<DiffItemsRecord> {
     @Override
     public List<Check<DiffItemsRecord>> getChecks() {
         return Arrays.asList(
-            Internal.createCheck(this, DSL.name("diff_items_match_confidence_chk"), "(((match_confidence IS NULL) OR (match_confidence = ANY (ARRAY['HIGH'::text, 'MEDIUM'::text, 'LOW'::text]))))", true),
-            Internal.createCheck(this, DSL.name("diff_items_status_chk"), "((diff_status = ANY (ARRAY['NEW'::text, 'RESOLVED'::text, 'UNCHANGED'::text, 'CHANGED'::text])))", true)
+            Internal.createCheck(this, DSL.name("diff_items_diff_status_check"), "((diff_status = ANY (ARRAY['NEW'::text, 'NOT_OBSERVED'::text, 'UNCHANGED'::text, 'CHANGED'::text, 'EXCLUDED'::text, 'NO_LONGER_SELECTED'::text])))", true),
+            Internal.createCheck(this, DSL.name("diff_items_match_confidence_chk"), "(((match_confidence IS NULL) OR (match_confidence = ANY (ARRAY['HIGH'::text, 'MEDIUM'::text, 'LOW'::text]))))", true)
         );
     }
 

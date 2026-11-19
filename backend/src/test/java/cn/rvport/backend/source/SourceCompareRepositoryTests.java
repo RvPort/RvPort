@@ -54,7 +54,7 @@ class SourceCompareRepositoryTests {
             SourceCompareRepository repository = new SourceCompareRepository(database.dsl(), new ObjectMapper());
             database.enqueueRecord(run(JSONB.valueOf("{}"), TaskStatus.PENDING)).enqueueRows(1).enqueueRows(1);
 
-            assertThat(repository.createRecheckRun(RUN_ID, PROJECT_ID, UUID.randomUUID(), BASE_ID, TARGET_ID, TaskStatus.PENDING).summary())
+            assertThat(repository.createRecheckRun(RUN_ID, PROJECT_ID, UUID.randomUUID(), BASE_ID, TARGET_ID, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), TaskStatus.PENDING).summary())
                     .isEmpty();
             repository.updateRecheckStatus(RUN_ID, TaskStatus.SUCCEEDED, Map.of("resolved", 3));
             repository.updateRecheckStatus(RUN_ID, TaskStatus.FAILED, null);
@@ -175,7 +175,7 @@ class SourceCompareRepositoryTests {
     }
 
     private static RecheckRunsRecord run(JSONB summary, TaskStatus status) {
-        return new RecheckRunsRecord(RUN_ID, PROJECT_ID, UUID.randomUUID(), BASE_ID, TARGET_ID, null, null, summary, status.name(), NOW);
+        return new RecheckRunsRecord(RUN_ID, PROJECT_ID, UUID.randomUUID(), BASE_ID, TARGET_ID, null, null, summary, status.name(), NOW, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
     }
 
     private static DiffItemsRecord item(JSONB oldSnapshot, JSONB newSnapshot) {

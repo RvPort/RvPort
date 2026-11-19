@@ -69,10 +69,10 @@ for wire,agents in [('RESPONSES',['CODEX']),('CHAT',list(runtime_ids))]:
             assert all(check['details']['route']==('OPENCODEX' if wire=='CHAT' else 'NATIVE_RESPONSES') for check in result['checks'])
 client.call('PATCH','/api/me/model-stage-assignments',{'assignments':[
     {'stage':stage,'modelProfileId':profiles['CHAT'],'agentRuntimeId':runtime_ids['CODEX']}
-    for stage in ('KB_AI_EXTENSION','TEST_LOG_COMPARE')]})
+    for stage in ('REPORT_AI_REVIEW','TEST_LOG_COMPARE')]})
 assignments=client.call('GET','/api/me/model-stage-assignments')
-selected_assignments={item['stage']:item['modelProfileId'] for item in assignments if item['stage'] in ('KB_AI_EXTENSION','TEST_LOG_COMPARE')}
-assert selected_assignments==dict.fromkeys(('KB_AI_EXTENSION','TEST_LOG_COMPARE'),profiles['CHAT']),assignments
+selected_assignments={item['stage']:item['modelProfileId'] for item in assignments if item['stage'] in ('REPORT_AI_REVIEW','TEST_LOG_COMPARE')}
+assert selected_assignments==dict.fromkeys(('REPORT_AI_REVIEW','TEST_LOG_COMPARE'),profiles['CHAT']),assignments
 second=client.call('POST','/api/me/model-profiles',{'name':'local-two-'+suffix,'enabled':True,'modelProviderType':'OPENAI_COMPATIBLE',
     'baseUrl':'http://agent-mock:8089/two/v1','model':'fixture-model','wireApi':'CHAT','apiKey':'local-dummy-key-two',
     'timeoutSeconds':30,'maxRuntimeSeconds':60})['id']

@@ -15,18 +15,16 @@ import cn.rvport.backend.jooq.tables.DependencyAnalysisRuns.DependencyAnalysisRu
 import cn.rvport.backend.jooq.tables.DependencyAutoFixItems.DependencyAutoFixItemsPath;
 import cn.rvport.backend.jooq.tables.DependencyAutoFixRuns.DependencyAutoFixRunsPath;
 import cn.rvport.backend.jooq.tables.Findings.FindingsPath;
-import cn.rvport.backend.jooq.tables.KbAiExtensionResults.KbAiExtensionResultsPath;
-import cn.rvport.backend.jooq.tables.KbAiExtensionRuns.KbAiExtensionRunsPath;
 import cn.rvport.backend.jooq.tables.KbScanRuns.KbScanRunsPath;
-import cn.rvport.backend.jooq.tables.MigrationInputRefs.MigrationInputRefsPath;
-import cn.rvport.backend.jooq.tables.MigrationInputSets.MigrationInputSetsPath;
 import cn.rvport.backend.jooq.tables.OptimizationCycles.OptimizationCyclesPath;
 import cn.rvport.backend.jooq.tables.Projects.ProjectsPath;
 import cn.rvport.backend.jooq.tables.RecheckRuns.RecheckRunsPath;
 import cn.rvport.backend.jooq.tables.ReportFileContexts.ReportFileContextsPath;
+import cn.rvport.backend.jooq.tables.ReportReviewRuns.ReportReviewRunsPath;
 import cn.rvport.backend.jooq.tables.Reports.ReportsPath;
 import cn.rvport.backend.jooq.tables.SourceDeployRuns.SourceDeployRunsPath;
 import cn.rvport.backend.jooq.tables.SourceImports.SourceImportsPath;
+import cn.rvport.backend.jooq.tables.SourceRevisionManifests.SourceRevisionManifestsPath;
 import cn.rvport.backend.jooq.tables.SpecializedAnalysisFindings.SpecializedAnalysisFindingsPath;
 import cn.rvport.backend.jooq.tables.SpecializedAnalysisRuns.SpecializedAnalysisRunsPath;
 import cn.rvport.backend.jooq.tables.TestRuns.TestRunsPath;
@@ -233,6 +231,11 @@ public class SourceRevisions extends TableImpl<SourceRevisionsRecord> {
     }
 
     @Override
+    public List<UniqueKey<SourceRevisionsRecord>> getUniqueKeys() {
+        return Arrays.asList(Keys.SOURCE_REVISIONS_PROJECT_ID_UK);
+    }
+
+    @Override
     public List<ForeignKey<SourceRevisionsRecord, ?>> getReferences() {
         return Arrays.asList(Keys.SOURCE_REVISIONS__SOURCE_REVISIONS_CREATED_BY_FKEY, Keys.SOURCE_REVISIONS__SOURCE_REVISIONS_PROJECT_ID_FKEY);
     }
@@ -365,32 +368,6 @@ public class SourceRevisions extends TableImpl<SourceRevisionsRecord> {
         return _findings;
     }
 
-    private transient KbAiExtensionResultsPath _kbAiExtensionResults;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_results</code> table
-     */
-    public KbAiExtensionResultsPath kbAiExtensionResults() {
-        if (_kbAiExtensionResults == null)
-            _kbAiExtensionResults = new KbAiExtensionResultsPath(this, null, Keys.KB_AI_EXTENSION_RESULTS__KB_AI_EXTENSION_RESULTS_SOURCE_REVISION_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionResults;
-    }
-
-    private transient KbAiExtensionRunsPath _kbAiExtensionRuns;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_runs</code> table
-     */
-    public KbAiExtensionRunsPath kbAiExtensionRuns() {
-        if (_kbAiExtensionRuns == null)
-            _kbAiExtensionRuns = new KbAiExtensionRunsPath(this, null, Keys.KB_AI_EXTENSION_RUNS__KB_AI_EXTENSION_RUNS_SOURCE_REVISION_ID_FKEY.getInverseKey());
-
-        return _kbAiExtensionRuns;
-    }
-
     private transient KbScanRunsPath _kbScanRuns;
 
     /**
@@ -402,32 +379,6 @@ public class SourceRevisions extends TableImpl<SourceRevisionsRecord> {
             _kbScanRuns = new KbScanRunsPath(this, null, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_SOURCE_REVISION_ID_FKEY.getInverseKey());
 
         return _kbScanRuns;
-    }
-
-    private transient MigrationInputRefsPath _migrationInputRefs;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.migration_input_refs</code> table
-     */
-    public MigrationInputRefsPath migrationInputRefs() {
-        if (_migrationInputRefs == null)
-            _migrationInputRefs = new MigrationInputRefsPath(this, null, Keys.MIGRATION_INPUT_REFS__MIGRATION_INPUT_REFS_SOURCE_REVISION_ID_FKEY.getInverseKey());
-
-        return _migrationInputRefs;
-    }
-
-    private transient MigrationInputSetsPath _migrationInputSets;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.migration_input_sets</code> table
-     */
-    public MigrationInputSetsPath migrationInputSets() {
-        if (_migrationInputSets == null)
-            _migrationInputSets = new MigrationInputSetsPath(this, null, Keys.MIGRATION_INPUT_SETS__MIGRATION_INPUT_SETS_SOURCE_REVISION_ID_FKEY.getInverseKey());
-
-        return _migrationInputSets;
     }
 
     private transient OptimizationCyclesPath _optimizationCycles;
@@ -484,6 +435,19 @@ public class SourceRevisions extends TableImpl<SourceRevisionsRecord> {
         return _reportFileContexts;
     }
 
+    private transient ReportReviewRunsPath _reportReviewRuns;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_review_runs</code> table
+     */
+    public ReportReviewRunsPath reportReviewRuns() {
+        if (_reportReviewRuns == null)
+            _reportReviewRuns = new ReportReviewRunsPath(this, null, Keys.REPORT_REVIEW_RUNS__REPORT_REVIEW_RUNS_PROJECT_ID_SOURCE_REVISION_ID_FKEY.getInverseKey());
+
+        return _reportReviewRuns;
+    }
+
     private transient ReportsPath _reports;
 
     /**
@@ -521,6 +485,19 @@ public class SourceRevisions extends TableImpl<SourceRevisionsRecord> {
             _sourceImports = new SourceImportsPath(this, null, Keys.SOURCE_IMPORTS__SOURCE_IMPORTS_SOURCE_REVISION_ID_FKEY.getInverseKey());
 
         return _sourceImports;
+    }
+
+    private transient SourceRevisionManifestsPath _sourceRevisionManifests;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.source_revision_manifests</code> table
+     */
+    public SourceRevisionManifestsPath sourceRevisionManifests() {
+        if (_sourceRevisionManifests == null)
+            _sourceRevisionManifests = new SourceRevisionManifestsPath(this, null, Keys.SOURCE_REVISION_MANIFESTS__SOURCE_REVISION_MANIFESTS_PROJECT_ID_SOURCE_REVISION_ID_FKEY.getInverseKey());
+
+        return _sourceRevisionManifests;
     }
 
     private transient SpecializedAnalysisFindingsPath _specializedAnalysisFindings;

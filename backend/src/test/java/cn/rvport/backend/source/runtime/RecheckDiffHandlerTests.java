@@ -19,7 +19,7 @@ class RecheckDiffHandlerTests {
         RecheckDiffRuntimeService service = Mockito.mock(RecheckDiffRuntimeService.class);
         TaskExecutionContext context = Mockito.mock(TaskExecutionContext.class);
         RecheckTaskInput input = new RecheckTaskInput(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
         when(context.input(RecheckTaskInput.class)).thenReturn(input);
         RecheckDiffHandler handler = new RecheckDiffHandler(service);
 
@@ -33,7 +33,7 @@ class RecheckDiffHandlerTests {
         RecheckDiffRuntimeService service = Mockito.mock(RecheckDiffRuntimeService.class);
         TaskExecutionContext context = Mockito.mock(TaskExecutionContext.class);
         RecheckTaskInput input = new RecheckTaskInput(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
         when(context.input(RecheckTaskInput.class)).thenReturn(input);
         RuntimeException failure = new RuntimeException("failed");
         org.mockito.Mockito.doThrow(failure).when(service).run(input, context);

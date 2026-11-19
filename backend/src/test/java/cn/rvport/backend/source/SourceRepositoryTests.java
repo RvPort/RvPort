@@ -63,12 +63,12 @@ class SourceRepositoryTests {
     }
 
     @Test
-    void createsArchiveAndGitRevisionsAndRegistersMigrationInputSets() throws Exception {
+    void createsArchiveAndGitRevisions() throws Exception {
         try (JooqMockDatabase database = new JooqMockDatabase()) {
             SourceRepository repository = new SourceRepository(database.dsl());
             SourceRevisionsRecord archive = revision(SourceRevisionType.ARCHIVE, false);
             SourceRevisionsRecord git = revision(SourceRevisionType.GIT, true);
-            database.enqueueRecord(archive).enqueueRows(1).enqueueRecord(git).enqueueRows(1);
+            database.enqueueRecord(archive).enqueueRecord(git);
 
             SourceRevisionView archiveView = repository.createArchive(
                     REVISION_ID, PROJECT_ID, "  ", "upload.tar.gz", "/archive/file", "/work/tree", " note ", false, USER_ID);
@@ -78,8 +78,7 @@ class SourceRepositoryTests {
             assertThat(archiveView.revisionType()).isEqualTo(SourceRevisionType.ARCHIVE);
             assertThat(gitView.revisionType()).isEqualTo(SourceRevisionType.GIT);
             assertThat(database.executions().get(0).bindings()).containsNull();
-            assertThat(database.executions().get(2).bindings()).contains("v2", "abc123").containsNull();
-            assertThat(database.executions().get(1).normalizedSql()).contains("insert into migration_input_sets", "on conflict do nothing");
+            assertThat(database.executions().get(1).bindings()).contains("v2", "abc123").containsNull();
             database.verifyComplete();
         }
     }

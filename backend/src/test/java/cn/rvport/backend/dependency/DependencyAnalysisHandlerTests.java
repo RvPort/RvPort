@@ -20,9 +20,6 @@ import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.environment.runtime.EnvironmentCollectionResult;
 import cn.rvport.backend.environment.runtime.EnvironmentTaskInput;
 import cn.rvport.backend.environment.runtime.SshRuntimeService;
-import cn.rvport.backend.migration.MigrationInputRepository;
-import cn.rvport.backend.migration.MigrationInputService;
-import cn.rvport.backend.migration.MigrationInputSourceType;
 import cn.rvport.backend.task.TaskErrorCode;
 import cn.rvport.backend.task.TaskExecutionException;
 import cn.rvport.backend.task.TaskLogRepository;
@@ -69,8 +66,6 @@ class DependencyAnalysisHandlerTests {
     @Mock
     private ArchiveCandidateRegistrar archiveCandidateRegistrar;
     @Mock
-    private MigrationInputService migrationInputService;
-    @Mock
     private TaskExecutionContext context;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -87,10 +82,6 @@ class DependencyAnalysisHandlerTests {
         DependencyAnalysisResultItem item = item(fixtures);
         when(extractor.extract(eq(fixtures.run), eq(fixtures.buildRun), any(), eq(fixtures.sourceComponents), eq(fixtures.targetComponents), any()))
                 .thenReturn(List.of(item));
-        when(repository.listResultItemIds(fixtures.run.id())).thenReturn(List.of(UUID.randomUUID()));
-        when(migrationInputService.syncSourceRefs(eq(fixtures.projectId), eq(fixtures.run.sourceRevisionId()),
-                eq(MigrationInputSourceType.DEPENDENCY_RESULT), any()))
-                .thenReturn(new MigrationInputRepository.InsertResult(List.of(), 0));
         ArgumentCaptor<Map<String, Object>> jsonCaptor = stubArtifacts(fixtures);
 
         handler().handle(context);
@@ -99,8 +90,6 @@ class DependencyAnalysisHandlerTests {
         verify(repository).listTargetComponents(fixtures.sourceSnapshotId);
         verify(repository).listTargetComponents(fixtures.targetSnapshotId);
         verify(repository).replaceResultItems(fixtures.run.id(), List.of(item));
-        verify(migrationInputService).syncSourceRefs(eq(fixtures.projectId), eq(fixtures.run.sourceRevisionId()),
-                eq(MigrationInputSourceType.DEPENDENCY_RESULT), any());
         Map<String, Object> json = jsonCaptor.getValue();
         assertThat(json)
                 .containsEntry("environmentRefresh", true)
@@ -125,7 +114,6 @@ class DependencyAnalysisHandlerTests {
 
         verify(repository, never()).findLatestSucceededSnapshotId(any(), any());
         verify(repository, never()).listTargetComponents(any());
-        verify(migrationInputService, never()).syncSourceRefs(any(), any(), any(), any());
         verify(repository).markFinished(eq(fixtures.run.id()), eq(TaskStatus.FAILED), any(), eq(List.of()));
     }
 
@@ -143,20 +131,16 @@ class DependencyAnalysisHandlerTests {
 
         verify(repository, never()).findLatestSucceededSnapshotId(any(), any());
         verify(repository, never()).listTargetComponents(any());
-        verify(migrationInputService, never()).syncSourceRefs(any(), any(), any(), any());
         verify(repository).markFinished(eq(fixtures.run.id()), eq(TaskStatus.FAILED), any(), eq(List.of()));
     }
 
     @Test
-    void failsRunWhenMigrationInputSyncFailsAfterResultItemsAreStored() {
+    void failsRunWhenResultItemsCannotBeStored() {
         Fixtures fixtures = fixtures();
         DependencyAnalysisResultItem item = item(fixtures);
         when(extractor.extract(eq(fixtures.run), eq(fixtures.buildRun), any(), eq(fixtures.sourceComponents), eq(fixtures.targetComponents), any()))
                 .thenReturn(List.of(item));
-        when(repository.listResultItemIds(fixtures.run.id())).thenReturn(List.of(UUID.randomUUID()));
-        when(migrationInputService.syncSourceRefs(eq(fixtures.projectId), eq(fixtures.run.sourceRevisionId()),
-                eq(MigrationInputSourceType.DEPENDENCY_RESULT), any()))
-                .thenThrow(new IllegalStateException("migration input sync failed"));
+        org.mockito.Mockito.doThrow(new IllegalStateException("write failed")).when(repository).replaceResultItems(fixtures.run.id(), List.of(item));
 
         assertThatThrownBy(() -> handler().handle(context))
                 .isInstanceOf(TaskExecutionException.class)
@@ -173,10 +157,6 @@ class DependencyAnalysisHandlerTests {
         Fixtures fixtures = fixtures();
         stubArtifacts(fixtures);
         when(extractor.extract(eq(fixtures.run), eq(fixtures.buildRun), any(), any(), any(), any())).thenReturn(List.of());
-        when(repository.listResultItemIds(fixtures.run.id())).thenReturn(List.of());
-        when(migrationInputService.syncSourceRefs(fixtures.projectId, fixtures.run.sourceRevisionId(),
-                MigrationInputSourceType.DEPENDENCY_RESULT, List.of()))
-                .thenReturn(new MigrationInputRepository.InsertResult(List.of(), 0));
 
         handler().handle(context);
 
@@ -356,7 +336,7 @@ class DependencyAnalysisHandlerTests {
     private DependencyAnalysisHandler handler() {
         return new DependencyAnalysisHandler(repository, buildValidationRepository, taskLogRepository, taskLogService,
                 toolRunRepository, sshRuntimeService, extractor, storedArtifactService, archiveCandidateRegistrar,
-                objectMapper, migrationInputService);
+                objectMapper);
     }
 
     private DependencyAnalysisView analysisRun(UUID projectId, UUID runId) {
@@ -397,7 +377,7 @@ class DependencyAnalysisHandlerTests {
                 .isInstanceOf(cn.rvport.backend.worker.TaskAttemptLostException.class);
         verify(repository, never()).replaceResultItems(any(), any());
         verify(repository, never()).markFinished(any(), any(), any(), any());
-        org.mockito.Mockito.verifyNoInteractions(migrationInputService, archiveCandidateRegistrar);
+        org.mockito.Mockito.verifyNoInteractions(archiveCandidateRegistrar);
     }
 
     private Fixtures fixtures() {

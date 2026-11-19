@@ -8,6 +8,8 @@ public record RecheckTaskInput(
         UUID projectId,
         UUID recheckRunId,
         UUID baseSourceRevisionId,
-        UUID targetSourceRevisionId
+        UUID targetSourceRevisionId,
+        UUID baseConfirmationId,
+        UUID targetConfirmationId
 ) {
 }

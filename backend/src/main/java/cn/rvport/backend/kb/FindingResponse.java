@@ -1,8 +1,6 @@
 package cn.rvport.backend.kb;
 
-import cn.rvport.backend.migration.MigrationInputStatus;
 import cn.rvport.backend.migration.NodeReportInclusionState;
-import cn.rvport.backend.kb.ai.KbAiExtensionSuggestionResponse;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -29,13 +27,9 @@ public record FindingResponse(
         Map<String, Object> evidence,
         String suggestion,
         String status,
-        UUID migrationInputRefId,
-        MigrationInputStatus migrationInputStatus,
-        boolean confirmedForNextReport,
         boolean includedInLatestReport,
         UUID latestReportId,
-        OffsetDateTime createdAt,
-        KbAiExtensionSuggestionResponse aiExtension
+        OffsetDateTime createdAt
 ) {
     static FindingResponse from(FindingView view) {
         return from(view, null);
@@ -64,13 +58,9 @@ public record FindingResponse(
                 view.evidence(),
                 view.suggestion(),
                 view.status(),
-                state.migrationInputRefId(),
-                state.migrationInputStatus(),
-                state.confirmedForNextReport(),
                 state.includedInLatestReport(),
                 state.latestReportId(),
-                view.createdAt(),
-                null
+                view.createdAt()
         );
     }
 
@@ -97,45 +87,9 @@ public record FindingResponse(
                 evidence,
                 suggestion,
                 status,
-                state.migrationInputRefId(),
-                state.migrationInputStatus(),
-                state.confirmedForNextReport(),
                 state.includedInLatestReport(),
                 state.latestReportId(),
-                createdAt,
-                aiExtension
-        );
-    }
-
-    FindingResponse withAiExtension(KbAiExtensionSuggestionResponse aiExtension) {
-        return new FindingResponse(
-                id,
-                projectId,
-                scanRunId,
-                sourceRevisionId,
-                ruleId,
-                category,
-                severity,
-                title,
-                description,
-                filePath,
-                lineStart,
-                lineEnd,
-                symbol,
-                fact,
-                conclusion,
-                occurrences,
-                evidenceChain,
-                evidence,
-                suggestion,
-                status,
-                migrationInputRefId,
-                migrationInputStatus,
-                confirmedForNextReport,
-                includedInLatestReport,
-                latestReportId,
-                createdAt,
-                aiExtension
+                createdAt
         );
     }
 

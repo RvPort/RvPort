@@ -14,12 +14,16 @@ import cn.rvport.backend.jooq.tables.Credentials.CredentialsPath;
 import cn.rvport.backend.jooq.tables.Environments.EnvironmentsPath;
 import cn.rvport.backend.jooq.tables.IssueEvents.IssueEventsPath;
 import cn.rvport.backend.jooq.tables.Issues.IssuesPath;
-import cn.rvport.backend.jooq.tables.KbAiExtensionRuns.KbAiExtensionRunsPath;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeRuns.ModelProfileAgentProbeRunsPath;
 import cn.rvport.backend.jooq.tables.ModelProfiles.ModelProfilesPath;
 import cn.rvport.backend.jooq.tables.ModelStageAssignments.ModelStageAssignmentsPath;
 import cn.rvport.backend.jooq.tables.ProjectRuntimeEnvironments.ProjectRuntimeEnvironmentsPath;
 import cn.rvport.backend.jooq.tables.Projects.ProjectsPath;
+import cn.rvport.backend.jooq.tables.ReportFixListConfirmations.ReportFixListConfirmationsPath;
+import cn.rvport.backend.jooq.tables.ReportReviewEvents.ReportReviewEventsPath;
+import cn.rvport.backend.jooq.tables.ReportReviewItems.ReportReviewItemsPath;
+import cn.rvport.backend.jooq.tables.ReportReviewOperations.ReportReviewOperationsPath;
+import cn.rvport.backend.jooq.tables.ReportReviewRuns.ReportReviewRunsPath;
 import cn.rvport.backend.jooq.tables.Reports.ReportsPath;
 import cn.rvport.backend.jooq.tables.SourceRevisions.SourceRevisionsPath;
 import cn.rvport.backend.jooq.tables.SpecializedAnalysisRuns.SpecializedAnalysisRunsPath;
@@ -305,19 +309,6 @@ public class Users extends TableImpl<UsersRecord> {
         return _issues;
     }
 
-    private transient KbAiExtensionRunsPath _kbAiExtensionRuns;
-
-    /**
-     * Get the implicit to-many join path to the
-     * <code>public.kb_ai_extension_runs</code> table
-     */
-    public KbAiExtensionRunsPath kbAiExtensionRuns() {
-        if (_kbAiExtensionRuns == null)
-            _kbAiExtensionRuns = new KbAiExtensionRunsPath(this, null, Keys.KB_AI_EXTENSION_RUNS__KB_AI_EXTENSION_RUNS_CREATED_BY_FKEY.getInverseKey());
-
-        return _kbAiExtensionRuns;
-    }
-
     private transient ModelProfileAgentProbeRunsPath _modelProfileAgentProbeRunsCreatedByFkey;
 
     /**
@@ -440,6 +431,71 @@ public class Users extends TableImpl<UsersRecord> {
             _projects = new ProjectsPath(this, null, Keys.PROJECTS__PROJECTS_CREATED_BY_FKEY.getInverseKey());
 
         return _projects;
+    }
+
+    private transient ReportFixListConfirmationsPath _reportFixListConfirmations;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_fix_list_confirmations</code> table
+     */
+    public ReportFixListConfirmationsPath reportFixListConfirmations() {
+        if (_reportFixListConfirmations == null)
+            _reportFixListConfirmations = new ReportFixListConfirmationsPath(this, null, Keys.REPORT_FIX_LIST_CONFIRMATIONS__REPORT_FIX_LIST_CONFIRMATIONS_CONFIRMED_BY_FKEY.getInverseKey());
+
+        return _reportFixListConfirmations;
+    }
+
+    private transient ReportReviewEventsPath _reportReviewEvents;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_review_events</code> table
+     */
+    public ReportReviewEventsPath reportReviewEvents() {
+        if (_reportReviewEvents == null)
+            _reportReviewEvents = new ReportReviewEventsPath(this, null, Keys.REPORT_REVIEW_EVENTS__REPORT_REVIEW_EVENTS_ACTOR_ID_FKEY.getInverseKey());
+
+        return _reportReviewEvents;
+    }
+
+    private transient ReportReviewItemsPath _reportReviewItems;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_review_items</code> table
+     */
+    public ReportReviewItemsPath reportReviewItems() {
+        if (_reportReviewItems == null)
+            _reportReviewItems = new ReportReviewItemsPath(this, null, Keys.REPORT_REVIEW_ITEMS__REPORT_REVIEW_ITEMS_CREATED_BY_FKEY.getInverseKey());
+
+        return _reportReviewItems;
+    }
+
+    private transient ReportReviewOperationsPath _reportReviewOperations;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_review_operations</code> table
+     */
+    public ReportReviewOperationsPath reportReviewOperations() {
+        if (_reportReviewOperations == null)
+            _reportReviewOperations = new ReportReviewOperationsPath(this, null, Keys.REPORT_REVIEW_OPERATIONS__REPORT_REVIEW_OPERATIONS_ACTOR_ID_FKEY.getInverseKey());
+
+        return _reportReviewOperations;
+    }
+
+    private transient ReportReviewRunsPath _reportReviewRuns;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_review_runs</code> table
+     */
+    public ReportReviewRunsPath reportReviewRuns() {
+        if (_reportReviewRuns == null)
+            _reportReviewRuns = new ReportReviewRunsPath(this, null, Keys.REPORT_REVIEW_RUNS__REPORT_REVIEW_RUNS_CONFIGURATION_USER_ID_FKEY.getInverseKey());
+
+        return _reportReviewRuns;
     }
 
     private transient ReportsPath _reports;

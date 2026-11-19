@@ -68,7 +68,7 @@ public final class AgentCliAcceptanceMain {
                     new cn.rvport.backend.config.CredentialCryptoProperties(System.getenv("RVPORT_CREDENTIAL_MASTER_KEY"),
                             System.getenv("RVPORT_CREDENTIAL_KEY_ID"))) : null;
             var runtime = new AgentRuntimesRecord();
-            runtime.setId(UUID.randomUUID()); runtime.setAgentType("CODEX"); runtime.setExecutablePath(executable);
+            runtime.setId(UUID.randomUUID()); runtime.setAgentType(agent.name()); runtime.setExecutablePath(executable);
             var stages = new java.util.HashSet<cn.rvport.backend.modelprofile.ModelProfileStage>();
             var profiles = new cn.rvport.backend.modelprofile.ModelProfileService(repository, cipher, json, null, null, null) {
                 @Override public AgentModelRuntimeConfig resolveAgentForStage(cn.rvport.backend.modelprofile.ModelProfileStage stage, UUID actorUserId) {
@@ -85,18 +85,26 @@ public final class AgentCliAcceptanceMain {
                         new cn.rvport.backend.modelprofile.ModelConfigurationAccess(new cn.rvport.backend.user.UserRepository(
                                 org.jooq.impl.DSL.using(connection, org.jooq.SQLDialect.POSTGRES)), null));
             }
-            var registry = new AgentRuntimeAdapterRegistry(List.of(new CodexAgentRuntimeAdapter(runner)));
+            var registry = new AgentRuntimeAdapterRegistry(List.of(new CodexAgentRuntimeAdapter(runner),
+                    new DeepSeekHarnessAgentRuntimeAdapter(runner,json),new OpenCodeAgentRuntimeAdapter(runner,json)));
             Path source = Files.createTempDirectory("rvport-business-source-");
-            Path kbWorkspace = null;
             try {
-                Files.writeString(source.resolve("main.c"), "int main(void) { return 0; }\n");
-                var finding = UUID.randomUUID().toString();
-                var kb = new cn.rvport.backend.kb.ai.KbAiExtensionAgentRuntime(profiles, registry, json)
-                        .run(source,  List.of(),  List.of(java.util.Map.of("findingId", finding)), profiles.resolveAgentForStage(cn.rvport.backend.modelprofile.ModelProfileStage.KB_AI_EXTENSION, configurationUserId));
-                kbWorkspace = kb.workspace();
-                if (kb.rawRows().size() != 1 || !finding.equals(kb.rawRows().getFirst().get("findingId"))
-                        || !Files.readString(kb.outputFile()).contains("rvport-probe-ok")) {
-                    throw new AssertionError("KB actual tool result mismatch");
+                var reportConfig = profiles.resolveAgentForStage(cn.rvport.backend.modelprofile.ModelProfileStage.REPORT_AI_REVIEW, configurationUserId);
+                var inputId = UUID.randomUUID();
+                Files.createDirectories(source.resolve("source"));
+                Files.createDirectories(source.resolve("input"));
+                Files.createDirectories(source.resolve("output"));
+                Files.writeString(source.resolve("input/findings.jsonl"),json.writeValueAsString(java.util.Map.of(
+                        "inputId",inputId,"evidenceRefs",List.of("analysis:"+inputId))));
+                var execution = registry.get(reportConfig.runtime().getAgentType()).run(new AgentRuntimeExecutionRequest(
+                        reportConfig.runtime(),reportConfig.model(),source,"从 input/findings.jsonl 读取待复核项并写入 output/results.jsonl",Duration.ofSeconds(60),true));
+                if(execution.exitCode()!=0 || execution.timedOut())
+                    throw new AssertionError("隔离模拟 Agent 失败: exit="+execution.exitCode()+" timedOut="+execution.timedOut()
+                            +" "+execution.stderr().replace(reportConfig.model().apiKey(),"[redacted]"));
+                var result = json.readTree(Files.readString(source.resolve("output/results.jsonl")));
+                if (execution.timedOut() || execution.exitCode()!=0 || !inputId.toString().equals(result.path("inputId").asText())
+                        || !"INSUFFICIENT_EVIDENCE".equals(result.path("verdict").asText())) {
+                    throw new AssertionError("报告逐项复核实际工具输出错误");
                 }
                 var comparison = new cn.rvport.backend.testcomparison.runtime.TestComparisonAgentRuntime(profiles, registry, json)
                         .run(new cn.rvport.backend.testcomparison.runtime.TestComparisonInputBundle(
@@ -107,7 +115,7 @@ public final class AgentCliAcceptanceMain {
                 System.out.println("BUSINESS_ADAPTER_ACCEPTANCE_PASSED");
             } finally {
                 if (connection != null) { connection.close(); }
-                for (Path directory : new Path[]{source, kbWorkspace}) {
+                for (Path directory : new Path[]{source}) {
                     if (directory != null) {
                         try (var files = Files.walk(directory)) {
                             for (Path path : files.sorted(java.util.Comparator.reverseOrder()).toList()) { Files.delete(path); }

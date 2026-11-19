@@ -8,7 +8,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import cn.rvport.backend.migration.MigrationInputStatus;
 import cn.rvport.backend.migration.NodeReportInclusionState;
 import org.junit.jupiter.api.Test;
 
@@ -51,16 +50,12 @@ class KbValueObjectTests {
         UUID refId = UUID.randomUUID();
         UUID reportId = UUID.randomUUID();
         NodeReportInclusionState state = new NodeReportInclusionState(
-                refId, MigrationInputStatus.CONFIRMED, true, true, reportId);
+                true, reportId);
 
         FindingResponse response = FindingResponse.from(view(Map.of()), state);
-        assertThat(response.migrationInputRefId()).isEqualTo(refId);
-        assertThat(response.confirmedForNextReport()).isTrue();
         assertThat(response.includedInLatestReport()).isTrue();
 
         FindingResponse cleared = response.withInclusion(null);
-        assertThat(cleared.migrationInputRefId()).isNull();
-        assertThat(cleared.confirmedForNextReport()).isFalse();
         assertThat(cleared.withInclusion(state).latestReportId()).isEqualTo(reportId);
     }
 

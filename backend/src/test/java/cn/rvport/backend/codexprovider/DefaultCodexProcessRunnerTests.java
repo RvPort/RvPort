@@ -122,7 +122,7 @@ class DefaultCodexProcessRunnerTests {
         });
         Path pidFile = workspace.resolve("root.pid");
         long limit = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (!Files.exists(pidFile) && System.nanoTime() < limit) { Thread.sleep(10); }
+        while ((!Files.exists(pidFile) || Files.size(pidFile) == 0) && System.nanoTime() < limit) { Thread.sleep(10); }
         assertThat(pidFile).exists();
         long pid = Long.parseLong(Files.readString(pidFile));
         thread.interrupt();

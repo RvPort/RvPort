@@ -328,7 +328,7 @@ public class ModelProfileService {
     private String stageLabel(ModelProfileStage stage) {
         return switch (stage) {
             case TEST_LOG_COMPARE -> "测试结果比较阶段";
-            case KB_AI_EXTENSION -> "知识库 AI 扩展阶段";
+            case REPORT_AI_REVIEW -> "报告 AI 复核阶段";
         };
     }
 
@@ -667,7 +667,7 @@ public class ModelProfileService {
         try {
             return ModelProfileStage.valueOf(value == null ? "" : value.trim());
         } catch (IllegalArgumentException ex) {
-            throw validation("stage 只允许 TEST_LOG_COMPARE 或 KB_AI_EXTENSION");
+            throw validation("stage 只允许 TEST_LOG_COMPARE 或 REPORT_AI_REVIEW");
         }
     }
 
