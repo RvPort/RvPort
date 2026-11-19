@@ -329,6 +329,7 @@ public class ModelProfileService {
         return switch (stage) {
             case TEST_LOG_COMPARE -> "测试结果比较阶段";
             case REPORT_AI_REVIEW -> "报告 AI 复核阶段";
+            case KB_MIGRATION -> "KB 迁移阶段";
         };
     }
 
@@ -667,7 +668,7 @@ public class ModelProfileService {
         try {
             return ModelProfileStage.valueOf(value == null ? "" : value.trim());
         } catch (IllegalArgumentException ex) {
-            throw validation("stage 只允许 TEST_LOG_COMPARE 或 REPORT_AI_REVIEW");
+            throw validation("stage 只允许 TEST_LOG_COMPARE、REPORT_AI_REVIEW 或 KB_MIGRATION");
         }
     }
 

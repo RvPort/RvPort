@@ -182,3 +182,6 @@ databaseChangeLog:
   - include:
       file: changes/0137-retire-node-confirmation.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/0138-add-kb-migration.sql
+      relativeToChangelogFile: true

@@ -10,6 +10,7 @@ public final class RvPortTaskTypes {
     public static final String DEPENDENCY_ANALYSIS = "DEPENDENCY_ANALYSIS";
     public static final String DEPENDENCY_AUTO_FIX = "DEPENDENCY_AUTO_FIX";
     public static final String KB_SCAN = "KB_SCAN";
+    public static final String KB_MIGRATION = "KB_MIGRATION";
     public static final String REPORT_GENERATE = "REPORT_GENERATE";
     public static final String REPORT_COMPARE = "REPORT_COMPARE";
     public static final String RECHECK_DIFF = "RECHECK_DIFF";

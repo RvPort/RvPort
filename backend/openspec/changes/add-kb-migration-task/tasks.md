@@ -14,7 +14,7 @@
 
 ## 3. 任务类型与阶段接线
 
-- [ ] 3.1 `RvPortTaskTypes.KB_MIGRATION` 常量；`TaskMetadataResolver` 三处 switch（stageId/resourceType/resourceId=migrationRunId）；`StageIds` 加 `kb-migration` 并接入 `StageReadinessService`。
+- [ ] 3.1 `RvPortTaskTypes.KB_MIGRATION` 常量；`TaskMetadataResolver` 三处 switch（stageId 复用 `kb-scan` 分组、resourceType=`kb_migration_run`、resourceId=input.migrationRunId；stageId 为自由分组字符串，无需改 `StageIds` 常量）。
 - [ ] 3.2 `TaskDomainFinalizationRepository.DOMAINS` 加 `new Domain("KB_MIGRATION", "kb_migration_runs", "finished_at", "summary", null, null)`。
 - [ ] 3.3 `ModelProfileStage.KB_MIGRATION` 枚举、`ModelProfileService` 阶段白名单与 stageLabel（"KB 迁移阶段"）；`StoredArtifactOwnerType.KB_MIGRATION`。
 - [ ] 3.4 单测：枚举/CHECK/白名单一致（含非法阶段拒绝、孤儿收敛覆盖新域表）。

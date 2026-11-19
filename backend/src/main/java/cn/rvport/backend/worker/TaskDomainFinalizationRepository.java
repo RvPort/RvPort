@@ -23,6 +23,7 @@ public class TaskDomainFinalizationRepository {
             new Domain("DEPENDENCY_ANALYSIS", "dependency_analysis_runs", "finished_at", "summary", null, null),
             new Domain("DEPENDENCY_AUTO_FIX", "dependency_auto_fix_runs", "finished_at", "summary", "error_summary", null),
             new Domain("KB_SCAN", "kb_scan_runs", "finished_at", "summary", null, null),
+            new Domain("KB_MIGRATION", "kb_migration_runs", "finished_at", "summary", null, null),
             new Domain("FLOATING_POINT_ANALYSIS", "specialized_analysis_runs", "finished_at", "summary", null, null),
             new Domain("MEMORY_ORDER_ANALYSIS", "specialized_analysis_runs", "finished_at", "summary", null, null),
             new Domain("BUILD_VALIDATION", "build_runs", "finished_at", "build_facts", null, "failure_category"),

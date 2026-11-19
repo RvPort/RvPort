@@ -9,5 +9,6 @@ public enum StoredArtifactOwnerType {
     AUTOMATED_TEST,
     TEST_COMPARISON,
     SPECIALIZED_ANALYSIS,
-    SOURCE_REVISION
+    SOURCE_REVISION,
+    KB_MIGRATION
 }
