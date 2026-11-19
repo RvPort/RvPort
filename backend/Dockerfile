@@ -53,13 +53,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends aria2 ca-certificates xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# 预置 LLVM tarball（可选）：存在于构建上下文时免下载，sha256 仍强制校验。
-# 构建后由 .dockerignore 之外的手动清理或 CI 缓存策略管理；未提供时此 COPY 需有文件。
-COPY backend/LLVM-21.1.8-Linux-X64.tar.xz /workspace/backend/
-
+# 受限网络双出口：ARIA2_PROXY 给 aria2 注入代理；本机还可用 BuildKit additional context
+# （docker buildx build --build-context llvm-tarball=/path/to/dir 含 tarball + 把 COPY 行临时加回），
+# CI 走默认直连下载（github releases 可达），与上游行为一致。
 ARG ARIA2_PROXY=
-# 受限网络：构建上下文可预置 LLVM tarball（backend/LLVM-*.tar.xz，构建时 COPY），
-# 存在则直接使用（sha256 仍校验），否则走 aria2 下载（可经 ARIA2_PROXY）。
+# 预置文件存在则用（本机 workaround），否则 aria2 下载（CI 路径）；sha256 均强制校验。
 RUN --mount=type=cache,target=/var/cache/rvport-toolchains \
     mkdir -p /opt/rvport/toolchains /var/cache/rvport-toolchains \
     && if [ -f "/workspace/backend/${BITCODE_LLVM_ARCHIVE}" ]; then \
