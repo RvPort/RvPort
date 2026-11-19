@@ -26,26 +26,26 @@
 
 ## 5. KbMigrationAgentRuntime 与 workspace
 
-- [ ] 5.1 实现 workspace 组装（D3 布局）：投影输出、manifest（expectedCount/entriesFile/sourceRoot/outputFile/missingFiles）、按投影涉及文件物化 source/（ServerPathGuard 校验、符号链接不跟随）、释放 classpath `kb-migration/agents/` 到 `.opencode/agent/`。
-- [ ] 5.2 prompt 合同与调用：中文任务说明（读 input、只写 output、最终单行 DONE/FAIL）、`AgentRuntimeAdapterRegistry.get(OPENCODE)` 执行、`RVPORT_AGENT_*` 环境注入复用。
-- [ ] 5.3 执行后校验：输入文件 SHA-256 复核；`output/migration_result.json` 解析与校验（unknown/duplicate/missing 计数、状态枚举 DONE/NO_WORK_NEEDED/PENDING）；`migration-diff.patch` 生成；产物先入库再清理 workspace。
-- [ ] 5.4 单测：hash 不一致检测、结果校验各分支、workspace 布局断言、技能资源释放完整性、缺失源文件计入 missingFiles 不中断。
+- [x] 5.1 实现 workspace 组装（D3 布局）：投影输出、manifest（expectedCount/entriesFile/sourceRoot/outputFile/missingFiles）、按投影涉及文件物化 source/（ServerPathGuard 校验、符号链接不跟随）、释放 classpath `kb-migration/agents/` 到 `.opencode/agent/`。
+- [x] 5.2 prompt 合同与调用：中文任务说明（读 input、只写 output、最终单行 DONE/FAIL）、`AgentRuntimeAdapterRegistry.get(OPENCODE)` 执行、`RVPORT_AGENT_*` 环境注入复用。
+- [x] 5.3 执行后校验：输入文件 SHA-256 复核；`output/migration_result.json` 解析与校验（unknown/duplicate/missing 计数、状态枚举 DONE/NO_WORK_NEEDED/PENDING）；`migration-diff.patch` 生成；产物先入库再清理 workspace。
+- [x] 5.4 单测：hash 不一致检测、结果校验各分支、workspace 布局断言、技能资源释放完整性、缺失源文件计入 missingFiles 不中断。
 
 ## 6. Handler、Service 与产物
 
-- [ ] 6.1 `KbMigrationHandler implements TaskHandler`：markRunning → 投影（重新生成，不信任旧文件）→ runtime 执行 → 结果校验 → 产物入库（StoredArtifactService TaskExecutionContext 重载）→ counts 回写 → markFinished；DB 写全走 `context.publish()`。
-- [ ] 6.2 `KbMigrationService`：create（readiness 三查 + inputSnapshot 内嵌 `ModelExecutionSelection.from`）、list、detail、resolveExecution 断言 taskId/profileId/runtimeId 一致（防换绑，照报告复核模式）。
-- [ ] 6.3 失败语义：`KB_MIGRATION_MODEL_NOT_CONFIGURED`/`KB_MIGRATION_NO_ENTRIES`/`AGENT_OUTPUT_INVALID` 不可重试；超时 ExecutionBudget；取消经 `throwIfCancellationRequested`。
-- [ ] 6.4 `archive_candidates` 登记两类产物节点（MIGRATION_DIFF/MIGRATION_RESULT）。
-- [ ] 6.5 单测：readiness 各拒绝分支、防换绑、产物入库与归档候选、取消与超时路径。
+- [x] 6.1 `KbMigrationHandler implements TaskHandler`：markRunning → 投影（重新生成，不信任旧文件）→ runtime 执行 → 结果校验 → 产物入库（StoredArtifactService TaskExecutionContext 重载）→ counts 回写 → markFinished；DB 写全走 `context.publish()`。
+- [x] 6.2 `KbMigrationService`：create（readiness 三查 + inputSnapshot 内嵌 `ModelExecutionSelection.from`）、list、detail、resolveExecution 断言 taskId/profileId/runtimeId 一致（防换绑，照报告复核模式）。
+- [x] 6.3 失败语义：`KB_MIGRATION_MODEL_NOT_CONFIGURED`/`KB_MIGRATION_NO_ENTRIES`/`AGENT_OUTPUT_INVALID` 不可重试；超时 ExecutionBudget；取消经 `throwIfCancellationRequested`。
+- [x] 6.4 `archive_candidates` 登记两类产物节点（MIGRATION_DIFF/MIGRATION_RESULT）。
+- [x] 6.5 单测：readiness 各拒绝分支、防换绑、产物入库与归档候选、取消与超时路径。
 
 ## 7. API
 
-- [ ] 7.1 `KbMigrationController`：POST/GET 端点（D7 契约）、双语错误原因、项目归属校验。
-- [ ] 7.2 单测：鉴权、参数校验、正常/失败响应形态；产物下载复用链路验证。
+- [x] 7.1 `KbMigrationController`：POST/GET 端点（D7 契约）、双语错误原因、项目归属校验。
+- [x] 7.2 单测：鉴权、参数校验、正常/失败响应形态；产物下载复用链路验证。
 
 ## 8. 覆盖率与验证
 
 - [x] 8.1 Docker 内执行后端全量单测；整体与 `cn.rvport.backend.kb.migration` 模块行/分支覆盖率 ≥ 90%。
 - [ ] 8.2 完整 Compose 冒烟：重建镜像 → `docker compose up -d --wait` → 以 test-projects 测试包工程发起 KB_MIGRATION → 产物可下载、任务日志可读。
-- [ ] 8.3 `openspec validate add-kb-migration-task --strict` 通过；不自动归档。
+- [x] 8.3 `openspec validate add-kb-migration-task --strict` 通过；不自动归档。
