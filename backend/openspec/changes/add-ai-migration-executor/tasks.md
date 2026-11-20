@@ -8,9 +8,9 @@
 
 ## 2. 执行器容器服务
 
-- [ ] 2.1 `ExecutorContainerService`：docker run 命令拼装（命名、挂载、env 显式传值、代理置空、--rm）、启动前同名孤儿 rm、退出码/超时映射。
-- [ ] 2.2 取消集成：`registerCancellableResource` → `docker kill`；与任务取消链路（worker cancel）联通。
-- [ ] 2.3 单测：命令快照断言（挂载/env/命名/代理置空）、孤儿清理、超时 kill、退出码映射（不真跑 docker）。
+- [x] 2.1 `ExecutorContainerService`：docker run 命令拼装（命名、挂载、env 显式传值、代理置空、--rm）、启动前同名孤儿 rm、退出码/超时映射。
+- [x] 2.2 取消集成：`registerCancellableResource` → `docker kill`；与任务取消链路（worker cancel）联通。
+- [x] 2.3 单测：命令快照断言（挂载/env/命名/代理置空）、孤儿清理、超时 kill、退出码映射（不真跑 docker）。
 
 ## 3. 技能 volume 与管理面
 
