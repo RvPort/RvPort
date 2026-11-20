@@ -15,13 +15,18 @@ class ReportSourceRepositoryTests {
             assertThat(repo.kb(project,source,env,7,build)).isPresent();
             assertThat(db.lastExecution().sql()).contains("status='SUCCEEDED'","build_run_id=?","runtime_environment_version=?").doesNotContain("case");
             assertThat(db.lastExecution().bindings()).containsExactly(project,source,env,7L,build);
+            assertThat(db.lastExecution().sql()).contains("latest_execution", "e.source_revision_id=r.source_revision_id", "t.id=e.task_id", "desc nulls last,e.id desc")
+                    .doesNotContain("e.created_at");
             ReviewWorkspaceRepositoryTests.enqueue(db,Map.of("id",build));
             assertThat(repo.dependency(project,source,env,7,build,snapshot,snapshot)).isPresent();
             assertThat(db.lastExecution().sql()).contains("sourceSnapshotId","targetSnapshotId","source_build_run_id=?");
             assertThat(db.lastExecution().bindings()).containsExactly(project,source,env,7L,build,snapshot.toString(),snapshot.toString());
             ReviewWorkspaceRepositoryTests.enqueue(db,Map.of("id",build));
             assertThat(repo.specialized(project,source,"FLOATING_POINT",build,7L,"AST_ONLY",null)).isPresent();
-            assertThat(db.lastExecution().sql()).contains("status in ('COMPLETE','COMPLETE_WITH_RISK')","is not distinct from").doesNotContain("'PARTIAL'");
+            assertThat(db.lastExecution().sql()).contains("status in ('COMPLETE','COMPLETE_WITH_RISK','PARTIAL')",
+                    "result_json_artifact_id is not null", "coalesce(effective_input_plan,input_plan)->>'inputOrigin'='SOURCE_DISCOVERY'", "is not distinct from");
+            assertThat(db.lastExecution().sql()).contains("latest_execution","e.analyzer_type=r.analyzer_type", "input_plan is not null or");
+            assertThat(db.lastExecution().sql()).contains("p.id=r.project_id", "lower(trim(p.source_arch))", "lower(trim(p.target_arch))");
             for(String type:List.of("KB_FINDING","DEPENDENCY_RESULT","FLOATING_POINT_FINDING","MEMORY_ORDER_FINDING")) {
                 ReviewWorkspaceRepositoryTests.enqueue(db,Map.of("id",build));
                 assertThat(repo.findings(type,build)).containsExactly(Map.of("id",build));

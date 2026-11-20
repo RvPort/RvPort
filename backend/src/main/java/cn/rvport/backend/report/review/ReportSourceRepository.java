@@ -7,7 +7,7 @@ import java.util.UUID;
 import org.jooq.DSLContext;
 import org.springframework.stereotype.Repository;
 
-/** 先限定执行上下文，再选最新完整成功；不使用 active-first 排序。 */
+/** 先限定实际输入，再选最新合法发布结果；技术失败不能发布半截输出。 */
 @Repository
 public class ReportSourceRepository {
     private final DSLContext dsl;
@@ -17,9 +17,19 @@ public class ReportSourceRepository {
     public Optional<Map<String,Object>> kb(UUID project, UUID source, UUID environment, long version, UUID build) {
         return dsl.fetchOptional("""
                 select id,status,finished_at,kb_version,source_environment_id,runtime_environment_version,build_run_id,
-                    summary->>'schemaVersion' as result_schema_version from kb_scan_runs where project_id=? and source_revision_id=?
-                  and source_environment_id=? and runtime_environment_version=? and build_run_id=?
-                order by (status='SUCCEEDED') desc,finished_at desc nulls last,id desc limit 1
+                    summary, input_plan, effective_input_plan,
+                    (select jsonb_build_object('id',e.id,'status',e.status,'reasonCode',e.summary->>'reasonCode')
+                       from kb_scan_runs e where e.project_id=r.project_id and e.source_revision_id=r.source_revision_id
+                       order by (e.status in ('PENDING','QUEUED','RUNNING')) desc,
+                         (select t.created_at from tasks t where t.id=e.task_id) desc nulls last,e.id desc limit 1) as latest_execution,
+                    exists(select 1 from kb_scan_artifacts a where a.scan_run_id=r.id
+                      and a.artifact_type='SCAN_RESULT_JSON' and a.stored_artifact_id is not null) as result_available,
+                    summary->>'schemaVersion' as result_schema_version from kb_scan_runs r where project_id=? and source_revision_id=?
+                  and ((source_environment_id=? and runtime_environment_version=? and build_run_id=?)
+                    or coalesce(effective_input_plan,input_plan)->>'inputOrigin'='SOURCE_DISCOVERY')
+                order by (status='SUCCEEDED' and exists(select 1 from kb_scan_artifacts a where a.scan_run_id=r.id
+                    and a.artifact_type='SCAN_RESULT_JSON' and a.stored_artifact_id is not null)) desc,
+                    (select t.created_at from tasks t where t.id=r.task_id) desc nulls last,id desc limit 1
                 """,project,source,environment,version,build).map(json::map);
     }
 
@@ -39,11 +49,22 @@ public class ReportSourceRepository {
             Long environmentVersion, String mode, String artifactSet) {
         return dsl.fetchOptional("""
                 select id,status,finished_at,analysis_mode,artifact_set_id,build_run_id,environment_config_version,result_schema_version,
+                    summary,input_plan,effective_input_plan,result_json_artifact_id,
+                    (select jsonb_build_object('id',e.id,'status',e.status,'reasonCode',e.summary->>'reasonCode')
+                       from specialized_analysis_runs e where e.project_id=r.project_id and e.source_revision_id=r.source_revision_id
+                         and e.analyzer_type=r.analyzer_type
+                       order by (e.status in ('PENDING','QUEUED','RUNNING')) desc,e.created_at desc,e.id desc limit 1) as latest_execution,
+                    (result_json_artifact_id is not null) as result_available,
                     (select count(*) from specialized_analysis_findings f where f.run_id=r.id and f.finding_kind='DISCHARGED') as discharged_count
                 from specialized_analysis_runs r where project_id=? and source_revision_id=? and analyzer_type=?
-                  and build_run_id=? and environment_config_version is not distinct from ?::bigint
-                  and analysis_mode=? and artifact_set_id is not distinct from ?::text
-                order by (status in ('COMPLETE','COMPLETE_WITH_RISK')) desc,finished_at desc nulls last,created_at desc,id desc limit 1
+                  and exists(select 1 from projects p where p.id=r.project_id
+                    and lower(trim(p.source_arch)) in ('x86','x86_64','amd64','i386','i686','x64')
+                    and lower(trim(p.target_arch)) in ('riscv64','riscv','risc-v','risc-v64'))
+                  and ((build_run_id=? and environment_config_version is not distinct from ?::bigint
+                  and (input_plan is not null or (analysis_mode=? and artifact_set_id is not distinct from ?::text)))
+                  or coalesce(effective_input_plan,input_plan)->>'inputOrigin'='SOURCE_DISCOVERY')
+                order by (status in ('COMPLETE','COMPLETE_WITH_RISK','PARTIAL') and result_json_artifact_id is not null) desc,
+                    created_at desc,id desc limit 1
                 """,project,source,analyzer,build,environmentVersion,mode,artifactSet).map(json::map);
     }
 

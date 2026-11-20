@@ -8,8 +8,16 @@ public record StagePrerequisiteResponse(
         StagePrerequisiteStatus status,
         UUID referenceId,
         String reasonCode,
-        Map<String, Object> details
+        Map<String, Object> details,
+        boolean required
 ) {
+    public StagePrerequisiteResponse(String key, StagePrerequisiteStatus status, UUID referenceId,
+            String reasonCode, Map<String, Object> details) {
+        this(key, status, referenceId, reasonCode, details, true);
+    }
+    public StagePrerequisiteResponse optional() {
+        return new StagePrerequisiteResponse(key, status, referenceId, reasonCode, details, false);
+    }
     public static StagePrerequisiteResponse of(
             String key,
             StagePrerequisiteStatus status,

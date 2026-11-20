@@ -159,11 +159,12 @@ public class ReviewWorkspaceService {
     private void freezeDocuments(ReviewWorkspaceRepository.Draft draft,UUID id) {
         var rows=repository.confirmationItems(draft.reportId(),id);
         Map<String,Object> document=new LinkedHashMap<>();
-        document.put("schemaVersion","confirmed-fix-list.v1"); document.put("reportId",draft.reportId());
+        document.put("schemaVersion","confirmed-fix-list.v2"); document.put("reportId",draft.reportId());
         document.put("sourceRevisionId",draft.sourceRevisionId()); document.put("confirmationId",id);
         document.put("draftVersion",draft.version()); document.put("decisions",rows);
         document.put("fixItems",rows.stream().filter(row->"TO_FIX".equals(row.get("reviewState"))).toList());
         var renderer=new ReportReviewRenderer(mapper);
+        document.put("sources",renderer.sources(repository.manifest(draft.reportId())));
         UUID json=store(draft,id,"JSON","application/json",renderer.json(document));
         UUID html=store(draft,id,"HTML","text/html",renderer.html(document).getBytes(StandardCharsets.UTF_8));
         repository.linkDocuments(draft.reportId(),id,html,json);

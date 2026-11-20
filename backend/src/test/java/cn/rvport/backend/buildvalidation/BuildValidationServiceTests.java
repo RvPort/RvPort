@@ -117,6 +117,9 @@ class BuildValidationServiceTests {
                 .containsExactly(x86Deployment.id(), riscvDeployment.id());
         ArgumentCaptor<TaskCreateCommand> commandCaptor = ArgumentCaptor.forClass(TaskCreateCommand.class);
         verify(taskService, org.mockito.Mockito.times(2)).create(commandCaptor.capture());
+        assertThat(commandCaptor.getAllValues()).allSatisfy(command ->
+                assertThat(command.inputSnapshot().get("buildBatchId")).isNotNull()
+                        .isEqualTo(commandCaptor.getValue().inputSnapshot().get("buildBatchId")));
         assertThat(commandCaptor.getAllValues()).allSatisfy(command -> {
             assertThat(command.type()).isEqualTo(RvPortTaskTypes.BUILD_VALIDATION);
             assertThat(command.inputSnapshot()).containsKeys("buildRunId", "sourceDeploymentId", "scriptPayloadId", "scriptSha256",
@@ -137,7 +140,7 @@ class BuildValidationServiceTests {
         EnvironmentView x86 = environment(projectId, EnvironmentRole.SOURCE_X86);
         EnvironmentView riscv = environment(projectId, EnvironmentRole.TARGET_RISCV);
         SourceDeployRunView x86Deployment = deployment(projectId, revision.id(), x86.id(), TaskStatus.SUCCEEDED);
-        when(projectRuntimeEnvironmentService.requireComplete(projectId, actorId, false))
+        when(projectRuntimeEnvironmentService.requireSource(projectId, actorId, false))
                 .thenReturn(new ProjectRuntimeEnvironmentView(projectId, x86.id(), riscv.id(), 2L, actorId, null, null));
         when(sourceDeployRepository.findLatestSucceeded(projectId, revision.id(), x86.id(), 2L)).thenReturn(Optional.of(x86Deployment));
         when(sourceRepository.findById(revision.id())).thenReturn(Optional.of(revision));
@@ -174,7 +177,7 @@ class BuildValidationServiceTests {
         SourceRevisionView revision = revision(projectId);
         EnvironmentView x86 = environment(projectId, EnvironmentRole.SOURCE_X86);
         EnvironmentView riscv = environment(projectId, EnvironmentRole.TARGET_RISCV);
-        when(projectRuntimeEnvironmentService.requireComplete(projectId, actorId, false))
+        when(projectRuntimeEnvironmentService.requireSource(projectId, actorId, false))
                 .thenReturn(new ProjectRuntimeEnvironmentView(projectId, x86.id(), riscv.id(), 2L, actorId, null, null));
         when(sourceRepository.findById(revision.id())).thenReturn(Optional.of(revision));
         when(environmentRepository.findById(x86.id())).thenReturn(Optional.of(x86));

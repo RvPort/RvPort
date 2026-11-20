@@ -4,7 +4,7 @@
 TBD - created by archiving change integrate-floating-point-and-memory-order-analysis-runtime. Update Purpose after archive.
 ## Requirements
 ### Requirement: 内存序分析必须使用统一项目入口
-Worker SHALL 根据完整 `compile_commands.json` 为所有合法 C/C++ 翻译单元准备可信源码输入，并在共享 BC 可用时将其适配为工具外部 bundle；Worker SHALL 只调用 `memory_order_analyzer analyze-project`，不得由 Java 编排工具内部分析阶段。共享 BC SHALL 是可选增强证据而不是任务创建的硬前置条件。
+Worker SHALL 根据可信 compile database 或 SOURCE_DISCOVERY 内部计划为合法 C/C++ 翻译单元准备带解析假设的源码输入，并在共享 BC 可用时将其适配为工具外部 bundle；Worker SHALL 只调用 `memory_order_analyzer analyze-project`，不得由 Java 编排工具内部分析阶段。成功 x86 构建、编译数据库和共享 BC SHALL 均为可选增强，不是任务创建硬前置；仅使用独立分析 profile 即可解析时不要求远程环境。
 
 #### Scenario: 使用完整 BC 运行全部 Scope
 - **WHEN** 当前源码版本具有成功 x86 构建、真实 compile database 且全部计划翻译单元具有可用 BC record
@@ -13,7 +13,7 @@ Worker SHALL 根据完整 `compile_commands.json` 为所有合法 C/C++ 翻译�
 - **AND** 工具 SHALL 自行编排内部阶段和内部 ArtifactKey
 
 #### Scenario: 无 BC 时运行 AST-only
-- **WHEN** 当前源码版本具有成功 x86 构建和真实 compile database，但没有可用 BC record
+- **WHEN** 当前源码与源码解析计划可用，但没有可用 BC record
 - **THEN** 后端 SHALL 为合法翻译单元生成 SourceSemanticRequest 并创建统一分析请求
 - **AND** 翻译单元模式 SHALL 为 `ast-only`
 - **AND** 工具 SHALL 将仅有源码证据的结论保存为 source candidate、unknown 或 frontier
@@ -40,6 +40,14 @@ Worker SHALL 根据完整 `compile_commands.json` 为所有合法 C/C++ 翻译�
 - **WHEN** scope 声明 `closed=false`
 - **THEN** 后端 SHALL 允许工具运行
 - **AND** 最终 partial/frontier 语义 SHALL 由统一报告决定，不得伪造闭合范围
+
+#### Scenario: 无数据库源码计划
+- **WHEN** 只有固定源码，没有 x86 构建和编译数据库
+- **THEN** SHALL 通过既有 source requests 和开放 Scope 执行统一入口，记录 SOURCE_DISCOVERY、默认假设和 planned/failed/omitted 范围；不运行工程构建，不创建假构建记录或伪造闭合 Scope。
+
+#### Scenario: 解析上下文不足
+- **WHEN** 内部计划无法可靠解析部分源码或确认并发关系
+- **THEN** SHALL 保留工具合法源码候选及 unknown/frontier，不能用错误恢复 AST 证明线程关系或安全，零候选仍保留缺口。
 
 ### Requirement: 内存序任务状态必须遵循统一报告和退出码
 后端 SHALL 同时校验 `UnifiedMemoryOrderAnalysisReport v1` 的 status、verdict 和 exit_code，并使用工具定义的退出码语义结束任务。

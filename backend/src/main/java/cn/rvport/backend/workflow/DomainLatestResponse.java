@@ -4,8 +4,13 @@ public record DomainLatestResponse<T>(
         ProjectContextSnapshot context,
         DomainLatestFreshness freshness,
         DomainLatestExecutionResponse execution,
-        T result
+        T result,
+        T currentResult
 ) {
+    public DomainLatestResponse(ProjectContextSnapshot context, DomainLatestFreshness freshness,
+            DomainLatestExecutionResponse execution, T result) {
+        this(context, freshness, execution, result, null);
+    }
     public static <T> DomainLatestResponse<T> empty(ProjectContextSnapshot context) {
         return new DomainLatestResponse<>(context, DomainLatestFreshness.EMPTY, null, null);
     }

@@ -260,28 +260,6 @@ KB 扫描相关实现 SHALL 配套 Java 单元测试、轻量集成测试和 API
 - **WHEN** 编写 KB 扫描测试
 - **THEN** 测试 SHALL 覆盖空 findings、重复 fingerprint、超长日志、非法分页参数、非法排序字段、路径脱敏、取消运行中 scanner 和清理测试数据
 
-### Requirement: KB findings 必须可加入迁移输入
-KB 扫描结果 SHALL 能作为迁移输入 reference 的代码类来源，并 SHALL 保持源码版本一致性。
-
-#### Scenario: KB finding 导入迁移输入
-- **WHEN** 用户将 KB finding 加入迁移输入
-- **THEN** 后端 SHALL 校验 finding 属于当前项目
-- **AND** 后端 SHALL 校验 finding 的 `source_revision_id` 等于迁移输入 URL 中的 `sourceRevisionId`
-- **AND** 后端 SHALL 使用 finding 的 title 生成 `issueTitle`
-- **AND** 后端 SHALL 使用 finding 的 severity 生成 `detectedLevel`
-
-#### Scenario: KB finding location label
-- **WHEN** 后端为 KB finding 创建迁移输入 reference
-- **THEN** `locationLabel` SHALL 使用 finding 的相对 `file_path` 和行号生成
-- **AND** 单行 SHALL 表达为 `path:line`
-- **AND** 行范围 SHALL 表达为 `path:start-end`
-- **AND** 无行号时 SHALL 只使用相对路径
-
-#### Scenario: 跨源码版本 finding 被拒绝
-- **WHEN** 用户尝试把源码版本 A 的 finding 导入源码版本 B 的迁移输入
-- **THEN** 后端 SHALL 拒绝请求
-- **AND** 后端 MUST NOT 创建迁移输入 reference
-
 ### Requirement: KB 扫描 artifact 必须支持对象存储
 KB 扫描运行时 SHALL 支持将新生成的扫描输出制品保存到对象存储，并 SHALL 保持现有 KB 业务下载接口语义。
 
@@ -309,33 +287,8 @@ KB 扫描运行时 SHALL 支持将新生成的扫描输出制品保存到对象�
 - **WHEN** 执行 `openspec validate kb-scan-runtime --type spec --strict`
 - **THEN** 该 spec SHALL 不再因为 `Purpose section is too brief` 失败
 
-### Requirement: KB 扫描节点必须支持本节点确认进入报告
-KB 扫描运行时 SHALL 支持在 KB 扫描节点内将 finding 加入、撤回或确认为报告输入。
-
-#### Scenario: KB finding 默认确认
-- **WHEN** KB 扫描任务成功写入 finding
-- **AND** finding severity 归一化为 `CRITICAL`、`HIGH`、`MEDIUM`、`INFO` 或 `COMMENT`
-- **THEN** 后端 SHALL 创建或维护对应 `KB_FINDING` migration input reference
-- **AND** reference 状态 SHALL 默认为 `CONFIRMED`
-
-#### Scenario: KB finding 低风险默认候选
-- **WHEN** KB 扫描任务成功写入 finding
-- **AND** finding severity 归一化为 `LOW`
-- **THEN** 后端 SHALL 创建或维护对应 `KB_FINDING` migration input reference
-- **AND** reference 状态 SHALL 默认为 `CANDIDATE`
-
-#### Scenario: KB 节点人工撤回
-- **WHEN** 用户在 KB 扫描节点撤回某个 finding
-- **THEN** 后端 SHALL 将对应 migration input reference 状态更新为 `EXCLUDED`
-- **AND** 报告生成 MUST NOT 使用该 finding
-
-#### Scenario: KB 节点人工加入低风险
-- **WHEN** 用户在 KB 扫描节点人工加入 `LOW` finding
-- **THEN** 后端 SHALL 将对应 migration input reference 状态更新为 `CONFIRMED`
-- **AND** 报告生成 SHALL 可以使用该 finding
-
 ### Requirement: KB 扫描必须自动复用构建上下文 compile database
-KB 扫描运行时 SHALL 使用创建任务时绑定并校验成功的 source/x86 `SOURCE_ONLY` 构建，在其 compile database 可用时自动传给 KB Scanner；MUST NOT 在执行时重新选择其他成功构建。
+KB 扫描运行时 SHALL 优先使用固定且可信的编译上下文；无构建或编译数据库时 SHALL 直接进行源码扫描，MUST NOT 在执行时重新选择其他构建。
 
 #### Scenario: 自动使用绑定的成功构建上下文
 - **WHEN** worker 执行具有完整上下文且前置校验通过的 `KB_SCAN` 任务
@@ -346,23 +299,22 @@ KB 扫描运行时 SHALL 使用创建任务时绑定并校验成功的 source/x8
 - **AND** summary SHALL 记录绑定 build run ID、stored artifact ID、sha256 和 command count
 
 #### Scenario: 成功构建没有编译数据库时降级扫描
-- **WHEN** worker 已确认绑定构建成功且仍满足开始执行的前置条件
-- **AND** 该构建没有可用 compile database
+- **WHEN** worker 已确认固定源码和必需工具可用
+- **AND** 不存在可用的绑定构建或 compile database
 - **THEN** worker SHALL 不传 `--compile-commands` 并继续源码上下文扫描
 - **AND** `kb_scan_runs.summary.compileCommands.mode` SHALL 为 `NOT_AVAILABLE`
-- **AND** summary SHALL 保存绑定构建 ID 与安全原因码
+- **AND** summary SHALL 保存可空绑定构建 ID、实际 inputOrigin 与安全原因码
 
-#### Scenario: 没有成功构建不得降级执行
-- **WHEN** worker 无法证明绑定构建满足项目、源码、源环境、运行环境版本、`SOURCE_ONLY` 范围和成功状态要求
-- **THEN** worker SHALL 受控失败并记录安全原因
-- **AND** worker MUST NOT 启动 scanner、导入 findings 或标记扫描成功
+#### Scenario: 没有成功构建允许源码扫描
+- **WHEN** 未构建或构建未成功，但固定源码和工具可用
+- **THEN** SHALL 使用 SOURCE_DISCOVERY 计划扫描，不要求远程环境、不创建假构建，不把缺失编译上下文称已验证。
 
 #### Scenario: artifact 下载失败时降级扫描
 - **WHEN** 成功绑定构建的 compile database artifact 缺失、下载失败、所有权不符或内容不可用
 - **THEN** worker SHALL 记录 warning 并继续现有路径脱敏和所有权保护
 - **AND** worker SHALL 不传 `--compile-commands`，按源码上下文扫描继续执行
 - **AND** `kb_scan_runs.summary.compileCommands.mode` SHALL 为 `FALLBACK`
-- **AND** summary SHALL 保存绑定构建 ID 与安全原因码
+- **AND** summary SHALL 保存可空绑定构建 ID、实际 inputOrigin 与安全原因码
 - **AND** worker MUST NOT 改用其他构建的 artifact
 
 #### Scenario: 源码版本隔离
@@ -447,69 +399,16 @@ KB 扫描运行列表 API SHALL 默认返回当前 active source revision 下的
 - **THEN** 后端 SHALL 按请求参数返回匹配历史记录
 - **AND** 响应 SHALL 标明每条记录是否属于当前源码版本
 
-### Requirement: KB finding 响应必须附带最新 AI 扩展建议
-KB finding 列表和详情 SHALL 在原始 finding 字段之外返回同一 KB scan 下最新成功 AI 扩展结果，使前端无需单独查询 AI result 即可展示当条 AI 建议。
-
-#### Scenario: finding 列表返回 AI 建议
-- **WHEN** 用户查询 `GET /api/kb-scans/{scanId}/findings`
-- **AND** 该 scan 存在最新成功的 AI 扩展结果
-- **THEN** 每条有对应结果的 finding SHALL 返回 `aiExtension`
-- **AND** `aiExtension` SHALL 包含 AI 扩展运行 ID、状态、summary、suggestion、confidence、action type 和更新时间
-
-#### Scenario: finding 详情返回 AI 建议
-- **WHEN** 用户查询 `GET /api/findings/{findingId}`
-- **AND** 该 finding 所属 scan 存在最新成功 AI 扩展结果
-- **THEN** 响应 SHALL 返回该 finding 对应的 `aiExtension`
-- **AND** 后端 MUST NOT 要求前端自行联表推断 AI 建议
-
-#### Scenario: 没有 AI 扩展结果
-- **WHEN** 用户查询 finding 列表或详情
-- **AND** 当前 finding 没有同一 KB scan 下的成功 AI 扩展结果
-- **THEN** 响应 SHALL 返回 `aiExtension=null`
-- **AND** 原 finding 字段、报告纳入状态和代码上下文能力 SHALL 保持不变
-
-### Requirement: KB Scanner 主输出不得被 AI 扩展修改
-KB AI 扩展 SHALL 作为 KB 扫描后的派生能力运行，不得修改 KB Scanner 的主输出文件和主解析契约。
-
-#### Scenario: AI 扩展不修改 scanner 输出
-- **WHEN** AI 扩展扫描运行
-- **THEN** 后端 SHALL 读取已入库 findings 或受控 artifact 生成 AI 输入文件
-- **AND** 后端 MUST NOT 修改 `scan-result.json`、`scan-report.html`、`scan.log` 或 KB Scanner 主输出结构
-- **AND** AI 扩展失败 MUST NOT 改变原 KB scan 的成功状态和原 finding 内容
-
-### Requirement: KB 扫描报告生成可以引用 AI 扩展建议
-评估报告生成 SHALL 继续以已确认 migration input reference 为准，并 MAY 在对应 KB finding 存在当前 scan 的 AI 扩展结果时引用 AI 建议。
-
-#### Scenario: 已确认 finding 存在 AI 建议
-- **WHEN** 评估报告生成读取已确认 KB finding
-- **AND** 该 finding 存在同一 KB scan 下最新成功 AI 扩展结果
-- **THEN** 报告输入快照 SHALL 能包含该 AI summary 和 AI suggestion
-- **AND** 报告仍 SHALL 保留原始 KB suggestion 作为基础事实
-
-#### Scenario: AI 建议不改变确认状态
-- **WHEN** AI 扩展扫描成功写入结果
-- **THEN** 后端 MUST NOT 自动改变 finding 对应 migration input reference 的状态
-- **AND** 低风险、人工撤回或人工加入的规则 SHALL 继续由 KB 节点确认机制决定
-
 ### Requirement: KB finding 必须返回报告纳入状态
-KB finding 列表和详情 SHALL 返回该 finding 与当前报告输入池、最新评估报告之间的关系。
+KB 列表和详情 SHALL 按报告固定来源引用返回真实 includedInLatestReport；人工处置和 AI 判断 SHALL 从具体报告读取，不恢复旧节点确认或动态 aiExtension。
 
-#### Scenario: finding 已确认进入下一次报告
-- **WHEN** KB finding 存在同一源码版本下的 `sourceType=KB_FINDING` migration input reference
-- **AND** reference 状态为 `CONFIRMED`
-- **THEN** finding 响应 SHALL 返回 `confirmedForNextReport=true`
-- **AND** 响应 SHALL 返回 `migrationInputRefId` 和 `migrationInputStatus`
+#### Scenario: 已纳入当前有效报告
+- **WHEN** 当前报告快照引用该扫描及 finding
+- **THEN** SHALL 返回真实纳入状态，不表示最终清单已确认。
 
-#### Scenario: finding 已纳入最新报告
-- **WHEN** 当前源码版本存在最新成功评估报告
-- **AND** 该报告的 `report_inputs` 包含对应 migration input reference
-- **THEN** finding 响应 SHALL 返回 `includedInLatestReport=true`
-- **AND** 响应 SHALL 返回 `latestReportId`
-
-#### Scenario: finding 未纳入报告
-- **WHEN** KB finding 没有对应 migration input reference 或 reference 未进入最新报告快照
-- **THEN** finding 响应 SHALL 返回明确的 `confirmedForNextReport=false` 或 `includedInLatestReport=false`
-- **AND** 后端 MUST NOT 要求前端自行联表推断该状态
+#### Scenario: 未纳入或历史报告
+- **WHEN** 当前报告未引用该 finding 或仅历史报告引用
+- **THEN** SHALL 返回准确当前纳入事实，历史关系可追溯，不返回旧 migrationInputRefId、migrationInputStatus、confirmedForNextReport。
 
 ### Requirement: KB Scanner 必须扫描 RPM spec 文件
 KB Scanner SHALL 将 RPM spec 文件作为知识库扫描输入，并 SHALL 对 `*.spec` 使用 RPM spec 专属匹配语义。
@@ -676,7 +575,7 @@ RPM spec KB 扫描实现 SHALL 覆盖正常流程、异常流程和 edge case。
 - **WHEN** 已登录用户调用 `GET /api/projects/{projectId}/kb-scans/latest`
 - **THEN** 后端 SHALL 返回统一 latest 外壳
 - **AND** `context.sourceRevisionId` SHALL 为项目当前 active source revision
-- **AND** `CURRENT` 记录 SHALL 匹配当前项目、active source、源环境、运行环境版本和当前选中的成功 `SOURCE_ONLY` 构建 ID
+- **AND** `CURRENT` 记录 SHALL 匹配当前项目、active source 及实际消费的输入计划；SOURCE_DISCOVERY 不要求构建或远程环境，BUILD_ARTIFACTS 校验实际绑定上下文
 - **AND** `execution` SHALL 指向该有效上下文内最新活动扫描任务，否则指向最近创建的终态扫描任务
 - **AND** `result` SHALL 包含对应扫描摘要、finding 数量、artifact 摘要及安全执行上下文
 - **AND** 相同创建时间 SHALL 使用 ID 作为稳定排序条件
@@ -687,20 +586,20 @@ RPM spec KB 扫描实现 SHALL 覆盖正常流程、异常流程和 edge case。
 - **AND** 后端 MUST NOT 将该记录标记为 `CURRENT`
 
 #### Scenario: 环境或构建变更使旧扫描失效
-- **WHEN** 扫描关联的源环境、运行环境版本或构建 ID 与当前有效上下文不同，或当前 x86 构建尚未成功
+- **WHEN** 扫描实际依赖的源环境、运行环境版本或增强构建 ID 与当前适用上下文不同；SOURCE_DISCOVERY 未消费的字段除外
 - **AND** 没有其他当前有效扫描记录
 - **THEN** latest SHALL 返回历史记录并标记 `STALE`，提供环境变化、构建变化或构建未就绪的安全原因
 - **AND** 后端 MUST NOT 修改历史执行的真实状态
 
 #### Scenario: 缺少上下文的旧扫描
-- **WHEN** 历史扫描缺少源环境、运行环境版本或绑定构建 ID
+- **WHEN** 历史扫描缺少可验证的计划版本及实际依赖身份；合法 SOURCE_DISCOVERY 的 buildRunId=null 不属于此情况
 - **THEN** 后端 SHALL 将其视为 `STALE`，原因包含 `KB_SCAN_CONTEXT_UNKNOWN`
 - **AND** 后端 MUST NOT 仅根据源码相同、summary 中孤立的构建 ID 或时间接近猜测为当前有效
 
 #### Scenario: 当前失败或活动扫描优先于旧成功
 - **WHEN** 同一有效上下文存在活动扫描，或最新终态扫描为失败、取消、超时
 - **THEN** latest SHALL 返回活动扫描优先、否则最近终态的记录及真实状态
-- **AND** 后端 MUST NOT 回退到更早的成功扫描
+- **AND** 后端 MUST NOT 用旧成功覆盖最新执行事实；独立 currentResult SHALL 可引用仍适用的旧成功并明确结果 ID/有效性，不混淆两者
 
 #### Scenario: 无 active source 但存在历史
 - **WHEN** 项目没有 active source 但存在扫描历史
@@ -712,7 +611,7 @@ RPM spec KB 扫描实现 SHALL 覆盖正常流程、异常流程和 edge case。
 - **AND** 后端 MUST NOT 以 404 表达无记录
 
 ### Requirement: 知识库扫描 readiness 必须校验 active source 和 x86 构建
-项目级 readiness 在 `stageId=kb` 时 SHALL 返回知识库扫描所需的源码与 x86 构建前置条件，并 SHALL 与创建接口和当前结果选择使用同一构建规则。
+项目级 readiness 在 `stageId=kb` 时 SHALL 返回源码及必需工具条件和可选 x86 增强事实，并 SHALL 与创建接口和结果选择使用同一输入计划规则。
 
 #### Scenario: active source 已存在
 - **WHEN** 项目存在 active source revision
@@ -727,8 +626,8 @@ RPM spec KB 扫描实现 SHALL 覆盖正常流程、异常流程和 edge case。
 #### Scenario: 当前上下文 x86 构建尚未成功
 - **WHEN** 当前上下文没有 x86 source-only 构建，或选中的构建处于排队、运行、失败、取消或超时状态
 - **THEN** `X86_BUILD` prerequisite SHALL 返回对应的 `MISSING`、`RUNNING` 或 `FAILED`
-- **AND** 知识库分析 SHALL NOT 被 readiness 表示为可开始
-- **AND** 后端 MUST NOT 用更早成功构建、其他环境版本构建或 `BOTH` 构建替代该前置条件
+- **AND** 源码与工具满足时知识库分析 SHALL 被表示为可开始；X86_BUILD SHALL 标记 required=false
+- **AND** 后端 MUST NOT 借用其他版本或不合格构建增强源码分析；缺少增强不阻塞源码模式
 
 #### Scenario: active source 缺失
 - **WHEN** 项目不存在 active source revision
@@ -786,37 +685,31 @@ schema v2 finding 导入后 SHALL 继续支持用户确认、排除、报告纳�
 - **AND** 用户后续手动排除或加入 SHALL 作用于当前 finding 记录
 
 ### Requirement: KB 创建与 worker 必须固定并校验执行上下文
-后端 SHALL 在创建事务内重新校验请求源码的 x86 构建前置条件，并完整保存绑定上下文。worker SHALL 在开始执行前复核该上下文，不自动补绑或切换构建。
+后端 SHALL 在创建事务内固定源码输入计划和可空构建关联；worker SHALL 核对权限、源码与工具，按记录执行并保存实际模式，不自动补绑。
 
 #### Scenario: 创建时前置条件不满足
-- **WHEN** 请求源码在当前运行环境版本下没有满足条件的成功构建
-- **THEN** 后端 SHALL 返回 `409 PREREQUISITE_NOT_SATISFIED`
-- **AND** 后端 MUST NOT 留下任务、扫描记录或队列消息
+- **WHEN** 源码不可用、无权访问或必需工具不可用
+- **THEN** SHALL 拒绝且无任务/消息副作用；没有构建、环境或 compile database 不是拒绝源码模式的理由。
 
 #### Scenario: 显式历史源码执行
-- **WHEN** 有权限用户显式指定本项目历史源码，且该源码在当前运行环境下满足同一构建前置规则
-- **THEN** 后端 SHALL 允许创建并绑定该源码的成功构建
-- **AND** 结果 MUST NOT 占用其他 active source 的当前状态
-- **AND** 跨项目源码请求 SHALL 继续按既有权限策略拒绝且不泄露其他项目资源细节
+- **WHEN** 有权限用户明确选择本项目历史源码且必需输入可用
+- **THEN** SHALL 按固定历史计划执行，不能占用其他 active 源码的当前状态；跨项目请求拒绝且不泄露资源细节。
 
 #### Scenario: 创建事务内上下文变化
-- **WHEN** 前置校验后、事务提交前选中构建或运行环境版本发生变化
-- **THEN** 后端 SHALL 通过事务锁或条件重验拒绝不一致写入并回滚全部任务创建副作用
+- **WHEN** 校验后实际使用的源码/profile/计划或增强输入改变
+- **THEN** SHALL 以锁或版本重验拒绝不一致写入并整体回滚。
 
 #### Scenario: 排队期间执行前置变化或旧任务缺失上下文
-- **WHEN** worker 开始时当前环境版本或针对绑定源码选中的构建与记录不一致，或旧任务没有完整绑定上下文
-- **THEN** worker SHALL 受控失败并保存安全原因
-- **AND** worker MUST NOT 启动 scanner 或自行查找其他成功构建执行
+- **WHEN** 必需固定输入不可用或不能验证旧任务输入协议
+- **THEN** SHALL 受控失败，不猜测历史输入；仅可选制品丢失可安全降级并保存 effectiveInputDigest，不影响源码事实。
 
 #### Scenario: 排队期间仅切换 active source
-- **WHEN** active source 已切换但绑定源码仍存在，且该源码的绑定构建及环境版本仍满足执行前置条件
-- **THEN** worker SHALL 允许按固定历史源码执行
-- **AND** 该运行 SHALL 在当前项目查询中判为历史而非当前结果
+- **WHEN** 固定历史源码仍可读且其他必需输入有效
+- **THEN** SHALL 允许按原计划执行，结果仅为历史，不占用新源码当前状态。
 
 #### Scenario: 执行期间上下文变化
-- **WHEN** scanner 启动后项目切换源码、环境版本变化或出现新的 x86 构建
-- **THEN** worker SHALL 保持原绑定输入并保存真实执行终态
-- **AND** 对当前上下文的查询 SHALL 将该运行判为历史，不以其成功覆盖当前工作流状态
+- **WHEN** 源码、相关配置或可选构建发生变化
+- **THEN** SHALL 保留固定输入和真实执行终态，按实际依赖判断适用性；未消费的环境/构建变化不能单独使源码模式失效。
 
 ### Requirement: KB 当前结果消费者必须遵守统一有效性
 后端 SHALL 将同一有效性选择应用于默认当前扫描列表、当前性标记、报告 KB 前置条件和新报告的 KB 来源自动选择；历史详情、确认记录和既有报告快照 SHALL 保留。
@@ -849,3 +742,37 @@ schema v2 finding 导入后 SHALL 继续支持用户确认、排除、报告纳�
 - **THEN** 交付记录 SHALL 列出实际命令、退出状态、行/分支指标、统计范围和报告位置，未取得指标标为不可用
 - **AND** 质量验收任务 SHALL 保持未完成
 - **AND** 需要大规模无关改造时 SHALL 报告差距并请求扩大范围，不能缩小分母或降低门槛
+
+### Requirement: KB 源码独立运行必须保留多语言范围与输入身份
+后端 SHALL 承接已合并多语言字符串及sourceArch透传，默认c,cpp/x86不变，不以专项C/C++过滤器裁剪KB；固定语言、架构和范围供执行、latest、报告与审计使用。
+
+#### Scenario: 混合工程无构建
+- **WHEN** 请求language=c,rust,go,java,python,asm且无构建数据库
+- **THEN** SHALL 按固定工具支持能力扫描所选语言，逐语言保留候选和覆盖；不能要求其他语言生成C/C++ TU或编译数据库。
+
+#### Scenario: 纯非C工程
+- **WHEN** 固定源码只有所选受支持的非C语言
+- **THEN** KB SHALL 可执行并保留合法结果，专项只返回自身未支持范围或合法无法判定结果，不伪造完整零风险。
+
+#### Scenario: 请求规范化与恢复
+- **WHEN** KB请求为空缺省、已支持别名或合法多语言组合，任务随后恢复
+- **THEN** SHALL 保留既有默认与别名语义，记录规范化策略及显式未知架构回退假设；恢复使用固定输入，不读取新的全局语言或架构配置替换原输入。
+
+### Requirement: KB 资源失败必须可诊断且不得发布半截结果
+后端 SHALL 复用既有内存限额，受控提取FATAL诊断并保存reasonCode、toolDiagnosticCode、exitCode、phase、实际预算与双语说明；MUST NOT 将失败进程残留输出作为成功或合法PARTIAL。
+
+#### Scenario: 内存预算明确超限
+- **WHEN** 子进程非零退出且有合法pipeline.memory-budget-exceeded诊断
+- **THEN** SHALL 记录稳定内存预算失败原因并保持FAILED，不导入残留findings；有其他或旧的有效产出时可按其独立身份供报告使用。
+
+#### Scenario: 无完整诊断
+- **WHEN** 进程被杀、超时或输出截断且不能证明内存超限
+- **THEN** SHALL 只保存已证实退出/超时/worker丢失事实，不从退出码137猜测OOM，不以伪造证据不足代替技术失败。
+
+#### Scenario: 配置与并发预算
+- **WHEN** 使用默认2048MiB、显式0或配置的扫描预算启动任务
+- **THEN** SHALL 记录实际值并保留0仅关闭子进程限额的含义，结合worker现有并发、JVM与容器预算限流验证，不自动增大或关闭预算重试。
+
+#### Scenario: worker丢失后的恢复
+- **WHEN** 独立本地故障注入终止worker后租约过期
+- **THEN** SHALL 按既有有界重试/终态策略恢复固定计划，隔离未发布输出并拒绝旧租约提交；正常子进程超限另验worker继续服务，不承诺所有容器OOM均可避免。

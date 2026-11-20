@@ -323,11 +323,16 @@ public class BuildValidationRepository {
 
     private BuildValidationRunView view(Record record) {
         String scope = record.get(BUILD_SCOPE);
+        Map<String, Object> facts = new java.util.LinkedHashMap<>(jsonbToMap(record.get(BUILD_FACTS)));
+        // 批次身份由服务端入队时固定，不从可变工具输出推断。
+        facts.remove("buildBatchId");
+        Object batch = jsonbToMap(record.get(TASKS.INPUT_SNAPSHOT)).get("buildBatchId");
+        if (batch instanceof String value && value.matches("[0-9a-fA-F-]{36}")) facts.put("buildBatchId", value);
         return BuildValidationRunView.from(
                 record.into(BUILD_RUNS),
                 environmentVariablesMasked(record.get(TASKS.INPUT_SNAPSHOT)),
                 parseScope(scope),
-                jsonbToMap(record.get(BUILD_FACTS))
+                facts
         );
     }
 

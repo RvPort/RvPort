@@ -27,7 +27,7 @@ class KbScanHandlerTests {
 
         assertThat(handler.taskType()).isEqualTo(RvPortTaskTypes.KB_SCAN);
         assertThat(handler.handle(context).message()).isEqualTo("KB 扫描完成");
-        verify(runtimeService).scan(input, context);
+        verify(runtimeService).scanTask(input, context);
     }
 
     @Test
@@ -38,7 +38,7 @@ class KbScanHandlerTests {
                 "rules", "c", "arm64", "riscv64", Map.of(), List.of());
         when(context.input(KbScanInput.class)).thenReturn(input);
         RuntimeException failure = new RuntimeException("scan failed");
-        org.mockito.Mockito.doThrow(failure).when(runtimeService).scan(input, context);
+        org.mockito.Mockito.doThrow(failure).when(runtimeService).scanTask(input, context);
 
         assertThatThrownBy(() -> new KbScanHandler(runtimeService).handle(context)).isSameAs(failure);
     }

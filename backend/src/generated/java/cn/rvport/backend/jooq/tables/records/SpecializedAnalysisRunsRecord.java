@@ -520,6 +520,36 @@ public class SpecializedAnalysisRunsRecord extends UpdatableRecordImpl<Specializ
         return (String) get(33);
     }
 
+    /**
+     * Setter for <code>public.specialized_analysis_runs.input_plan</code>.
+     */
+    public void setInputPlan(JSONB value) {
+        set(34, value);
+    }
+
+    /**
+     * Getter for <code>public.specialized_analysis_runs.input_plan</code>.
+     */
+    public JSONB getInputPlan() {
+        return (JSONB) get(34);
+    }
+
+    /**
+     * Setter for
+     * <code>public.specialized_analysis_runs.effective_input_plan</code>.
+     */
+    public void setEffectiveInputPlan(JSONB value) {
+        set(35, value);
+    }
+
+    /**
+     * Getter for
+     * <code>public.specialized_analysis_runs.effective_input_plan</code>.
+     */
+    public JSONB getEffectiveInputPlan() {
+        return (JSONB) get(35);
+    }
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -543,7 +573,7 @@ public class SpecializedAnalysisRunsRecord extends UpdatableRecordImpl<Specializ
     /**
      * Create a detached, initialised SpecializedAnalysisRunsRecord
      */
-    public SpecializedAnalysisRunsRecord(UUID id, UUID projectId, UUID taskId, String analyzerType, UUID sourceRevisionId, UUID buildRunId, String artifactSetId, Long environmentConfigVersion, String toolVersion, String requestSchemaVersion, String resultSchemaVersion, String policyId, String status, String verdict, Integer exitCode, JSONB summary, UUID requestArtifactId, UUID resultJsonArtifactId, UUID resultHtmlArtifactId, UUID auditBundleArtifactId, Integer findingCount, Integer candidateCount, Integer diagnosticCount, UUID createdBy, OffsetDateTime startedAt, OffsetDateTime finishedAt, OffsetDateTime createdAt, OffsetDateTime updatedAt, String analysisMode, String bcStatus, Integer bcPlannedCount, Integer bcUsableCount, Integer bcFailedCount, String bcDegradationReason) {
+    public SpecializedAnalysisRunsRecord(UUID id, UUID projectId, UUID taskId, String analyzerType, UUID sourceRevisionId, UUID buildRunId, String artifactSetId, Long environmentConfigVersion, String toolVersion, String requestSchemaVersion, String resultSchemaVersion, String policyId, String status, String verdict, Integer exitCode, JSONB summary, UUID requestArtifactId, UUID resultJsonArtifactId, UUID resultHtmlArtifactId, UUID auditBundleArtifactId, Integer findingCount, Integer candidateCount, Integer diagnosticCount, UUID createdBy, OffsetDateTime startedAt, OffsetDateTime finishedAt, OffsetDateTime createdAt, OffsetDateTime updatedAt, String analysisMode, String bcStatus, Integer bcPlannedCount, Integer bcUsableCount, Integer bcFailedCount, String bcDegradationReason, JSONB inputPlan, JSONB effectiveInputPlan) {
         super(SpecializedAnalysisRuns.SPECIALIZED_ANALYSIS_RUNS);
 
         setId(id);
@@ -580,6 +610,8 @@ public class SpecializedAnalysisRunsRecord extends UpdatableRecordImpl<Specializ
         setBcUsableCount(bcUsableCount);
         setBcFailedCount(bcFailedCount);
         setBcDegradationReason(bcDegradationReason);
+        setInputPlan(inputPlan);
+        setEffectiveInputPlan(effectiveInputPlan);
         resetTouchedOnNotNull();
     }
 }

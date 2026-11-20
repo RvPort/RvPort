@@ -66,15 +66,162 @@ import org.springframework.core.io.ByteArrayResource;
 
 @ExtendWith(MockitoExtension.class)
 class SpecializedAnalysisRuntimeServiceTests {
+    @Test void retryKeepsPreviouslyFixedSourceOrCompileOnlyPlan() {
+        var original=input(SpecializedAnalyzerType.FLOATING_POINT);
+        var plan=new AnalysisInputPlan(1,projectId,sourceId,"a".repeat(64),"FLOATING_POINT","1","p1",
+                AnalysisInputPlan.Identity.of("c","x86","riscv64",Map.of(),List.of(),"r1"),AnalysisInputPlan.InputOrigin.BUILD_ARTIFACTS,
+                new AnalysisInputPlan.BuildBinding(original.buildRunId(),projectId,sourceId,UUID.randomUUID(),1,"x86","p","x86","unknown"),
+                List.of(new AnalysisInputPlan.Artifact(original.compileDatabaseArtifactId(),original.buildRunId(),"COMPILE_COMMANDS_JSON","b".repeat(64))),List.of(),List.of(),null);
+        var input=new SpecializedAnalysisTaskInput(projectId,original.runId(),sourceId,original.buildRunId(),original.compileDatabaseArtifactId(),
+                original.bitcodeManifestArtifactId(),original.bitcodeBundleArtifactId(),original.artifactSetId(),original.analysisMode(),original.bcStatus(),
+                1,1,0,null,1L,original.analyzerType(),plan);
+        var service=service();
+        assertThat(service.resumeInput(original)).isSameAs(original);
+        assertThat(service.resumeInput(input)).isSameAs(input);
+        when(repository.effectivePlan(input.runId())).thenReturn(Optional.of(plan));
+        assertThat(service.resumeInput(input)).isSameAs(input);
+        for(var actual:List.of(plan.sourceFallback("OPTIONAL_ARTIFACT_UNAVAILABLE"),plan.withoutBitcode("BITCODE_UNAVAILABLE"))) {
+            when(repository.effectivePlan(input.runId())).thenReturn(Optional.of(actual));
+            var resumed=service.resumeInput(input);
+            assertThat(resumed.inputPlan()).isEqualTo(actual);
+            assertThat(resumed.analysisMode()).isEqualTo(SpecializedAnalysisMode.AST_ONLY);
+            assertThat(resumed.bitcodeManifestArtifactId()).isNull();
+            assertThat(resumed.bitcodeBundleArtifactId()).isNull();
+            assertThat(resumed.compileDatabaseArtifactId()).isEqualTo(actual.build()==null?null:input.compileDatabaseArtifactId());
+            assertThat(resumed.buildRunId()).isEqualTo(actual.build()==null?null:input.buildRunId());
+        }
+        when(repository.effectivePlan(input.runId())).thenReturn(Optional.of(new AnalysisInputPlan(1,projectId,sourceId,"c".repeat(64),
+                plan.analyzer(),plan.toolVersion(),plan.profileVersion(),plan.identity(),AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY,
+                null,List.of(),List.of(),List.of(),null)));
+        assertThatThrownBy(()->service.resumeInput(input)).hasMessage("ANALYSIS_INPUT_PLAN_MISMATCH");
+        org.mockito.Mockito.verifyNoInteractions(artifactService,processRunner,sourcePlans);
+    }
+    @Test void legacyTaskFailsWithoutRunningToolsOrGuessingAnInputPlan() {
+        var input=input(SpecializedAnalyzerType.FLOATING_POINT);
+        assertThatThrownBy(()->service().runTask(input,context)).hasMessageContaining("固定输入计划");
+        verify(repository).fail(eq(input.runId()),eq(SpecializedAnalysisStatus.FAILED),
+                org.mockito.ArgumentMatchers.argThat(summary -> "ANALYSIS_INPUT_PLAN_REQUIRED".equals(summary.get("reasonCode"))),
+                eq(null),eq(null),eq(0));
+        org.mockito.Mockito.verifyNoInteractions(sourcePlans,sourceRepository,processRunner);
+    }
+    @Test
+    void boundCompileArtifactsVerifyBytesOwnershipAndPinnedRootBeforeEnhancement() throws Exception {
+        UUID build=UUID.randomUUID(), artifactId=UUID.randomUUID();
+        byte[] bytes="[{\"file\":\"/remote/source/main.c\",\"directory\":\"/remote/source\",\"arguments\":[\"cc\",\"-c\",\"main.c\"]}]".getBytes(StandardCharsets.UTF_8);
+        String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        var plan=new AnalysisInputPlan(1,projectId,sourceId,"a".repeat(64),"FLOATING_POINT","1","p1",
+                AnalysisInputPlan.Identity.of("c","x86","riscv64",Map.of(),List.of(),"r1"),AnalysisInputPlan.InputOrigin.BUILD_ARTIFACTS,
+                new AnalysisInputPlan.BuildBinding(build,projectId,sourceId,UUID.randomUUID(),1,"x86","producer","x86","unknown"),
+                List.of(new AnalysisInputPlan.Artifact(artifactId,build,"COMPILE_COMMANDS_JSON",hash)),List.of(),List.of(),null);
+        var input=new SpecializedAnalysisTaskInput(projectId,UUID.randomUUID(),sourceId,build,artifactId,null,null,null,
+                SpecializedAnalysisMode.AST_ONLY,"MISSING",0,0,0,null,1L,SpecializedAnalyzerType.FLOATING_POINT,plan);
+        when(sourceRepository.findById(sourceId)).thenReturn(Optional.of(new SourceRevisionView(sourceId,projectId,null,null,null,null,null,null,null,
+                sourceRoot.toString(),null,true,null,null)));
+        for(int variant=0;variant<11;variant++) {
+            var resource=new StoredArtifactView(artifactId,variant==1?UUID.randomUUID():projectId,null,
+                    variant==2?StoredArtifactOwnerType.SOURCE_REVISION:StoredArtifactOwnerType.BUILD_VALIDATION,
+                    variant==3?UUID.randomUUID():build,variant==4?"OTHER":"COMPILE_COMMANDS_JSON","b","k","application/json",bytes.length,
+                    variant==5?"b".repeat(64):hash,variant==7?Map.of():Map.of("remoteSourceRoot",variant==8?"/":variant==9?"/bad\n":variant==10?"/different":"/remote/source"),null);
+            when(artifactService.download(artifactId)).thenReturn(new StoredArtifactResource(resource,
+                    new ByteArrayResource(variant==6?new byte[]{1}:bytes)));
+            Object prepared=org.springframework.test.util.ReflectionTestUtils.invokeMethod(service(),"materialize",input,tempDir.resolve("case-"+variant));
+            Path database=org.springframework.test.util.ReflectionTestUtils.invokeMethod(prepared,"compileDatabase");
+            SpecializedBitcodeCapability capability=org.springframework.test.util.ReflectionTestUtils.invokeMethod(prepared,"capability");
+            if(variant==0) {
+                assertThat(database).isRegularFile();
+                assertThat(capability.plannedCount()).isEqualTo(1);
+                assertThat((String)org.springframework.test.util.ReflectionTestUtils.invokeMethod(prepared,"remoteSourceRoot")).isEqualTo("/remote/source");
+            } else {
+                assertThat(database).isNull();
+                assertThat(capability.mode()).isEqualTo(SpecializedAnalysisMode.AST_ONLY);
+                assertThat(capability.degradationReason()).isEqualTo("OPTIONAL_ARTIFACT_UNAVAILABLE");
+            }
+        }
+        var oversized=new StoredArtifactView(artifactId,projectId,null,StoredArtifactOwnerType.BUILD_VALIDATION,build,"COMPILE_COMMANDS_JSON",
+                "b","k","application/json",1,hash,Map.of(),null);
+        when(artifactService.download(artifactId)).thenReturn(new StoredArtifactResource(oversized,new ByteArrayResource(bytes)));
+        assertThatThrownBy(()->org.springframework.test.util.ReflectionTestUtils.invokeMethod(service(),"writeBoundArtifact",input,artifactId,
+                "COMPILE_COMMANDS_JSON",tempDir.resolve("overflow"),1L)).hasMessageContaining("大小预算");
+        assertThatThrownBy(()->org.springframework.test.util.ReflectionTestUtils.invokeMethod(service(),"writeBoundArtifact",input,artifactId,
+                "OTHER",tempDir.resolve("wrong"),1000L)).hasMessage("ANALYSIS_ARTIFACT_IDENTITY_MISMATCH");
+    }
+
+    @Test
+    void sourceDiscoveryRunsWithoutBuildArtifactsAndKeepsDefaultAssumptions() throws Exception {
+        var plan = new AnalysisInputPlan(1, projectId, sourceId, "a".repeat(64), "FLOATING_POINT", "0.6.0", "profile@1",
+                AnalysisInputPlan.Identity.of("c,cpp", "x86", "riscv64", Map.of(), List.of(), "r1"),
+                AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY, null, List.of(), List.of("DEFAULT_ASSUMPTION"),
+                List.of("COMPILE_DATABASE_UNAVAILABLE"), null);
+        var input = new SpecializedAnalysisTaskInput(projectId, UUID.randomUUID(), sourceId, null, null, null, null,
+                null, SpecializedAnalysisMode.AST_ONLY, "MISSING", 0, 0, 0, "SOURCE_DISCOVERY", null,
+                SpecializedAnalyzerType.FLOATING_POINT, plan);
+        when(sourceRepository.findById(sourceId)).thenReturn(Optional.of(new SourceRevisionView(sourceId, projectId,
+                SourceRevisionType.GIT, "main", null, null, null, null, null, sourceRoot.toString(), null,
+                true, UUID.randomUUID(), OffsetDateTime.now())));
+        when(processRunner.run(any(), any(), eq(context), any())).thenAnswer(invocation -> {
+            List<String> command = invocation.getArgument(0);
+            if (isAdapter(command)) {
+                assertThat(command).doesNotContain("--compile-database", "--manifest", "--artifact-root", "--build-run");
+                assertThat(Files.isRegularFile(Path.of(command.get(1)).resolveSibling("source_analysis_plan.py"))).isTrue();
+                Path cache=argumentPath(command,"--cache");
+                Files.createDirectories(cache);
+                Files.writeString(cache.resolve("source-analysis-plan.json"),"{\"files\":[{\"path\":\"a.c\",\"status\":\"PLANNED\"}],\"inputDigest\":\"manifest-hash\"}");
+                Files.writeString(argumentPath(command, "--output"), "{}");
+            } else if (command.contains("scan")) {
+                Files.createDirectories(argumentPath(command, "--output").getParent());
+                Files.writeString(argumentPath(command, "--output"),
+                        "{\"schemaVersion\":\"2.0\",\"scan\":{\"status\":\"complete\"},\"diagnostics\":[],\"findings\":[]}");
+            }
+            return result(0);
+        });
+        arrangeStoredArtifacts();
+        when(sourcePlans.materialize(eq(plan), any())).thenReturn(
+                new cn.rvport.backend.report.review.ReportSourceMaterializer.Materialized(sourceRoot, sourceRoot, plan.sourceDigest()));
+        service().runTask(input, context);
+        ArgumentCaptor<Map<String,Object>> summary=ArgumentCaptor.forClass(Map.class);
+        verify(completionService).complete(eq(input), eq(SpecializedAnalysisStatus.COMPLETE), eq("complete"), eq(0),
+                summary.capture(), any(), any(), any(), eq(null), eq(List.of()));
+        assertThat(summary.getValue()).containsEntry("analysisComplete",true)
+                .containsEntry("missingEvidence",List.of("COMPILE_DATABASE_UNAVAILABLE"));
+        assertThat((Map<String,Object>)summary.getValue().get("coverage")).containsEntry("knownSourceFileCount",1);
+        org.mockito.Mockito.verify(artifactService, org.mockito.Mockito.never()).download(any());
+        assertThat(service().languageContexts(null)).hasSize(2).allSatisfy(value ->
+                assertThat(value).containsValue("DEFAULT_ASSUMPTION"));
+    }
+
+    @Test
+    void sourceDiscoveryRejectsMissingOrMismatchedPlanBeforeTools() {
+        when(sourceRepository.findById(sourceId)).thenReturn(Optional.of(new SourceRevisionView(sourceId, projectId,
+                SourceRevisionType.GIT, "main", null, null, null, null, null, sourceRoot.toString(), null,
+                true, UUID.randomUUID(), OffsetDateTime.now())));
+        for (int invalid = 0; invalid < 8; invalid++) {
+            var plan = invalid == 0 ? null : new AnalysisInputPlan(1, invalid == 6 ? UUID.randomUUID() : projectId,
+                    invalid == 7 ? UUID.randomUUID() : sourceId, "a".repeat(64), "FLOATING_POINT", "0.6.0", "p1",
+                    AnalysisInputPlan.Identity.of("c", "x86", "riscv64", Map.of(), List.of(), "r1"),
+                    AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY, null, List.of(), List.of(), List.of(), null);
+            var input = new SpecializedAnalysisTaskInput(projectId, UUID.randomUUID(), sourceId,
+                    invalid == 1 ? UUID.randomUUID() : null, null, invalid == 2 ? UUID.randomUUID() : null,
+                    invalid == 3 ? UUID.randomUUID() : null, invalid == 4 ? "set" : null,
+                    SpecializedAnalysisMode.AST_ONLY, "MISSING", 0, 0, 0, "SOURCE_DISCOVERY", null,
+                    SpecializedAnalyzerType.FLOATING_POINT, invalid == 5 ? null : plan);
+            assertThatThrownBy(() -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(service(), "materialize", input, tempDir))
+                    .hasMessage("ANALYSIS_PLAN_INVALID");
+        }
+        org.mockito.Mockito.verifyNoInteractions(artifactService, processRunner);
+    }
+
     @Test
     void memoryOrderStatusVerdictAndExitCodeMustAgree() {
         ObjectNode base = mapper.createObjectNode().put("kind", "UnifiedMemoryOrderAnalysisReport")
                 .put("schema_version", 1).put("finding_schema_version", "3.0");
         for (Object[] row : new Object[][] {{0, "complete", "no-finding-within-supported-model"},
-                {3, "complete", "risk"}, {2, "partial", "inconclusive"}, {2, "cancelled", "inconclusive"}}) {
+                {3, "complete", "risk"}, {2, "partial", "inconclusive"}}) {
             ObjectNode report = base.deepCopy().put("exit_code", (int) row[0]).put("status", (String) row[1]).put("verdict", (String) row[2]);
             org.springframework.test.util.ReflectionTestUtils.invokeMethod(service(), "validateResult", SpecializedAnalyzerType.MEMORY_ORDER, report, row[0]);
         }
+        assertThatThrownBy(() -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(service(), "validateResult",
+                SpecializedAnalyzerType.MEMORY_ORDER, base.deepCopy().put("exit_code",2).put("status","cancelled").put("verdict","inconclusive"),2))
+                .isInstanceOf(cn.rvport.backend.worker.TaskCancelledException.class);
         for (Object[] row : new Object[][] {{0, "partial", "no-finding-within-supported-model"},
                 {0, "complete", "risk"}, {3, "partial", "risk"}, {3, "complete", "inconclusive"},
                 {2, "complete", "inconclusive"}, {2, "partial", "risk"}, {4, "partial", "inconclusive"}}) {
@@ -120,6 +267,7 @@ class SpecializedAnalysisRuntimeServiceTests {
     @Mock ProjectRepository projectRepository;
     @Mock SpecializedAnalysisProcessRunner processRunner;
     @Mock SharedBitcodeArtifactVerifier bitcodeArtifactVerifier;
+    @Mock SourceAnalysisPlanService sourcePlans;
     @Mock TaskExecutionContext context;
 
     @org.junit.jupiter.api.BeforeEach
@@ -274,7 +422,7 @@ class SpecializedAnalysisRuntimeServiceTests {
         verify(completionService).complete(eq(input), eq(SpecializedAnalysisStatus.PARTIAL), eq("partial"), eq(4),
                 any(), any(), any(), any(), eq(null), findings.capture());
         assertThat(archivedJson.get()).isEqualTo(resultJson);
-        verify(repository).markRunning(input.runId(), "0.5.1");
+        verify(repository).markRunning(input.runId(), "0.6.0");
         assertThat(findings.getValue()).singleElement().satisfies(finding -> {
             assertThat(mapper.<JsonNode>valueToTree(finding.detail())).isEqualTo(expected);
             assertThat(finding.externalFindingId()).isEqualTo("fp-1");
@@ -914,7 +1062,7 @@ class SpecializedAnalysisRuntimeServiceTests {
                 "python", "fp-scanner", "clang", "fp-worker", "python", "mo-worker", "source-worker");
         return new SpecializedAnalysisRuntimeService(repository, completionService, artifactService, sourceRepository,
                 projectRepository, mapper, new RvPortProperties(null, null, null, null, config), processRunner,
-                bitcodeArtifactVerifier);
+                bitcodeArtifactVerifier, sourcePlans);
     }
 
     private void arrangeInputs(SpecializedAnalysisTaskInput input, boolean wrongBundleSha) throws Exception {

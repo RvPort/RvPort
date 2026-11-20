@@ -12,7 +12,7 @@ public class FloatingPointAnalysisHandler implements TaskHandler {
     public FloatingPointAnalysisHandler(SpecializedAnalysisRuntimeService runtime) { this.runtime = runtime; }
     @Override public String taskType() { return RvPortTaskTypes.FLOATING_POINT_ANALYSIS; }
     @Override public TaskHandlerResult handle(TaskExecutionContext context) {
-        runtime.run(context.input(SpecializedAnalysisTaskInput.class), context);
+        runtime.runTask(context.input(SpecializedAnalysisTaskInput.class), context);
         return TaskHandlerResult.success("浮点精度分析完成");
     }
 }

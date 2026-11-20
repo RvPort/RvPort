@@ -29,6 +29,25 @@ class KbScanContextServiceTests {
     final UUID source = UUID.randomUUID();
 
     KbScanContextService service() { return new KbScanContextService(sources, runtimes, builds, scans); }
+    @Test void explicitSourcePlanSurvivesUnconsumedBuildAndEnvironmentChanges() {
+        var plan = new cn.rvport.backend.analysis.AnalysisInputPlan(1, project, source, "a".repeat(64), "KB", "0.1.0", "p1",
+                cn.rvport.backend.analysis.AnalysisInputPlan.Identity.of("c", "x86", "riscv64", Map.of(), List.of(), "r1"),
+                cn.rvport.backend.analysis.AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY, null, List.of(), List.of(), List.of(), null);
+        var binding = new KbExecutionContext(null, null, null, plan);
+        assertThat(binding.complete()).isTrue();
+        var run = scan(project, source, TaskStatus.SUCCEEDED, binding);
+        for (TaskStatus status : TaskStatus.values()) {
+            var selection = new KbScanContextService.Selection(project, source, ENV, 900L,
+                    build(project, source, ENV, 900L, UUID.randomUUID(), status, BuildValidationScope.SOURCE_ONLY));
+            assertThat(selection.staleReason(run)).isNull();
+        }
+        assertThat(service().requireExecution(run, input(run, binding, project, source))).isNull();
+        verifyNoInteractions(builds);
+        for (var invalid : List.of(new KbExecutionContext(ENV, null, null, plan),
+                new KbExecutionContext(null, 7L, null, plan), new KbExecutionContext(null, null, BUILD, plan)))
+            assertThat(invalid.complete()).isFalse();
+        assertThat(ready(project, UUID.randomUUID()).staleReason(run)).isEqualTo("KB_SCAN_SOURCE_CHANGED");
+    }
     void runtime() {
         when(runtimes.find(project)).thenReturn(Optional.of(new ProjectRuntimeEnvironmentView(project, ENV, null, 7L, null, null, null)));
     }

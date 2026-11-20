@@ -62,6 +62,7 @@ public class ProjectWorkflowStatusService {
     private cn.rvport.backend.kb.KbScanContextService scanContextService;
     @Autowired
     private cn.rvport.backend.optimization.OptimizationValidationService optimizationValidationService;
+    @Autowired private cn.rvport.backend.workflow.StageReadinessService readiness;
 
     @Autowired
     public ProjectWorkflowStatusService(
@@ -113,8 +114,8 @@ public class ProjectWorkflowStatusService {
         stages.add(x86Build(projectId, runtime, context));
         stages.add(kb(projectId, context));
         stages.add(dependency(projectId, context));
-        stages.add(specialized(projectId, context, SpecializedAnalyzerType.FLOATING_POINT, FLOATING_POINT));
-        stages.add(specialized(projectId, context, SpecializedAnalyzerType.MEMORY_ORDER, MEMORY_ORDER));
+        stages.add(specialized(projectId, context, runtime, SpecializedAnalyzerType.FLOATING_POINT, FLOATING_POINT));
+        stages.add(specialized(projectId, context, runtime, SpecializedAnalyzerType.MEMORY_ORDER, MEMORY_ORDER));
         var currentList=fixLists.current(projectId);
         WorkflowStageResponse report = report(projectId, context,currentList);
         stages.add(report);
@@ -123,7 +124,25 @@ public class ProjectWorkflowStatusService {
         stages.add(test(projectId, context));
         stages.add(optimize(projectId, context, runtime));
         stages.add(archive(projectId, context));
+        if (readiness != null) {
+            stages = stages.stream().map(stage -> withReadiness(projectId, stage)).toList();
+        }
         return new WorkflowResponse(recommended(stages), stages,currentList);
+    }
+
+    private WorkflowStageResponse withReadiness(UUID project, WorkflowStageResponse stage) {
+        if (List.of(PROJECT, ENV, ASSETS, MANUAL).contains(stage.id())) return stage;
+        if (stage.status() == WorkflowStageStatus.RUNNING) return new WorkflowStageResponse(stage.id(), stage.status(),
+                stage.reasonCode(), stage.analysisStatus(), stage.analysisComplete(), stage.message(), stage.messageEn(),
+                X86_BUILD.equals(stage.id()), false);
+        var prerequisites = readiness.resolve(project, stage.id()).prerequisites();
+        if (List.of(FLOATING_POINT, MEMORY_ORDER).contains(stage.id()) && prerequisites.stream().anyMatch(p ->
+                "SPECIALIZED_ANALYZER".equals(p.key()) && p.status() != cn.rvport.backend.workflow.StagePrerequisiteStatus.SATISFIED))
+            stage = pending(stage.id(), "ANALYSIS_PROFILE_OR_TOOL_UNAVAILABLE");
+        boolean canStart = prerequisites
+                .stream().allMatch(p -> !p.required() || p.status() == cn.rvport.backend.workflow.StagePrerequisiteStatus.SATISFIED);
+        return new WorkflowStageResponse(stage.id(), stage.status(), stage.reasonCode(), stage.analysisStatus(),
+                stage.analysisComplete(), stage.message(), stage.messageEn(), X86_BUILD.equals(stage.id()), canStart);
     }
 
     private WorkflowStageResponse environment(UUID projectId, ProjectRuntimeEnvironmentResponse runtime) {
@@ -204,6 +223,7 @@ public class ProjectWorkflowStatusService {
     private WorkflowStageResponse specialized(
             UUID projectId,
             ProjectContextSnapshot context,
+            ProjectRuntimeEnvironmentResponse runtime,
             SpecializedAnalyzerType analyzerType,
             String stageId
     ) {
@@ -212,13 +232,23 @@ public class ProjectWorkflowStatusService {
         }
         return specializedAnalysisRepository.latest(projectId, analyzerType)
                 .filter(run -> context.sourceRevisionId().equals(run.sourceRevisionId()))
+                .filter(run -> {
+                    if ("SOURCE_DISCOVERY".equals(run.summary().get("inputOrigin"))) return true;
+                    if (runtime.sourceEnvironment() == null) return false;
+                    return buildValidationRepository.findLatest(projectId, context.sourceRevisionId(),
+                            runtime.sourceEnvironment().id(), runtime.version(), BuildValidationScope.SOURCE_ONLY)
+                            .filter(build -> build.status() == TaskStatus.SUCCEEDED
+                                    && build.id().equals(run.buildRunId())
+                                    && java.util.Objects.equals(runtime.version(), run.environmentConfigVersion()))
+                            .isPresent();
+                })
                 .map(run -> fromSpecializedStatus(stageId, run.status(), analyzerType.name()))
                 .orElseGet(() -> pending(stageId, analyzerType.name() + "_MISSING"));
     }
 
     private WorkflowStageResponse fromSpecializedStatus(String stageId, SpecializedAnalysisStatus status, String prefix) {
-        if ("MEMORY_ORDER".equals(prefix) && status == SpecializedAnalysisStatus.PARTIAL) {
-            return new WorkflowStageResponse(stageId, WorkflowStageStatus.DONE, "MEMORY_ORDER_PARTIAL",
+        if (status == SpecializedAnalysisStatus.PARTIAL) {
+            return new WorkflowStageResponse(stageId, WorkflowStageStatus.DONE, prefix + "_PARTIAL",
                     "PARTIAL", false, "部分分析完成", "Analysis partially completed");
         }
         return switch (status) {
@@ -338,6 +368,8 @@ public class ProjectWorkflowStatusService {
 
     private String recommended(List<WorkflowStageResponse> stages) {
         return stages.stream().filter(stage -> stage.status() == WorkflowStageStatus.RUNNING).findFirst()
+                .or(() -> stages.stream().filter(stage -> !stage.optional() && Boolean.TRUE.equals(stage.canStart())
+                        && stage.status() != WorkflowStageStatus.DONE && !OPTIMIZE.equals(stage.id()) && !ARCHIVE.equals(stage.id())).findFirst())
                 .or(() -> stages.stream().filter(stage -> stage.status() == WorkflowStageStatus.BLOCKED).findFirst())
                 .or(() -> stages.stream().filter(stage -> stage.status() == WorkflowStageStatus.PENDING).findFirst())
                 .map(WorkflowStageResponse::id)

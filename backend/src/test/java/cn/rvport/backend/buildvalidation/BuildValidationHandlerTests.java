@@ -189,9 +189,12 @@ class BuildValidationHandlerTests {
                         """);
     }
 
-    @Test
-    void savesCompileDatabaseArtifactWhenRemoteFileIsValid() {
-        Fixtures fixtures = fixtures(TaskStatus.SUCCEEDED);
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value=EnvironmentRole.class, names={"SOURCE_X86", "TARGET_RISCV"})
+    void savesCompileDatabaseArtifactWhenRemoteFileIsValid(EnvironmentRole role) {
+        Fixtures fixtures = fixtures(TaskStatus.SUCCEEDED, true, Map.of(), role);
+        org.mockito.Mockito.lenient().when(bitcodeArtifactService.generate(any())).thenReturn(
+                BitcodeGenerationResult.unavailable(BitcodeStatus.UNSUPPORTED, BitcodeReasonCode.COMPILE_DATABASE_UNAVAILABLE));
         String compileCommands = """
                 [{"directory":"/workspace/source","command":"gcc -Iinclude -DPROJECT_FEATURE -c main.c","file":"main.c"}]
                 """;
@@ -212,13 +215,27 @@ class BuildValidationHandlerTests {
         StoredArtifactView artifact = storedArtifact(fixtures.projectId, fixtures.taskId, fixtures.buildRunId, compileCommands.length());
         when(storedArtifactService.store(any(), eq(context))).thenReturn(artifact);
 
-        handler().handle(context);
+        var sources=org.mockito.Mockito.mock(cn.rvport.backend.source.SourceRepository.class);
+        var snapshots=org.mockito.Mockito.mock(cn.rvport.backend.report.review.ReportSourceSnapshotService.class);
+        var revision=new cn.rvport.backend.source.SourceRevisionView(fixtures.input.sourceRevisionId(),fixtures.projectId,
+                null,null,null,null,null,null,null,null,null,true,null,null);
+        when(sources.findById(revision.id())).thenReturn(Optional.of(revision));
+        when(snapshots.prepare(revision)).thenReturn(new cn.rvport.backend.report.review.ReportSourceSnapshotService.Manifest(
+                revision.id(),"a".repeat(64),java.util.List.of(),null));
+        var handler=handler();
+        org.springframework.test.util.ReflectionTestUtils.setField(handler,"analysisSources",sources);
+        org.springframework.test.util.ReflectionTestUtils.setField(handler,"analysisSnapshots",snapshots);
+        handler.handle(context);
 
         ArgumentCaptor<StoredArtifactCreateCommand> artifactCaptor = ArgumentCaptor.forClass(StoredArtifactCreateCommand.class);
         verify(storedArtifactService).store(artifactCaptor.capture(), eq(context));
         assertThat(artifactCaptor.getValue().ownerType()).isEqualTo(StoredArtifactOwnerType.BUILD_VALIDATION);
         assertThat(artifactCaptor.getValue().ownerId()).isEqualTo(fixtures.buildRunId);
         assertThat(artifactCaptor.getValue().artifactType()).isEqualTo(BuildValidationArtifacts.COMPILE_COMMANDS_JSON);
+        assertThat(artifactCaptor.getValue().summary().get("sourceDigest")).isEqualTo("a".repeat(64));
+        assertThat(artifactCaptor.getValue().summary().get("remoteSourceRoot")).isEqualTo("/workspace/source");
+        if (role == EnvironmentRole.SOURCE_X86) assertThat(artifactCaptor.getValue().summary().get("sourceArch")).isEqualTo("x86");
+        else assertThat(artifactCaptor.getValue().summary()).doesNotContainKey("sourceArch");
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> factsCaptor = ArgumentCaptor.forClass(Map.class);

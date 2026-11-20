@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import cn.rvport.backend.credential.CredentialKind;
@@ -77,6 +78,9 @@ class SourceDeployExecutorTests {
         SourceRevisionView revision = revision(projectId, tempDir);
         EnvironmentView environment = environment(projectId, "/workspace");
         SourceDeployRunView reusable = run(UUID.randomUUID(), projectId, taskId, revision.id(), environment.id(), "/workspace/rvport-sources/" + revision.id(), TaskStatus.SUCCEEDED);
+        when(context.task()).thenReturn(task(taskId, projectId));
+        when(sourceRepository.findById(revision.id())).thenReturn(Optional.of(revision));
+        when(environmentRepository.findById(environment.id())).thenReturn(Optional.of(environment));
         when(sourceDeployRepository.findLatestSucceeded(projectId, revision.id(), environment.id(), 3L)).thenReturn(Optional.of(reusable));
 
         SourceDeployRunView result = executor().ensureDeployed(request(projectId, taskId, revision.id(), environment.id(), 3L, null), context);
@@ -122,10 +126,11 @@ class SourceDeployExecutorTests {
         UUID revisionId = UUID.randomUUID();
         UUID environmentId = UUID.randomUUID();
         SourceDeployRunView foreign = run(UUID.randomUUID(), otherProjectId, taskId, revisionId, environmentId, "/workspace/source", TaskStatus.SUCCEEDED);
+        when(context.task()).thenReturn(task(taskId, projectId));
         when(sourceDeployRepository.findById(foreign.id())).thenReturn(Optional.of(foreign));
 
         assertThatThrownBy(() -> executor().ensureDeployed(new SourceDeployExecutionRequest(
-                projectId, taskId, foreign.id(), revisionId, environmentId, 1L, null, false, 60
+                projectId, taskId, foreign.id(), revisionId, environmentId, 3L, null, false, 60
         ), context))
                 .isInstanceOf(TaskExecutionException.class)
                 .extracting("errorCode")
@@ -138,11 +143,12 @@ class SourceDeployExecutorTests {
         UUID taskId = UUID.randomUUID();
         SourceRevisionView revision = revision(projectId, tempDir);
         EnvironmentView environment = environment(projectId, " ");
-        when(sourceDeployRepository.findLatestSucceeded(projectId, revision.id(), environment.id(), 1L)).thenReturn(Optional.empty());
+        when(context.task()).thenReturn(task(taskId, projectId));
+        when(sourceDeployRepository.findLatestSucceeded(projectId, revision.id(), environment.id(), 3L)).thenReturn(Optional.empty());
         when(sourceRepository.findById(revision.id())).thenReturn(Optional.of(revision));
         when(environmentRepository.findById(environment.id())).thenReturn(Optional.of(environment));
 
-        assertThatThrownBy(() -> executor().ensureDeployed(request(projectId, taskId, revision.id(), environment.id(), 1L, null), context))
+        assertThatThrownBy(() -> executor().ensureDeployed(request(projectId, taskId, revision.id(), environment.id(), 3L, null), context))
                 .isInstanceOf(TaskExecutionException.class)
                 .extracting("errorCode")
                 .isEqualTo("ENVIRONMENT_WORKING_DIRECTORY_REQUIRED");
@@ -156,14 +162,14 @@ class SourceDeployExecutorTests {
         EnvironmentView environment = environment(projectId, "/workspace");
         SourceDeployRunView pending = run(UUID.randomUUID(), projectId, taskId, revision.id(), environment.id(), "/workspace/rvport-sources/" + revision.id(), TaskStatus.PENDING);
         when(context.task()).thenReturn(task(taskId, projectId));
-        when(sourceDeployRepository.findLatestSucceeded(projectId, revision.id(), environment.id(), 1L)).thenReturn(Optional.empty());
+        when(sourceDeployRepository.findLatestSucceeded(projectId, revision.id(), environment.id(), 3L)).thenReturn(Optional.empty());
         when(sourceRepository.findById(revision.id())).thenReturn(Optional.of(revision));
         when(environmentRepository.findById(environment.id())).thenReturn(Optional.of(environment));
-        when(sourceDeployRepository.createPending(any(), eq(projectId), eq(taskId), eq(revision.id()), eq(environment.id()), eq(1L),
+        when(sourceDeployRepository.createPending(any(), eq(projectId), eq(taskId), eq(revision.id()), eq(environment.id()), eq(3L),
                 eq("/workspace/rvport-sources/" + revision.id()), eq(false))).thenReturn(pending);
         when(toolRunRepository.create(eq(projectId), eq(taskId), any(), any(), any(), eq(TaskStatus.RUNNING), any())).thenReturn(UUID.randomUUID());
 
-        assertThatThrownBy(() -> executor().ensureDeployed(request(projectId, taskId, revision.id(), environment.id(), 1L, null), context))
+        assertThatThrownBy(() -> executor().ensureDeployed(request(projectId, taskId, revision.id(), environment.id(), 3L, null), context))
                 .isInstanceOf(TaskExecutionException.class)
                 .extracting("errorCode")
                 .isEqualTo("TASK_RESOURCE_NOT_FOUND");
@@ -181,15 +187,15 @@ class SourceDeployExecutorTests {
                 "/workspace/source", TaskStatus.RUNNING);
 
         ReflectionTestUtils.invokeMethod(executor, "validateRunMatches", run,
-                request(projectId, taskId, revisionId, environmentId, 1L, null));
+                request(projectId, taskId, revisionId, environmentId, 3L, null));
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(executor, "validateRunMatches", run,
-                request(UUID.randomUUID(), taskId, revisionId, environmentId, 1L, null)))
+                request(UUID.randomUUID(), taskId, revisionId, environmentId, 3L, null)))
                 .isInstanceOf(TaskExecutionException.class).extracting("errorCode").isEqualTo("TASK_PROJECT_MISMATCH");
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(executor, "validateRunMatches", run,
-                request(projectId, taskId, UUID.randomUUID(), environmentId, 1L, null)))
+                request(projectId, taskId, UUID.randomUUID(), environmentId, 3L, null)))
                 .isInstanceOf(TaskExecutionException.class).extracting("errorCode").isEqualTo("TASK_PROJECT_MISMATCH");
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(executor, "validateRunMatches", run,
-                request(projectId, taskId, revisionId, UUID.randomUUID(), 1L, null)))
+                request(projectId, taskId, revisionId, UUID.randomUUID(), 3L, null)))
                 .isInstanceOf(TaskExecutionException.class).extracting("errorCode").isEqualTo("TASK_PROJECT_MISMATCH");
     }
 
@@ -200,7 +206,7 @@ class SourceDeployExecutorTests {
         UUID taskId = UUID.randomUUID();
         UUID revisionId = UUID.randomUUID();
         UUID environmentId = UUID.randomUUID();
-        SourceDeployExecutionRequest request = request(projectId, taskId, revisionId, environmentId, 1L, null);
+        SourceDeployExecutionRequest request = request(projectId, taskId, revisionId, environmentId, 3L, null);
         when(sourceRepository.findById(revisionId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(executor, "requireSourceRevision", request))
                 .isInstanceOf(TaskExecutionException.class).extracting("errorCode").isEqualTo("TASK_RESOURCE_NOT_FOUND");
@@ -261,18 +267,18 @@ class SourceDeployExecutorTests {
         SourceDeployExecutor executor = executor();
         UUID projectId = UUID.randomUUID();
         UUID revisionId = UUID.randomUUID();
-        EnvironmentView environment = environment(UUID.randomUUID(), projectId, "C:\\work\\", true, null);
+        EnvironmentView environment = environment(UUID.randomUUID(), projectId, "/work/", true, null);
         SourceDeployExecutionRequest generated = request(projectId, UUID.randomUUID(), revisionId,
-                environment.id(), 1L, null);
+                environment.id(), 3L, null);
         SourceDeployExecutionRequest explicit = request(projectId, UUID.randomUUID(), revisionId,
-                environment.id(), 1L, "/custom/path");
+                environment.id(), 3L, "/work/rvport-sources/" + revisionId);
         SourceDeployExecutionRequest blank = request(projectId, UUID.randomUUID(), revisionId,
-                environment.id(), 1L, " ");
+                environment.id(), 3L, " ");
 
         assertThat((String) ReflectionTestUtils.invokeMethod(executor, "effectiveRemotePath", generated, environment, revisionId))
-                .isEqualTo("C:/work/rvport-sources/" + revisionId);
+                .isEqualTo("/work/rvport-sources/" + revisionId);
         assertThat((String) ReflectionTestUtils.invokeMethod(executor, "effectiveRemotePath", explicit, environment, revisionId))
-                .isEqualTo("/custom/path");
+                .isEqualTo("/work/rvport-sources/" + revisionId);
         assertThat((String) ReflectionTestUtils.invokeMethod(executor, "effectiveRemotePath", blank, environment, revisionId))
                 .endsWith("/rvport-sources/" + revisionId);
         assertThat((Integer) ReflectionTestUtils.invokeMethod(executor, "effectiveTimeout", (Object) null)).isEqualTo(3600);
@@ -367,6 +373,130 @@ class SourceDeployExecutorTests {
         assertThat(executor().deployExisting(input, context).id()).isEqualTo(fixture.run().id());
     }
 
+    @Test
+    void retryRejectsEveryMismatchedIdentityBeforeAnyPublicationOrTransfer() throws Exception {
+        DeploymentFixture f = prepareDeployment();
+        var r = f.run();
+        var invalid = java.util.List.of(
+                copyRun(r, UUID.randomUUID(), r.taskId(), r.sourceRevisionId(), r.environmentId(), 3L, r.remotePath(), TaskStatus.FAILED),
+                copyRun(r, r.projectId(), UUID.randomUUID(), r.sourceRevisionId(), r.environmentId(), 3L, r.remotePath(), TaskStatus.FAILED),
+                copyRun(r, r.projectId(), r.taskId(), UUID.randomUUID(), r.environmentId(), 3L, r.remotePath(), TaskStatus.FAILED),
+                copyRun(r, r.projectId(), r.taskId(), r.sourceRevisionId(), UUID.randomUUID(), 3L, r.remotePath(), TaskStatus.FAILED),
+                copyRun(r, r.projectId(), r.taskId(), r.sourceRevisionId(), r.environmentId(), 4L, r.remotePath(), TaskStatus.FAILED),
+                copyRun(r, r.projectId(), r.taskId(), r.sourceRevisionId(), r.environmentId(), null, r.remotePath(), TaskStatus.FAILED),
+                copyRun(r, r.projectId(), r.taskId(), r.sourceRevisionId(), r.environmentId(), 3L, "/other/source", TaskStatus.FAILED));
+        for (var bad : invalid) {
+            when(sourceDeployRepository.findByTaskId(r.taskId())).thenReturn(Optional.of(bad));
+            assertThatThrownBy(() -> executor().ensureDeployed(f.request(), context)).isInstanceOf(TaskExecutionException.class);
+        }
+        when(sourceDeployRepository.findByTaskId(r.taskId())).thenReturn(Optional.of(r));
+        var explicitMismatch = new SourceDeployExecutionRequest(r.projectId(), r.taskId(), UUID.randomUUID(),
+                r.sourceRevisionId(), r.environmentId(), 3L, null, false, 60);
+        assertThatThrownBy(() -> executor().ensureDeployed(explicitMismatch, context)).isInstanceOf(TaskExecutionException.class);
+        verify(sourceDeployRepository, never()).markRunning(any());
+        verify(sourceDeployRepository, never()).createPending(any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyLong(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+        org.mockito.Mockito.verifyNoInteractions(toolRunRepository, sshClientAdapter, credentialService);
+    }
+
+    @Test
+    void retryReusesTheSameRowAndSuccessfulTaskCacheDoesNotTransferAgain() throws Exception {
+        DeploymentFixture f = prepareDeployment();
+        var r = f.run();
+        var failed = copyRun(r, r.projectId(), r.taskId(), r.sourceRevisionId(), r.environmentId(), 3L, r.remotePath(), TaskStatus.FAILED);
+        when(sourceDeployRepository.findByTaskId(r.taskId())).thenReturn(Optional.of(failed));
+        when(sshClientAdapter.execute(any())).thenReturn(new SshCommandResult(0, "ok", "", Duration.ZERO));
+        assertThat(executor().ensureDeployed(f.request(), context).id()).isEqualTo(r.id());
+        verify(sourceDeployRepository).markRunning(r.id());
+        verify(sourceDeployRepository, never()).createPending(any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyLong(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+        var succeeded = copyRun(r, r.projectId(), r.taskId(), r.sourceRevisionId(), r.environmentId(), 3L, r.remotePath(), TaskStatus.SUCCEEDED);
+        when(sourceDeployRepository.findByTaskId(r.taskId())).thenReturn(Optional.of(succeeded));
+        assertThat(executor().ensureDeployed(f.request(), context)).isEqualTo(succeeded);
+        verify(sshClientAdapter).execute(any());
+    }
+
+    @Test
+    void successfulCrossTaskCacheIsAllowedButItsPathAndVersionAreStillChecked() throws Exception {
+        DeploymentFixture f = prepareDeployment();
+        var r = f.run();
+        var good = copyRun(r, r.projectId(), UUID.randomUUID(), r.sourceRevisionId(), r.environmentId(), 3L, r.remotePath(), TaskStatus.SUCCEEDED);
+        when(sourceDeployRepository.findLatestSucceeded(r.projectId(), r.sourceRevisionId(), r.environmentId(), 3L)).thenReturn(Optional.of(good));
+        assertThat(executor().ensureDeployed(f.request(), context)).isEqualTo(good);
+        var bad = copyRun(good, r.projectId(), good.taskId(), r.sourceRevisionId(), r.environmentId(), 4L, r.remotePath(), TaskStatus.SUCCEEDED);
+        when(sourceDeployRepository.findLatestSucceeded(r.projectId(), r.sourceRevisionId(), r.environmentId(), 3L)).thenReturn(Optional.of(bad));
+        assertThatThrownBy(() -> executor().ensureDeployed(f.request(), context)).isInstanceOf(TaskExecutionException.class);
+        org.mockito.Mockito.verifyNoInteractions(toolRunRepository, sshClientAdapter);
+    }
+
+    @Test
+    void explicitSuccessAndForceValidateAssociationWithoutChangingForceSemantics() throws Exception {
+        DeploymentFixture f = prepareDeployment();
+        var r = f.run();
+        var good = copyRun(r, r.projectId(), UUID.randomUUID(), r.sourceRevisionId(), r.environmentId(), 3L, r.remotePath(), TaskStatus.SUCCEEDED);
+        when(sourceDeployRepository.findById(good.id())).thenReturn(Optional.of(good));
+        var explicit = new SourceDeployExecutionRequest(r.projectId(), r.taskId(), r.id(), r.sourceRevisionId(), r.environmentId(), 3L, null, false, 60);
+        assertThat(executor().ensureDeployed(explicit, context)).isEqualTo(good);
+        var forced = new SourceDeployExecutionRequest(r.projectId(), r.taskId(), r.id(), r.sourceRevisionId(), r.environmentId(), 3L, null, true, 60);
+        var fresh = new SourceDeployRunView(UUID.randomUUID(), r.projectId(), r.taskId(), r.sourceRevisionId(), r.environmentId(), 3L,
+                r.remotePath(), r.deployStrategy(), true, TaskStatus.PENDING, null, null, null, JSONB.valueOf("{}"), null, null, null);
+        when(sourceDeployRepository.createPending(any(), eq(r.projectId()), eq(r.taskId()), eq(r.sourceRevisionId()), eq(r.environmentId()), eq(3L), eq(r.remotePath()), eq(true))).thenReturn(fresh);
+        when(sshClientAdapter.execute(any())).thenReturn(new SshCommandResult(0, "ok", "", Duration.ZERO));
+        assertThat(executor().ensureDeployed(forced, context).id()).isEqualTo(fresh.id());
+        verify(sourceDeployRepository).markRunning(fresh.id());
+        verify(sourceDeployRepository, never()).markRunning(good.id());
+    }
+
+    @Test
+    void invalidExecutionTaskAndLostLeaseCannotMutateDeployment() throws Exception {
+        DeploymentFixture f = prepareDeployment();
+        when(context.task()).thenReturn(null, task(UUID.randomUUID(), f.request().projectId()), task(f.request().taskId(), UUID.randomUUID()));
+        for (int i = 0; i < 3; i++)
+            assertThatThrownBy(() -> executor().ensureDeployed(f.request(), context)).isInstanceOf(TaskExecutionException.class);
+        when(context.task()).thenReturn(task(f.request().taskId(), f.request().projectId()));
+        when(sourceDeployRepository.findByTaskId(f.request().taskId())).thenReturn(Optional.of(f.run()));
+        org.mockito.Mockito.doThrow(new TaskCancelledException("lease lost")).when(context).publish(any());
+        assertThatThrownBy(() -> executor().ensureDeployed(f.request(), context)).isInstanceOf(TaskCancelledException.class);
+        verify(sourceDeployRepository, never()).markRunning(any());
+        org.mockito.Mockito.verifyNoInteractions(toolRunRepository, sshClientAdapter);
+    }
+
+    @Test
+    void rejectsTraversalRelativeRootsAndArbitraryRemotePaths() {
+        UUID project = UUID.randomUUID();
+        UUID source = UUID.randomUUID();
+        for (String root : java.util.List.of("relative", "C:/work", "/work/../target", "/work/./target", "/work//target", "/work\n/target")) {
+            var environment = environment(project, root);
+            var request = request(project, UUID.randomUUID(), source, environment.id(), 3L, null);
+            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(executor(), "effectiveRemotePath", request, environment, source))
+                    .isInstanceOf(TaskExecutionException.class);
+        }
+        var environment = environment(project, "/workspace");
+        var request = request(project, UUID.randomUUID(), source, environment.id(), 3L, "/workspace/other");
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(executor(), "effectiveRemotePath", request, environment, source))
+                .isInstanceOf(TaskExecutionException.class).extracting("errorCode").isEqualTo("SOURCE_DEPLOY_PATH_MISMATCH");
+    }
+
+    @Test
+    void rejectsRepositoryResourceIdMismatchBeforeTransfer() throws Exception {
+        var fixture = prepareDeployment();
+        var request = fixture.request();
+        when(sourceRepository.findById(request.sourceRevisionId())).thenReturn(Optional.of(revision(request.projectId(), tempDir)));
+        assertThatThrownBy(() -> executor().ensureDeployed(request, context)).isInstanceOf(TaskExecutionException.class);
+        verifyNoInteractions(sshClientAdapter);
+        var revision = new SourceRevisionView(request.sourceRevisionId(), request.projectId(), SourceRevisionType.ARCHIVE,
+                "v1", "source.zip", null, null, null, null, tempDir.toString(), null, true, null, null);
+        when(sourceRepository.findById(request.sourceRevisionId())).thenReturn(Optional.of(revision));
+        when(environmentRepository.findById(request.environmentId())).thenReturn(Optional.of(environment(request.projectId(), "/workspace")));
+        assertThatThrownBy(() -> executor().ensureDeployed(request, context)).isInstanceOf(TaskExecutionException.class);
+        verifyNoInteractions(sshClientAdapter);
+        verify(sourceDeployRepository, never()).markRunning(any());
+    }
+
+    private SourceDeployRunView copyRun(SourceDeployRunView original, UUID project, UUID task, UUID source,
+            UUID environment, Long version, String path, TaskStatus status) {
+        return new SourceDeployRunView(original.id(), project, task, source, environment, version, path,
+                original.deployStrategy(), original.force(), status, null, null, null, JSONB.valueOf("{}"), null, null, null);
+    }
+
     private SourceDeployExecutor executor() {
         return new SourceDeployExecutor(sourceDeployRepository, sourceRepository, environmentRepository,
                 credentialService, sshClientAdapter, toolRunRepository);
@@ -397,7 +527,7 @@ class SourceDeployExecutorTests {
     }
 
     private SourceDeployRunView run(UUID id, UUID projectId, UUID taskId, UUID revisionId, UUID environmentId, String remotePath, TaskStatus status) {
-        return new SourceDeployRunView(id, projectId, taskId, revisionId, environmentId, remotePath,
+        return new SourceDeployRunView(id, projectId, taskId, revisionId, environmentId, 3L, remotePath,
                 SourceDeployStrategy.TAR_OVER_SSH, false, status, null, null, null,
                 JSONB.valueOf("{}"), null, null, OffsetDateTime.now());
     }

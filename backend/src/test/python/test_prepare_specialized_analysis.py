@@ -15,6 +15,115 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PrepareSpecializedAnalysisTests(unittest.TestCase):
+    def test_pinned_compile_root_does_not_match_another_tree_by_filename(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.c").write_text("int x;")
+            (source / "not-built.c").write_text("int omitted;")
+            database = root / "compile_commands.json"
+            database.write_text(json.dumps([
+                {"file": "main.c", "directory": "/bound", "arguments": ["cc", "-std=c99", "-c", "main.c"]},
+                {"file": "/other/main.c", "directory": "/other", "arguments": ["cc", "-DWRONG"]},
+                {"file": "/bound/missing.c", "directory": "/bound", "arguments": ["cc"]}]))
+            args = SimpleNamespace(compile_database=database, source_root=source, cache=root, remote_source_root="/bound")
+            result = json.loads(MODULE.localized_compile_database(args).read_text())
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["file"], str(source / "main.c"))
+            self.assertIn("-std=c99", result[0]["arguments"])
+            coverage = json.loads((root / "source-analysis-plan.json").read_text())["compileContextCoverage"]
+            self.assertEqual(coverage["localizedCommandCount"], 1)
+            self.assertEqual(coverage["excludedCommandCount"], 1)
+            self.assertEqual(coverage["unavailableSourceCount"], 1)
+            self.assertEqual(coverage["unavailableSources"], [{"path": "missing.c", "reasonCode": "SOURCE_NOT_IN_FIXED_SNAPSHOT"}])
+            manifest = json.loads((root / "source-analysis-plan.json").read_text())
+            self.assertEqual(manifest["inputOrigin"], "BUILD_ARTIFACTS")
+            omitted = next(f for f in manifest["files"] if f["path"] == "not-built.c")
+            self.assertEqual(omitted["status"], "OMITTED")
+            self.assertEqual(omitted["reasonCode"], "NOT_IN_COMPILE_DATABASE")
+            for invalid in ("relative", "/", "/bound/../escape"):
+                args.remote_source_root = invalid
+                with self.assertRaisesRegex(ValueError, "根目录非法"):
+                    MODULE.localized_compile_database(args)
+
+    def test_artifact_and_source_paths_reject_symlinks_before_resolving(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "a.c").write_text("int x;")
+            (root / "link.c").symlink_to(root / "a.c")
+            (root / "linked-dir").symlink_to(root, target_is_directory=True)
+            for path in ("", "../a.c", "/a.c", "x:/a.c", "a/./b", "a\x00c", "link.c", "linked-dir/a.c"):
+                with self.assertRaises(ValueError):
+                    MODULE.safe(root, path)
+                with self.assertRaises(ValueError):
+                    MODULE.optional_verified_source(root, path, "a" * 64)
+            with self.assertRaises(ValueError):
+                MODULE.guarded_path(root / "linked-dir", "a.c")
+
+    def test_memory_source_only_uses_open_scope_and_records_missing_compile_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.c").write_text("int main(void) { return 0; }\n")
+            workspace = root / "workspace"
+            cache = workspace / "cache"
+            cache.mkdir(parents=True)
+            args = argparse.Namespace(manifest=None, artifact_root=None, source_root=source,
+                compile_database=None, output=workspace / "request.json", run_id="run", source_revision="revision",
+                build_run=None, cache=cache, timeout=60, max_frontend_output_bytes=1024 * 1024,
+                external_root=workspace / "external", workspace=workspace,
+                cancel_file=workspace / "cancel", project_id="project", project_name="source-only")
+            MODULE.memory(args)
+            request = json.loads(args.output.read_text())
+            self.assertEqual(request["schema_version"], 2)
+            self.assertEqual(len(request["source_requests"]), 1)
+            manifests = list(args.external_root.rglob("*.json"))
+            bundle = next(json.loads(path.read_text()) for path in manifests
+                          if json.loads(path.read_text()).get("kind") == "ExternalBitcodeBundleManifest")
+            self.assertTrue(bundle["scopes"])
+            for scope in bundle["scopes"]:
+                self.assertFalse(scope["closed"])
+                self.assertIn("compile-context-unavailable", scope["external_boundaries"])
+                self.assertIn("SOURCE_DISCOVERY", scope["evidence"])
+
+    def test_internal_projection_rejects_outside_units_and_preserves_command_standard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "main.c").write_text("int x;\n")
+            (root / "outside.c").write_text("int outside;\n")
+            result = MODULE.synthetic_platform([
+                {"directory": str(source), "file": "main.c", "command": "cc -std=c99 -c main.c"},
+                {"directory": str(root), "file": "outside.c", "arguments": ["cc", "-c", "outside.c"]}
+            ], source)
+            self.assertEqual(len(result["records"]), 1)
+            self.assertEqual(result["records"][0]["source"]["path"], "main.c")
+            self.assertEqual(result["records"][0]["standard"], "c99")
+
+    def test_source_discovery_input_is_explicit_and_never_a_build(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            cache = root / "cache"
+            cache.mkdir()
+            args = argparse.Namespace(source_root=source, cache=cache, compile_database=None, manifest=None)
+            with self.assertRaisesRegex(ValueError, "SOURCE_LANGUAGE_UNSUPPORTED"):
+                MODULE.localized_compile_database(args)
+            (source / "a.c").write_text("double add(double a, double b) { return a+b; }")
+            projection = MODULE.localized_compile_database(args)
+            self.assertEqual(projection.name, "source-discovery-input.json")
+            self.assertEqual(args.source_plan["inputOrigin"], "SOURCE_DISCOVERY")
+            self.assertFalse(args.source_plan["denominatorKnown"])
+            self.assertIn("-std=c17", json.loads(projection.read_text())[0]["arguments"])
+            self.assertFalse((source / "compile_commands.json").exists())
+            args.manifest = root / "untrusted.json"
+            with self.assertRaisesRegex(ValueError, "可信编译上下文"):
+                MODULE.localized_compile_database(args)
+
     def test_source_and_artifact_validation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -202,6 +311,8 @@ class PrepareSpecializedAnalysisTests(unittest.TestCase):
                                              "bytes": bitcode.stat().st_size}
                     elif mode == "partial":
                         record["status"] = "failed"
+                        # 真实 producer 在编译器校验失败时只提供占位源码摘要。
+                        record["source"]["sha256"] = "0" * 64
                 manifest = None
                 if mode != "missing":
                     manifest = root / "manifest.json"
@@ -237,6 +348,21 @@ class PrepareSpecializedAnalysisTests(unittest.TestCase):
                 self.assertEqual(len(records), 4)
                 if mode == "partial":
                     self.assertTrue(all(item["optimization"] == "unknown" and item["debug"] == "unknown" for item in records))
+                    for item in records:
+                        self.assertEqual(item["source"]["sha256"], MODULE.sha256(external_root / item["source"]["path"]))
+                    self.assertTrue(all(item["diagnostic"]["code"] == "external_build_failed"
+                                        for item in records if item["status"] == "failed"))
+                if mode == "complete":
+                    platform["records"][0]["source"]["sha256"] = "0" * 64
+                    manifest.write_text(json.dumps(platform), encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "源码摘要不匹配"):
+                        MODULE.memory(argparse.Namespace(
+                            manifest=manifest, artifact_root=artifact_root, source_root=source_root,
+                            compile_database=compile_database, output=output, run_id="run",
+                            source_revision="revision", build_run="build", cache=cache,
+                            timeout=60, max_frontend_output_bytes=1024 * 1024,
+                            external_root=external_root, workspace=workspace,
+                            cancel_file=workspace / "cancel", project_id="project", project_name="legacy"))
 
 
 if __name__ == "__main__":

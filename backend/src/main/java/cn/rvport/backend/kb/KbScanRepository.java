@@ -62,6 +62,7 @@ public class KbScanRepository {
                 .set(KB_SCAN_RUNS.SOURCE_ENVIRONMENT_ID, input.executionContext().sourceEnvironmentId())
                 .set(KB_SCAN_RUNS.RUNTIME_ENVIRONMENT_VERSION, input.executionContext().runtimeEnvironmentVersion())
                 .set(KB_SCAN_RUNS.BUILD_RUN_ID, input.executionContext().buildRunId())
+                .set(KB_SCAN_RUNS.INPUT_PLAN, planJson(input.executionContext().inputPlan()))
                 .set(KB_SCAN_RUNS.KB_VERSION, blankToNull(input.ruleVersion()))
                 .set(KB_SCAN_RUNS.SCOPE, toJsonb(input.scanScope()))
                 .set(KB_SCAN_RUNS.STATUS, TaskStatus.PENDING.name())
@@ -74,6 +75,18 @@ public class KbScanRepository {
                 .where(KB_SCAN_RUNS.ID.eq(id))
                 .fetchOptional()
                 .map(this::mapRun);
+    }
+
+    public void storeEffectivePlan(UUID runId, cn.rvport.backend.analysis.AnalysisInputPlan requested,
+            cn.rvport.backend.analysis.AnalysisInputPlan effective) {
+        if (!requested.effectiveInputDigest().equals(effective.originalInputDigest()))
+            throw new IllegalArgumentException("ANALYSIS_INPUT_PLAN_MISMATCH");
+        JSONB actual = planJson(effective);
+        int changed = dsl.update(KB_SCAN_RUNS).set(KB_SCAN_RUNS.EFFECTIVE_INPUT_PLAN, actual)
+                .where(KB_SCAN_RUNS.ID.eq(runId).and(KB_SCAN_RUNS.INPUT_PLAN.eq(planJson(requested)))
+                        .and(KB_SCAN_RUNS.EFFECTIVE_INPUT_PLAN.isNull().or(KB_SCAN_RUNS.EFFECTIVE_INPUT_PLAN.eq(actual))))
+                .execute();
+        if (changed != 1) throw new IllegalStateException("ANALYSIS_EFFECTIVE_PLAN_CONFLICT");
     }
 
     public void lockContext(UUID projectId) {
@@ -93,14 +106,35 @@ public class KbScanRepository {
         return dsl.select(KB_SCAN_RUNS.fields()).from(KB_SCAN_RUNS)
                 .leftJoin(TASKS).on(TASKS.ID.eq(KB_SCAN_RUNS.TASK_ID))
                 .where(KB_SCAN_RUNS.PROJECT_ID.eq(projectId))
+                .orderBy(activeFirst(KB_SCAN_RUNS.STATUS), TASKS.CREATED_AT.desc().nullsLast(), KB_SCAN_RUNS.ID.desc())
+                .limit(1).fetchOptional().map(record -> mapRun(record.into(KB_SCAN_RUNS)));
+    }
+
+    public Optional<KbScanView> findLatestPublishedByContext(UUID projectId, UUID sourceRevisionId, KbExecutionContext context) {
+        return dsl.select(KB_SCAN_RUNS.fields()).from(KB_SCAN_RUNS)
+                .leftJoin(TASKS).on(TASKS.ID.eq(KB_SCAN_RUNS.TASK_ID))
+                .where(KB_SCAN_RUNS.PROJECT_ID.eq(projectId).and(KB_SCAN_RUNS.SOURCE_REVISION_ID.eq(sourceRevisionId))
+                        .and(KB_SCAN_RUNS.STATUS.eq(TaskStatus.SUCCEEDED.name())).and(contextFilter(context))
+                        .and(DSL.exists(dsl.selectOne().from(KB_SCAN_ARTIFACTS)
+                                .where(KBA_SCAN_RUN_ID.eq(KB_SCAN_RUNS.ID).and(KBA_ARTIFACT_TYPE.eq("SCAN_RESULT_JSON"))
+                                        .and(KBA_STORED_ARTIFACT_ID.isNotNull())))))
                 .orderBy(TASKS.CREATED_AT.desc().nullsLast(), KB_SCAN_RUNS.ID.desc())
                 .limit(1).fetchOptional().map(record -> mapRun(record.into(KB_SCAN_RUNS)));
     }
 
     private Condition contextFilter(KbExecutionContext context) {
+        Condition sourceOnly = DSL.condition("coalesce({0}, {1})->>'inputOrigin' = 'SOURCE_DISCOVERY'",
+                KB_SCAN_RUNS.EFFECTIVE_INPUT_PLAN, KB_SCAN_RUNS.INPUT_PLAN);
+        if (context.sourceOnly()) return sourceOnly;
         return KB_SCAN_RUNS.SOURCE_ENVIRONMENT_ID.eq(context.sourceEnvironmentId())
                 .and(KB_SCAN_RUNS.RUNTIME_ENVIRONMENT_VERSION.eq(context.runtimeEnvironmentVersion()))
-                .and(KB_SCAN_RUNS.BUILD_RUN_ID.eq(context.buildRunId()));
+                .and(KB_SCAN_RUNS.BUILD_RUN_ID.eq(context.buildRunId())).or(sourceOnly);
+    }
+
+    private JSONB planJson(cn.rvport.backend.analysis.AnalysisInputPlan plan) {
+        if (plan == null) return null;
+        try { return JSONB.valueOf(objectMapper.writeValueAsString(plan)); }
+        catch (java.io.IOException ex) { throw new IllegalArgumentException("ANALYSIS_PLAN_INVALID", ex); }
     }
 
     public Optional<KbScanView> findByTaskId(UUID taskId) {

@@ -204,6 +204,34 @@ public class KbScanRunsRecord extends UpdatableRecordImpl<KbScanRunsRecord> {
         return (UUID) get(12);
     }
 
+    /**
+     * Setter for <code>public.kb_scan_runs.input_plan</code>.
+     */
+    public void setInputPlan(JSONB value) {
+        set(13, value);
+    }
+
+    /**
+     * Getter for <code>public.kb_scan_runs.input_plan</code>.
+     */
+    public JSONB getInputPlan() {
+        return (JSONB) get(13);
+    }
+
+    /**
+     * Setter for <code>public.kb_scan_runs.effective_input_plan</code>.
+     */
+    public void setEffectiveInputPlan(JSONB value) {
+        set(14, value);
+    }
+
+    /**
+     * Getter for <code>public.kb_scan_runs.effective_input_plan</code>.
+     */
+    public JSONB getEffectiveInputPlan() {
+        return (JSONB) get(14);
+    }
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -227,7 +255,7 @@ public class KbScanRunsRecord extends UpdatableRecordImpl<KbScanRunsRecord> {
     /**
      * Create a detached, initialised KbScanRunsRecord
      */
-    public KbScanRunsRecord(UUID id, UUID projectId, UUID taskId, UUID sourceRevisionId, String kbVersion, JSONB scope, String status, JSONB summary, OffsetDateTime startedAt, OffsetDateTime finishedAt, UUID sourceEnvironmentId, Long runtimeEnvironmentVersion, UUID buildRunId) {
+    public KbScanRunsRecord(UUID id, UUID projectId, UUID taskId, UUID sourceRevisionId, String kbVersion, JSONB scope, String status, JSONB summary, OffsetDateTime startedAt, OffsetDateTime finishedAt, UUID sourceEnvironmentId, Long runtimeEnvironmentVersion, UUID buildRunId, JSONB inputPlan, JSONB effectiveInputPlan) {
         super(KbScanRuns.KB_SCAN_RUNS);
 
         setId(id);
@@ -243,6 +271,8 @@ public class KbScanRunsRecord extends UpdatableRecordImpl<KbScanRunsRecord> {
         setSourceEnvironmentId(sourceEnvironmentId);
         setRuntimeEnvironmentVersion(runtimeEnvironmentVersion);
         setBuildRunId(buildRunId);
+        setInputPlan(inputPlan);
+        setEffectiveInputPlan(effectiveInputPlan);
         resetTouchedOnNotNull();
     }
 }

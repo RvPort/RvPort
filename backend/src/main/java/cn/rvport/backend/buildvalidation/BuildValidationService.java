@@ -124,7 +124,9 @@ public class BuildValidationService {
             throw badRequest("BUILD_SOURCE_DEPLOYMENTS_DEPRECATED", "构建环境由项目运行环境配置和成功源码部署记录决定，不能在请求中指定源码部署记录");
         }
         BuildValidationScope buildScope = request.effectiveBuildScope();
-        ProjectRuntimeEnvironmentView runtimeEnvironments = projectRuntimeEnvironmentService.requireComplete(projectId, actorUserId, superAdmin);
+        ProjectRuntimeEnvironmentView runtimeEnvironments = buildScope == BuildValidationScope.SOURCE_ONLY
+                ? projectRuntimeEnvironmentService.requireSource(projectId, actorUserId, superAdmin)
+                : projectRuntimeEnvironmentService.requireComplete(projectId, actorUserId, superAdmin);
         SourceRevisionView sourceRevision = requireRequestedOrActiveSourceRevision(projectId, request.sourceRevisionId());
         EnvironmentView sourceEnvironment = requireEnvironment(projectId, runtimeEnvironments.sourceEnvironmentId());
         List<EnvironmentView> environments = buildScope == BuildValidationScope.SOURCE_ONLY
@@ -134,8 +136,9 @@ public class BuildValidationService {
                         requireEnvironment(projectId, runtimeEnvironments.targetEnvironmentId())
                 );
 
+        UUID buildBatchId = UUID.randomUUID();
         List<BuildValidationResponse> builds = environments.stream()
-                .map(environment -> createOne(projectId, environment, sourceRevision, runtimeEnvironments.version(), buildScope, request, environmentVariables, actorUserId, httpRequest))
+                .map(environment -> createOne(projectId, environment, sourceRevision, runtimeEnvironments.version(), buildScope, buildBatchId, request, environmentVariables, actorUserId, httpRequest))
                 .toList();
         return new BuildValidationCreateResponse(builds);
     }
@@ -216,6 +219,7 @@ public class BuildValidationService {
             SourceRevisionView sourceRevision,
             long environmentConfigVersion,
             BuildValidationScope buildScope,
+            UUID buildBatchId,
             BuildValidationCreateRequest request,
             Map<String, String> environmentVariables,
             UUID actorUserId,
@@ -235,6 +239,7 @@ public class BuildValidationService {
         input.put("projectId", projectId);
         input.put("buildRunId", buildRunId);
         input.put("buildScope", buildScope.name());
+        input.put("buildBatchId", buildBatchId);
         input.put("sourceDeploymentId", sourceDeploymentId);
         input.put("sourceRevisionId", sourceRevision.id());
         input.put("environmentId", environment.id());

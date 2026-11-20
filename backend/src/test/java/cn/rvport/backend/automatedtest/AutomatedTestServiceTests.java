@@ -211,6 +211,11 @@ class AutomatedTestServiceTests {
         BuildValidationRunView build = buildRun(projectId, buildRunId, UUID.randomUUID(), environmentId, 5L);
         when(buildValidationRepository.findById(buildRunId)).thenReturn(Optional.of(build));
         when(projectRuntimeEnvironmentService.currentVersion(projectId)).thenReturn(5L);
+        when(stageReadinessService.readiness(projectId, "test", actorId, false)).thenReturn(
+                new cn.rvport.backend.workflow.StageReadinessResponse("test", new ProjectContextSnapshot(build.sourceRevisionId(), 5L),
+                        List.of(cn.rvport.backend.workflow.StagePrerequisiteResponse.of("BUILD_VALIDATION",
+                                cn.rvport.backend.workflow.StagePrerequisiteStatus.SATISFIED, buildRunId, "BUILD_VALIDATION_READY",
+                                Map.of("sourceBuildRunId", buildRunId, "targetBuildRunId", UUID.randomUUID())))));
         when(projectRuntimeEnvironmentService.summary(projectId)).thenReturn(new cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentResponse(
                 projectId,
                 new cn.rvport.backend.source.deploy.SourceDeployEnvironmentSummary(environmentId, "x86", cn.rvport.backend.environment.EnvironmentRole.SOURCE_X86, "x86_64", cn.rvport.backend.environment.EnvironmentStatus.AVAILABLE, true),
@@ -350,6 +355,37 @@ class AutomatedTestServiceTests {
         assertThat(service.list(projectId, query, UUID.randomUUID(), false).page()).isEqualTo(2);
         verify(repository).count(projectId, query);
         verify(repository).list(projectId, query);
+    }
+
+    @Test
+    void rejectsHistoricalBuildAndAcceptsOnlyCurrentPairedBuildIds() {
+        var service = fullService();
+        UUID project = UUID.randomUUID(), actor = UUID.randomUUID(), id = UUID.randomUUID(), source = UUID.randomUUID();
+        var build = buildRun(project, id, source, UUID.randomUUID(), 2L);
+        when(buildValidationRepository.findById(id)).thenReturn(Optional.of(build));
+        when(projectRuntimeEnvironmentService.currentVersion(project)).thenReturn(2L);
+        var context = new ProjectContextSnapshot(source, 2L);
+        when(stageReadinessService.readiness(project, "test", actor, false)).thenReturn(
+                new cn.rvport.backend.workflow.StageReadinessResponse("test", context, List.of()));
+        assertThatThrownBy(() -> service.create(project, request(id, source), actor, false, null))
+                .isInstanceOf(ApiException.class).extracting("code").isEqualTo("BUILD_RUN_STALE");
+        for (String role : List.of("neither", "sourceBuildRunId", "targetBuildRunId")) {
+            var details = Map.<String, Object>of("sourceBuildRunId", role.equals("sourceBuildRunId") ? id : UUID.randomUUID(),
+                    "targetBuildRunId", role.equals("targetBuildRunId") ? id : UUID.randomUUID());
+            when(stageReadinessService.readiness(project, "test", actor, false)).thenReturn(
+                    new cn.rvport.backend.workflow.StageReadinessResponse("test", context, List.of(
+                            cn.rvport.backend.workflow.StagePrerequisiteResponse.of("BUILD_VALIDATION",
+                                    cn.rvport.backend.workflow.StagePrerequisiteStatus.SATISFIED, id, "BUILD_VALIDATION_READY", details))));
+            if (role.equals("neither")) {
+                assertThatThrownBy(() -> service.create(project, request(id, source), actor, false, null))
+                        .isInstanceOf(ApiException.class).extracting("code").isEqualTo("BUILD_RUN_STALE");
+                org.mockito.Mockito.verifyNoInteractions(taskService);
+            } else {
+                var task = task(project, UUID.randomUUID());
+                when(taskService.create(any())).thenReturn(task);
+                assertThat(service.create(project, request(id, source), actor, false, null)).isSameAs(task);
+            }
+        }
     }
 
     private TestBatchRole inferBatchRole(AutomatedTestService service, UUID projectId, UUID environmentId) {

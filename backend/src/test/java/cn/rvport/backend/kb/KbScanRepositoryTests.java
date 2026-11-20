@@ -47,7 +47,7 @@ class KbScanRepositoryTests {
     private static final Field<OffsetDateTime> KBA_CREATED_AT = DSL.field(DSL.name("kb_scan_artifacts", "created_at"), SQLDataType.TIMESTAMPWITHTIMEZONE);
 
     @Test
-    void contextQueriesBindEveryDimensionAndSeparateActiveOrderingFromHistory() throws Exception {
+    void contextAndLatestExecutionQueriesBindDimensionsAndUseStableActiveOrdering() throws Exception {
         try (JooqMockDatabase database = new JooqMockDatabase()) {
             var repository = repository(database);
             var record = run(TaskStatus.FAILED, null, null);
@@ -63,8 +63,12 @@ class KbScanRepositoryTests {
             assertThat(repository.countRuns(PROJECT_ID, request)).isEqualTo(1);
             assertThat(database.executions().get(0).normalizedSql()).contains("case", "created_at desc nulls last", "id desc", "source_environment_id =", "runtime_environment_version =", "build_run_id =");
             assertThat(database.executions().get(0).bindings()).contains(PROJECT_ID, REVISION_ID, KbContextFixtures.ENV, 7L, KbContextFixtures.BUILD);
-            assertThat(database.executions().get(1).normalizedSql()).doesNotContain("case").contains("created_at desc nulls last", "id desc");
+            assertThat(database.executions().get(1).normalizedSql()).contains("case", "created_at desc nulls last", "id desc");
             assertThat(database.executions().get(2).bindings()).contains(KbContextFixtures.ENV, 7L, KbContextFixtures.BUILD);
+            database.enqueueRecord(run(TaskStatus.SUCCEEDED, null, null));
+            assertThat(repository.findLatestPublishedByContext(PROJECT_ID, REVISION_ID, KbContextFixtures.CONTEXT)).isPresent();
+            assertThat(database.lastExecution().normalizedSql()).contains("exists", "stored_artifact_id is not null", "created_at desc nulls last");
+            assertThat(database.lastExecution().bindings()).contains("SUCCEEDED", "SCAN_RESULT_JSON");
             assertThatThrownBy(() -> repository.createRun(new KbScanInput(PROJECT_ID, null, REVISION_ID, null, null, null, Map.of(), List.of()), TASK_ID))
                     .isInstanceOf(IllegalArgumentException.class);
             assertThatThrownBy(() -> repository.createRun(new KbScanInput(PROJECT_ID, null, REVISION_ID, null, null, null, Map.of(), List.of(), new KbExecutionContext(null, 7L, null)), TASK_ID))
@@ -258,7 +262,7 @@ class KbScanRepositoryTests {
     }
 
     private static KbScanRunsRecord run(TaskStatus status, JSONB scope, JSONB summary) {
-        return new KbScanRunsRecord(RUN_ID, PROJECT_ID, TASK_ID, REVISION_ID, "v2", scope, status.name(), summary, NOW, NOW, null, null, null);
+        return new KbScanRunsRecord(RUN_ID, PROJECT_ID, TASK_ID, REVISION_ID, "v2", scope, status.name(), summary, NOW, NOW, null, null, null, null, null);
     }
 
     private static FindingsRecord finding(JSONB evidence) {

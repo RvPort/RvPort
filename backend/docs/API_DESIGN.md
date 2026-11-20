@@ -170,3 +170,6 @@ The index contains 171 routes, including 3 SSE endpoints.
 | `GET` | `/api/projects/{projectId}/readiness` | [StageReadinessController.java](../src/main/java/cn/rvport/backend/workflow/StageReadinessController.java) |
 
 See [result assessment and confirmed fix lists (Chinese)](report-review.zh-CN.md) for the review workflow and API examples.
+
+
+当前源码独立扫描与可选构建的对接规则见 [源码独立分析接口契约](source-analysis-input-policy.zh-CN.md)。后端当前实现以此契约为准；旧文档中的强制构建门槛不再适用于三个源码分析。
