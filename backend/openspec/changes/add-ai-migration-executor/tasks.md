@@ -2,9 +2,9 @@
 
 ## 1. 实施边界与镜像
 
-- [ ] 1.1 确认基线分支、backend 独立 OpenSpec 根；执行器资产放 `backend/executor/`，根 compose 仅改 backend-worker。
-- [ ] 1.2 编写 `backend/executor/Dockerfile`：qemu-user-static + riscv64 交叉工具链 + node + pi（+pi-subagents/pi-mcp-adapter）+ wxai provider extension + entrypoint.sh；构建参数模板化（APT_URI/NODEJS_MIRROR/NPM_REGISTRY）；构建期三连自检。
-- [ ] 1.3 本地构建执行器镜像并验证自检通过；受限网络出口记录在案（ARIA2/NPM mirror）。
+- [x] 1.1 确认基线分支、backend 独立 OpenSpec 根；执行器资产放 `backend/executor/`，根 compose 仅改 backend-worker。
+- [x] 1.2 编写 `backend/executor/Dockerfile`：qemu-user-static + riscv64 交叉工具链 + node + pi（+pi-subagents/pi-mcp-adapter）+ wxai provider extension + entrypoint.sh；构建参数模板化（APT_URI/NODEJS_MIRROR/NPM_REGISTRY）；构建期三连自检。
+- [x] 1.3 本地构建执行器镜像并验证自检通过；受限网络出口记录在案（ARIA2/NPM mirror）。
 
 ## 2. 执行器容器服务
 
