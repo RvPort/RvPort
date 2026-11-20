@@ -5,6 +5,7 @@ package cn.rvport.backend.jooq;
 
 
 import cn.rvport.backend.jooq.tables.AgentRuntimes;
+import cn.rvport.backend.jooq.tables.AiMigrationRuns;
 import cn.rvport.backend.jooq.tables.ArchiveCandidates;
 import cn.rvport.backend.jooq.tables.ArchiveItems;
 import cn.rvport.backend.jooq.tables.Archives;
@@ -24,7 +25,6 @@ import cn.rvport.backend.jooq.tables.Findings;
 import cn.rvport.backend.jooq.tables.IssueEvents;
 import cn.rvport.backend.jooq.tables.IssueSources;
 import cn.rvport.backend.jooq.tables.Issues;
-import cn.rvport.backend.jooq.tables.KbMigrationRuns;
 import cn.rvport.backend.jooq.tables.KbScanArtifacts;
 import cn.rvport.backend.jooq.tables.KbScanRuns;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeResults;
@@ -97,6 +97,11 @@ public class Public extends SchemaImpl {
      * The table <code>public.agent_runtimes</code>.
      */
     public final AgentRuntimes AGENT_RUNTIMES = AgentRuntimes.AGENT_RUNTIMES;
+
+    /**
+     * The table <code>public.ai_migration_runs</code>.
+     */
+    public final AiMigrationRuns AI_MIGRATION_RUNS = AiMigrationRuns.AI_MIGRATION_RUNS;
 
     /**
      * The table <code>public.archive_candidates</code>.
@@ -192,11 +197,6 @@ public class Public extends SchemaImpl {
      * The table <code>public.issues</code>.
      */
     public final Issues ISSUES = Issues.ISSUES;
-
-    /**
-     * The table <code>public.kb_migration_runs</code>.
-     */
-    public final KbMigrationRuns KB_MIGRATION_RUNS = KbMigrationRuns.KB_MIGRATION_RUNS;
 
     /**
      * The table <code>public.kb_scan_artifacts</code>.
@@ -440,6 +440,7 @@ public class Public extends SchemaImpl {
     public final List<Table<?>> getTables() {
         return Arrays.asList(
             AgentRuntimes.AGENT_RUNTIMES,
+            AiMigrationRuns.AI_MIGRATION_RUNS,
             ArchiveCandidates.ARCHIVE_CANDIDATES,
             ArchiveItems.ARCHIVE_ITEMS,
             Archives.ARCHIVES,
@@ -459,7 +460,6 @@ public class Public extends SchemaImpl {
             IssueEvents.ISSUE_EVENTS,
             IssueSources.ISSUE_SOURCES,
             Issues.ISSUES,
-            KbMigrationRuns.KB_MIGRATION_RUNS,
             KbScanArtifacts.KB_SCAN_ARTIFACTS,
             KbScanRuns.KB_SCAN_RUNS,
             ModelProfileAgentProbeResults.MODEL_PROFILE_AGENT_PROBE_RESULTS,

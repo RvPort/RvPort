@@ -80,19 +80,19 @@ public class ArchiveCandidateRegistrar {
         ));
     }
 
-    public void registerKbMigration(cn.rvport.backend.kb.migration.KbMigrationRunView run, Map<String, Object> summary,
+    public void registerAiMigration(cn.rvport.backend.ai.migration.AiMigrationRunView run, Map<String, Object> summary,
             List<StoredArtifactView> artifacts) {
         candidateService.upsert(new ArchiveCandidateUpsertCommand(
                 run.projectId(),
                 run.sourceRevisionId(),
-                ArchiveNodeType.KB_MIGRATION,
+                ArchiveNodeType.AI_MIGRATION,
                 ArchiveCandidateType.REPORT,
-                "kb-migration",
-                "KB_MIGRATION",
+                "ai-migration",
+                "AI_MIGRATION",
                 run.id(),
-                "KB 迁移",
+                "AI 迁移",
                 merge(summary, Map.of("kbMigrationRunId", run.id().toString(), "status", run.status())),
-                artifactRefs("kb-migration", artifacts)
+                artifactRefs("ai-migration", artifacts)
         ));
     }
 

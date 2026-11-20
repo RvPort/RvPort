@@ -5,6 +5,7 @@ package cn.rvport.backend.jooq;
 
 
 import cn.rvport.backend.jooq.tables.AgentRuntimes;
+import cn.rvport.backend.jooq.tables.AiMigrationRuns;
 import cn.rvport.backend.jooq.tables.ArchiveCandidates;
 import cn.rvport.backend.jooq.tables.ArchiveItems;
 import cn.rvport.backend.jooq.tables.Archives;
@@ -24,7 +25,6 @@ import cn.rvport.backend.jooq.tables.Findings;
 import cn.rvport.backend.jooq.tables.IssueEvents;
 import cn.rvport.backend.jooq.tables.IssueSources;
 import cn.rvport.backend.jooq.tables.Issues;
-import cn.rvport.backend.jooq.tables.KbMigrationRuns;
 import cn.rvport.backend.jooq.tables.KbScanArtifacts;
 import cn.rvport.backend.jooq.tables.KbScanRuns;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeResults;
@@ -71,6 +71,7 @@ import cn.rvport.backend.jooq.tables.UserActionTokens;
 import cn.rvport.backend.jooq.tables.Users;
 import cn.rvport.backend.jooq.tables.WorkerInstances;
 import cn.rvport.backend.jooq.tables.records.AgentRuntimesRecord;
+import cn.rvport.backend.jooq.tables.records.AiMigrationRunsRecord;
 import cn.rvport.backend.jooq.tables.records.ArchiveCandidatesRecord;
 import cn.rvport.backend.jooq.tables.records.ArchiveItemsRecord;
 import cn.rvport.backend.jooq.tables.records.ArchivesRecord;
@@ -90,7 +91,6 @@ import cn.rvport.backend.jooq.tables.records.FindingsRecord;
 import cn.rvport.backend.jooq.tables.records.IssueEventsRecord;
 import cn.rvport.backend.jooq.tables.records.IssueSourcesRecord;
 import cn.rvport.backend.jooq.tables.records.IssuesRecord;
-import cn.rvport.backend.jooq.tables.records.KbMigrationRunsRecord;
 import cn.rvport.backend.jooq.tables.records.KbScanArtifactsRecord;
 import cn.rvport.backend.jooq.tables.records.KbScanRunsRecord;
 import cn.rvport.backend.jooq.tables.records.ModelProfileAgentProbeResultsRecord;
@@ -157,6 +157,8 @@ public class Keys {
     // -------------------------------------------------------------------------
 
     public static final UniqueKey<AgentRuntimesRecord> AGENT_RUNTIMES_PKEY = Internal.createUniqueKey(AgentRuntimes.AGENT_RUNTIMES, DSL.name("agent_runtimes_pkey"), new TableField[] { AgentRuntimes.AGENT_RUNTIMES.ID }, true);
+    public static final UniqueKey<AiMigrationRunsRecord> AI_MIGRATION_RUNS_PKEY = Internal.createUniqueKey(AiMigrationRuns.AI_MIGRATION_RUNS, DSL.name("ai_migration_runs_pkey"), new TableField[] { AiMigrationRuns.AI_MIGRATION_RUNS.ID }, true);
+    public static final UniqueKey<AiMigrationRunsRecord> AI_MIGRATION_RUNS_TASK_ID_KEY = Internal.createUniqueKey(AiMigrationRuns.AI_MIGRATION_RUNS, DSL.name("ai_migration_runs_task_id_key"), new TableField[] { AiMigrationRuns.AI_MIGRATION_RUNS.TASK_ID }, true);
     public static final UniqueKey<ArchiveCandidatesRecord> ARCHIVE_CANDIDATES_PKEY = Internal.createUniqueKey(ArchiveCandidates.ARCHIVE_CANDIDATES, DSL.name("archive_candidates_pkey"), new TableField[] { ArchiveCandidates.ARCHIVE_CANDIDATES.ID }, true);
     public static final UniqueKey<ArchiveCandidatesRecord> ARCHIVE_CANDIDATES_SLOT_UK = Internal.createUniqueKey(ArchiveCandidates.ARCHIVE_CANDIDATES, DSL.name("archive_candidates_slot_uk"), new TableField[] { ArchiveCandidates.ARCHIVE_CANDIDATES.PROJECT_ID, ArchiveCandidates.ARCHIVE_CANDIDATES.SOURCE_REVISION_ID, ArchiveCandidates.ARCHIVE_CANDIDATES.NODE_TYPE, ArchiveCandidates.ARCHIVE_CANDIDATES.CANDIDATE_TYPE, ArchiveCandidates.ARCHIVE_CANDIDATES.CANDIDATE_KEY }, true);
     public static final UniqueKey<ArchiveItemsRecord> ARCHIVE_ITEMS_PKEY = Internal.createUniqueKey(ArchiveItems.ARCHIVE_ITEMS, DSL.name("archive_items_pkey"), new TableField[] { ArchiveItems.ARCHIVE_ITEMS.ID }, true);
@@ -180,8 +182,6 @@ public class Keys {
     public static final UniqueKey<IssueEventsRecord> ISSUE_EVENTS_PKEY = Internal.createUniqueKey(IssueEvents.ISSUE_EVENTS, DSL.name("issue_events_pkey"), new TableField[] { IssueEvents.ISSUE_EVENTS.ID }, true);
     public static final UniqueKey<IssueSourcesRecord> ISSUE_SOURCES_PKEY = Internal.createUniqueKey(IssueSources.ISSUE_SOURCES, DSL.name("issue_sources_pkey"), new TableField[] { IssueSources.ISSUE_SOURCES.ID }, true);
     public static final UniqueKey<IssuesRecord> ISSUES_PKEY = Internal.createUniqueKey(Issues.ISSUES, DSL.name("issues_pkey"), new TableField[] { Issues.ISSUES.ID }, true);
-    public static final UniqueKey<KbMigrationRunsRecord> KB_MIGRATION_RUNS_PKEY = Internal.createUniqueKey(KbMigrationRuns.KB_MIGRATION_RUNS, DSL.name("kb_migration_runs_pkey"), new TableField[] { KbMigrationRuns.KB_MIGRATION_RUNS.ID }, true);
-    public static final UniqueKey<KbMigrationRunsRecord> KB_MIGRATION_RUNS_TASK_ID_KEY = Internal.createUniqueKey(KbMigrationRuns.KB_MIGRATION_RUNS, DSL.name("kb_migration_runs_task_id_key"), new TableField[] { KbMigrationRuns.KB_MIGRATION_RUNS.TASK_ID }, true);
     public static final UniqueKey<KbScanArtifactsRecord> KB_SCAN_ARTIFACTS_PKEY = Internal.createUniqueKey(KbScanArtifacts.KB_SCAN_ARTIFACTS, DSL.name("kb_scan_artifacts_pkey"), new TableField[] { KbScanArtifacts.KB_SCAN_ARTIFACTS.ID }, true);
     public static final UniqueKey<KbScanArtifactsRecord> KB_SCAN_ARTIFACTS_UNIQUE_TYPE = Internal.createUniqueKey(KbScanArtifacts.KB_SCAN_ARTIFACTS, DSL.name("kb_scan_artifacts_unique_type"), new TableField[] { KbScanArtifacts.KB_SCAN_ARTIFACTS.SCAN_RUN_ID, KbScanArtifacts.KB_SCAN_ARTIFACTS.ARTIFACT_TYPE }, true);
     public static final UniqueKey<KbScanRunsRecord> KB_SCAN_RUNS_PKEY = Internal.createUniqueKey(KbScanRuns.KB_SCAN_RUNS, DSL.name("kb_scan_runs_pkey"), new TableField[] { KbScanRuns.KB_SCAN_RUNS.ID }, true);
@@ -265,6 +265,11 @@ public class Keys {
     // FOREIGN KEY definitions
     // -------------------------------------------------------------------------
 
+    public static final ForeignKey<AiMigrationRunsRecord, AgentRuntimesRecord> AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_AGENT_RUNTIME_ID_FKEY = Internal.createForeignKey(AiMigrationRuns.AI_MIGRATION_RUNS, DSL.name("ai_migration_runs_agent_runtime_id_fkey"), new TableField[] { AiMigrationRuns.AI_MIGRATION_RUNS.AGENT_RUNTIME_ID }, Keys.AGENT_RUNTIMES_PKEY, new TableField[] { AgentRuntimes.AGENT_RUNTIMES.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
+    public static final ForeignKey<AiMigrationRunsRecord, ModelProfilesRecord> AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_MODEL_PROFILE_ID_FKEY = Internal.createForeignKey(AiMigrationRuns.AI_MIGRATION_RUNS, DSL.name("ai_migration_runs_model_profile_id_fkey"), new TableField[] { AiMigrationRuns.AI_MIGRATION_RUNS.MODEL_PROFILE_ID }, Keys.MODEL_PROFILES_PKEY, new TableField[] { ModelProfiles.MODEL_PROFILES.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
+    public static final ForeignKey<AiMigrationRunsRecord, ProjectsRecord> AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_PROJECT_ID_FKEY = Internal.createForeignKey(AiMigrationRuns.AI_MIGRATION_RUNS, DSL.name("ai_migration_runs_project_id_fkey"), new TableField[] { AiMigrationRuns.AI_MIGRATION_RUNS.PROJECT_ID }, Keys.PROJECTS_PKEY, new TableField[] { Projects.PROJECTS.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
+    public static final ForeignKey<AiMigrationRunsRecord, KbScanRunsRecord> AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_SCAN_RUN_ID_FKEY = Internal.createForeignKey(AiMigrationRuns.AI_MIGRATION_RUNS, DSL.name("ai_migration_runs_scan_run_id_fkey"), new TableField[] { AiMigrationRuns.AI_MIGRATION_RUNS.SCAN_RUN_ID }, Keys.KB_SCAN_RUNS_PKEY, new TableField[] { KbScanRuns.KB_SCAN_RUNS.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
+    public static final ForeignKey<AiMigrationRunsRecord, TasksRecord> AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_TASK_ID_FKEY = Internal.createForeignKey(AiMigrationRuns.AI_MIGRATION_RUNS, DSL.name("ai_migration_runs_task_id_fkey"), new TableField[] { AiMigrationRuns.AI_MIGRATION_RUNS.TASK_ID }, Keys.TASKS_PKEY, new TableField[] { Tasks.TASKS.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
     public static final ForeignKey<ArchiveCandidatesRecord, ProjectsRecord> ARCHIVE_CANDIDATES__ARCHIVE_CANDIDATES_PROJECT_ID_FKEY = Internal.createForeignKey(ArchiveCandidates.ARCHIVE_CANDIDATES, DSL.name("archive_candidates_project_id_fkey"), new TableField[] { ArchiveCandidates.ARCHIVE_CANDIDATES.PROJECT_ID }, Keys.PROJECTS_PKEY, new TableField[] { Projects.PROJECTS.ID }, true, ForeignKeyRule.CASCADE, ForeignKeyRule.NO_ACTION);
     public static final ForeignKey<ArchiveCandidatesRecord, SourceRevisionsRecord> ARCHIVE_CANDIDATES__ARCHIVE_CANDIDATES_SOURCE_REVISION_ID_FKEY = Internal.createForeignKey(ArchiveCandidates.ARCHIVE_CANDIDATES, DSL.name("archive_candidates_source_revision_id_fkey"), new TableField[] { ArchiveCandidates.ARCHIVE_CANDIDATES.SOURCE_REVISION_ID }, Keys.SOURCE_REVISIONS_PKEY, new TableField[] { SourceRevisions.SOURCE_REVISIONS.ID }, true, ForeignKeyRule.CASCADE, ForeignKeyRule.NO_ACTION);
     public static final ForeignKey<ArchiveItemsRecord, ArchivesRecord> ARCHIVE_ITEMS__ARCHIVE_ITEMS_ARCHIVE_ID_FKEY = Internal.createForeignKey(ArchiveItems.ARCHIVE_ITEMS, DSL.name("archive_items_archive_id_fkey"), new TableField[] { ArchiveItems.ARCHIVE_ITEMS.ARCHIVE_ID }, Keys.ARCHIVES_PKEY, new TableField[] { Archives.ARCHIVES.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
@@ -330,11 +335,6 @@ public class Keys {
     public static final ForeignKey<IssueSourcesRecord, IssuesRecord> ISSUE_SOURCES__ISSUE_SOURCES_ISSUE_ID_FKEY = Internal.createForeignKey(IssueSources.ISSUE_SOURCES, DSL.name("issue_sources_issue_id_fkey"), new TableField[] { IssueSources.ISSUE_SOURCES.ISSUE_ID }, Keys.ISSUES_PKEY, new TableField[] { Issues.ISSUES.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
     public static final ForeignKey<IssuesRecord, UsersRecord> ISSUES__ISSUES_CREATED_BY_FKEY = Internal.createForeignKey(Issues.ISSUES, DSL.name("issues_created_by_fkey"), new TableField[] { Issues.ISSUES.CREATED_BY }, Keys.USERS_PKEY, new TableField[] { Users.USERS.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
     public static final ForeignKey<IssuesRecord, ProjectsRecord> ISSUES__ISSUES_PROJECT_ID_FKEY = Internal.createForeignKey(Issues.ISSUES, DSL.name("issues_project_id_fkey"), new TableField[] { Issues.ISSUES.PROJECT_ID }, Keys.PROJECTS_PKEY, new TableField[] { Projects.PROJECTS.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
-    public static final ForeignKey<KbMigrationRunsRecord, AgentRuntimesRecord> KB_MIGRATION_RUNS__KB_MIGRATION_RUNS_AGENT_RUNTIME_ID_FKEY = Internal.createForeignKey(KbMigrationRuns.KB_MIGRATION_RUNS, DSL.name("kb_migration_runs_agent_runtime_id_fkey"), new TableField[] { KbMigrationRuns.KB_MIGRATION_RUNS.AGENT_RUNTIME_ID }, Keys.AGENT_RUNTIMES_PKEY, new TableField[] { AgentRuntimes.AGENT_RUNTIMES.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
-    public static final ForeignKey<KbMigrationRunsRecord, ModelProfilesRecord> KB_MIGRATION_RUNS__KB_MIGRATION_RUNS_MODEL_PROFILE_ID_FKEY = Internal.createForeignKey(KbMigrationRuns.KB_MIGRATION_RUNS, DSL.name("kb_migration_runs_model_profile_id_fkey"), new TableField[] { KbMigrationRuns.KB_MIGRATION_RUNS.MODEL_PROFILE_ID }, Keys.MODEL_PROFILES_PKEY, new TableField[] { ModelProfiles.MODEL_PROFILES.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
-    public static final ForeignKey<KbMigrationRunsRecord, ProjectsRecord> KB_MIGRATION_RUNS__KB_MIGRATION_RUNS_PROJECT_ID_FKEY = Internal.createForeignKey(KbMigrationRuns.KB_MIGRATION_RUNS, DSL.name("kb_migration_runs_project_id_fkey"), new TableField[] { KbMigrationRuns.KB_MIGRATION_RUNS.PROJECT_ID }, Keys.PROJECTS_PKEY, new TableField[] { Projects.PROJECTS.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
-    public static final ForeignKey<KbMigrationRunsRecord, KbScanRunsRecord> KB_MIGRATION_RUNS__KB_MIGRATION_RUNS_SCAN_RUN_ID_FKEY = Internal.createForeignKey(KbMigrationRuns.KB_MIGRATION_RUNS, DSL.name("kb_migration_runs_scan_run_id_fkey"), new TableField[] { KbMigrationRuns.KB_MIGRATION_RUNS.SCAN_RUN_ID }, Keys.KB_SCAN_RUNS_PKEY, new TableField[] { KbScanRuns.KB_SCAN_RUNS.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
-    public static final ForeignKey<KbMigrationRunsRecord, TasksRecord> KB_MIGRATION_RUNS__KB_MIGRATION_RUNS_TASK_ID_FKEY = Internal.createForeignKey(KbMigrationRuns.KB_MIGRATION_RUNS, DSL.name("kb_migration_runs_task_id_fkey"), new TableField[] { KbMigrationRuns.KB_MIGRATION_RUNS.TASK_ID }, Keys.TASKS_PKEY, new TableField[] { Tasks.TASKS.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
     public static final ForeignKey<KbScanArtifactsRecord, ProjectsRecord> KB_SCAN_ARTIFACTS__KB_SCAN_ARTIFACTS_PROJECT_ID_FKEY = Internal.createForeignKey(KbScanArtifacts.KB_SCAN_ARTIFACTS, DSL.name("kb_scan_artifacts_project_id_fkey"), new TableField[] { KbScanArtifacts.KB_SCAN_ARTIFACTS.PROJECT_ID }, Keys.PROJECTS_PKEY, new TableField[] { Projects.PROJECTS.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);
     public static final ForeignKey<KbScanArtifactsRecord, KbScanRunsRecord> KB_SCAN_ARTIFACTS__KB_SCAN_ARTIFACTS_SCAN_RUN_ID_FKEY = Internal.createForeignKey(KbScanArtifacts.KB_SCAN_ARTIFACTS, DSL.name("kb_scan_artifacts_scan_run_id_fkey"), new TableField[] { KbScanArtifacts.KB_SCAN_ARTIFACTS.SCAN_RUN_ID }, Keys.KB_SCAN_RUNS_PKEY, new TableField[] { KbScanRuns.KB_SCAN_RUNS.ID }, true, ForeignKeyRule.CASCADE, ForeignKeyRule.NO_ACTION);
     public static final ForeignKey<KbScanArtifactsRecord, StoredArtifactsRecord> KB_SCAN_ARTIFACTS__KB_SCAN_ARTIFACTS_STORED_ARTIFACT_ID_FKEY = Internal.createForeignKey(KbScanArtifacts.KB_SCAN_ARTIFACTS, DSL.name("kb_scan_artifacts_stored_artifact_id_fkey"), new TableField[] { KbScanArtifacts.KB_SCAN_ARTIFACTS.STORED_ARTIFACT_ID }, Keys.STORED_ARTIFACTS_PKEY, new TableField[] { StoredArtifacts.STORED_ARTIFACTS.ID }, true, ForeignKeyRule.NO_ACTION, ForeignKeyRule.NO_ACTION);

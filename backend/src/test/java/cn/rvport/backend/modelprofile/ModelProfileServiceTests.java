@@ -330,7 +330,7 @@ class ModelProfileServiceTests {
             assertThat(item.agentRuntimeId()).isNull();
         });
         assertThat(responses).anySatisfy(item -> {
-            assertThat(item.stage()).isEqualTo("KB_MIGRATION");
+            assertThat(item.stage()).isEqualTo("AI_MIGRATION");
             assertThat(item.modelProfileId()).isNull();
             assertThat(item.agentRuntimeId()).isNull();
         });

@@ -78,7 +78,7 @@ class TaskMetadataResolverTests {
                 expected(RvPortTaskTypes.DEPENDENCY_ANALYSIS, "dependency-analysis", "dependency_analysis_run", "analysisRunId"),
                 expected(RvPortTaskTypes.DEPENDENCY_AUTO_FIX, "dependency-analysis", "dependency_auto_fix_run", "autoFixRunId"),
                 expected(RvPortTaskTypes.KB_SCAN, "kb-scan", "kb_scan_run", "scanRunId"),
-                expected(RvPortTaskTypes.KB_MIGRATION, "kb-scan", "kb_migration_run", "migrationRunId"),
+                expected(RvPortTaskTypes.AI_MIGRATION, "kb-scan", "ai_migration_run", "migrationRunId"),
                 expected(RvPortTaskTypes.REPORT_GENERATE, "evaluation-report", "report", "reportId"),
                 expected(RvPortTaskTypes.REPORT_COMPARE, "evaluation-report", "report_comparison_run", "comparisonRunId"),
                 expected(RvPortTaskTypes.RECHECK_DIFF, "evaluation-report", "recheck_run", "recheckRunId"),

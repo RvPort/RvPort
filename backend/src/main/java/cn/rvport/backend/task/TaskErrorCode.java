@@ -21,9 +21,9 @@ public final class TaskErrorCode {
     public static final String WORKER_LOST = "WORKER_LOST";
     public static final String ANALYSIS_NON_RETRYABLE = "ANALYSIS_NON_RETRYABLE";
     public static final String ANALYSIS_RETRYABLE_RESOURCE = "ANALYSIS_RETRYABLE_RESOURCE";
-    public static final String KB_MIGRATION_MODEL_NOT_CONFIGURED = "KB_MIGRATION_MODEL_NOT_CONFIGURED";
-    public static final String KB_MIGRATION_NO_ENTRIES = "KB_MIGRATION_NO_ENTRIES";
-    public static final String KB_MIGRATION_OUTPUT_INVALID = "KB_MIGRATION_OUTPUT_INVALID";
+    public static final String AI_MIGRATION_MODEL_NOT_CONFIGURED = "AI_MIGRATION_MODEL_NOT_CONFIGURED";
+    public static final String AI_MIGRATION_NO_ENTRIES = "AI_MIGRATION_NO_ENTRIES";
+    public static final String AI_MIGRATION_OUTPUT_INVALID = "AI_MIGRATION_OUTPUT_INVALID";
 
     private TaskErrorCode() {
     }

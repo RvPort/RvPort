@@ -19,9 +19,9 @@ public class TaskRetryPolicy {
             TaskErrorCode.REMOTE_COMMAND_FAILED,
             TaskErrorCode.REPORT_NO_CONFIRMED_INPUTS,
             TaskErrorCode.ANALYSIS_NON_RETRYABLE,
-            TaskErrorCode.KB_MIGRATION_MODEL_NOT_CONFIGURED,
-            TaskErrorCode.KB_MIGRATION_NO_ENTRIES,
-            TaskErrorCode.KB_MIGRATION_OUTPUT_INVALID
+            TaskErrorCode.AI_MIGRATION_MODEL_NOT_CONFIGURED,
+            TaskErrorCode.AI_MIGRATION_NO_ENTRIES,
+            TaskErrorCode.AI_MIGRATION_OUTPUT_INVALID
     );
 
     public boolean shouldRetry(String errorCode) {

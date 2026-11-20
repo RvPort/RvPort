@@ -385,7 +385,7 @@ public class StoredArtifacts extends TableImpl<StoredArtifactsRecord> {
     @Override
     public List<Check<StoredArtifactsRecord>> getChecks() {
         return Arrays.asList(
-            Internal.createCheck(this, DSL.name("stored_artifacts_owner_type_chk"), "((owner_type = ANY (ARRAY['KB_SCAN'::text, 'DEPENDENCY_ANALYSIS'::text, 'BUILD_VALIDATION'::text, 'MIGRATION_REPORT'::text, 'ARCHIVE'::text, 'AUTOMATED_TEST'::text, 'TEST_COMPARISON'::text, 'SPECIALIZED_ANALYSIS'::text, 'SOURCE_REVISION'::text, 'KB_MIGRATION'::text])))", true),
+            Internal.createCheck(this, DSL.name("stored_artifacts_owner_type_chk"), "((owner_type = ANY (ARRAY['KB_SCAN'::text, 'DEPENDENCY_ANALYSIS'::text, 'BUILD_VALIDATION'::text, 'MIGRATION_REPORT'::text, 'ARCHIVE'::text, 'AUTOMATED_TEST'::text, 'TEST_COMPARISON'::text, 'SPECIALIZED_ANALYSIS'::text, 'SOURCE_REVISION'::text, 'AI_MIGRATION'::text])))", true),
             Internal.createCheck(this, DSL.name("stored_artifacts_size_chk"), "((size_bytes >= 0))", true)
         );
     }

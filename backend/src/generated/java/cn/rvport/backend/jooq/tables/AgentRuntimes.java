@@ -7,7 +7,7 @@ package cn.rvport.backend.jooq.tables;
 import cn.rvport.backend.jooq.Indexes;
 import cn.rvport.backend.jooq.Keys;
 import cn.rvport.backend.jooq.Public;
-import cn.rvport.backend.jooq.tables.KbMigrationRuns.KbMigrationRunsPath;
+import cn.rvport.backend.jooq.tables.AiMigrationRuns.AiMigrationRunsPath;
 import cn.rvport.backend.jooq.tables.ModelProfileAgentProbeResults.ModelProfileAgentProbeResultsPath;
 import cn.rvport.backend.jooq.tables.ModelStageAssignments.ModelStageAssignmentsPath;
 import cn.rvport.backend.jooq.tables.ReportReviewRuns.ReportReviewRunsPath;
@@ -208,17 +208,17 @@ public class AgentRuntimes extends TableImpl<AgentRuntimesRecord> {
         return Keys.AGENT_RUNTIMES_PKEY;
     }
 
-    private transient KbMigrationRunsPath _kbMigrationRuns;
+    private transient AiMigrationRunsPath _aiMigrationRuns;
 
     /**
      * Get the implicit to-many join path to the
-     * <code>public.kb_migration_runs</code> table
+     * <code>public.ai_migration_runs</code> table
      */
-    public KbMigrationRunsPath kbMigrationRuns() {
-        if (_kbMigrationRuns == null)
-            _kbMigrationRuns = new KbMigrationRunsPath(this, null, Keys.KB_MIGRATION_RUNS__KB_MIGRATION_RUNS_AGENT_RUNTIME_ID_FKEY.getInverseKey());
+    public AiMigrationRunsPath aiMigrationRuns() {
+        if (_aiMigrationRuns == null)
+            _aiMigrationRuns = new AiMigrationRunsPath(this, null, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_AGENT_RUNTIME_ID_FKEY.getInverseKey());
 
-        return _kbMigrationRuns;
+        return _aiMigrationRuns;
     }
 
     private transient ModelProfileAgentProbeResultsPath _modelProfileAgentProbeResults;

@@ -51,7 +51,7 @@ public class TaskMetadataResolver {
                 || RvPortTaskTypes.DEPENDENCY_AUTO_FIX.equals(taskType)) {
             return "dependency-analysis";
         }
-        if (RvPortTaskTypes.KB_SCAN.equals(taskType) || RvPortTaskTypes.KB_MIGRATION.equals(taskType)) {
+        if (RvPortTaskTypes.KB_SCAN.equals(taskType) || RvPortTaskTypes.AI_MIGRATION.equals(taskType)) {
             return "kb-scan";
         }
         if (RvPortTaskTypes.FLOATING_POINT_ANALYSIS.equals(taskType)) {
@@ -84,7 +84,7 @@ public class TaskMetadataResolver {
             case RvPortTaskTypes.DEPENDENCY_ANALYSIS -> "dependency_analysis_run";
             case RvPortTaskTypes.DEPENDENCY_AUTO_FIX -> "dependency_auto_fix_run";
             case RvPortTaskTypes.KB_SCAN -> "kb_scan_run";
-            case RvPortTaskTypes.KB_MIGRATION -> "kb_migration_run";
+            case RvPortTaskTypes.AI_MIGRATION -> "ai_migration_run";
             case RvPortTaskTypes.FLOATING_POINT_ANALYSIS, RvPortTaskTypes.MEMORY_ORDER_ANALYSIS -> "specialized_analysis_run";
             case RvPortTaskTypes.REPORT_GENERATE -> "report";
             case RvPortTaskTypes.REPORT_COMPARE -> "report_comparison_run";
@@ -106,7 +106,7 @@ public class TaskMetadataResolver {
             case RvPortTaskTypes.DEPENDENCY_ANALYSIS -> uuid(input.get("analysisRunId"));
             case RvPortTaskTypes.DEPENDENCY_AUTO_FIX -> uuid(input.get("autoFixRunId"));
             case RvPortTaskTypes.KB_SCAN -> uuid(input.get("scanRunId"));
-            case RvPortTaskTypes.KB_MIGRATION -> uuid(input.get("migrationRunId"));
+            case RvPortTaskTypes.AI_MIGRATION -> uuid(input.get("migrationRunId"));
             case RvPortTaskTypes.FLOATING_POINT_ANALYSIS, RvPortTaskTypes.MEMORY_ORDER_ANALYSIS -> uuid(input.get("runId"));
             case RvPortTaskTypes.REPORT_GENERATE -> uuid(input.get("reportId"));
             case RvPortTaskTypes.REPORT_COMPARE -> uuid(input.get("comparisonRunId"));
