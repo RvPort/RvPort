@@ -54,7 +54,7 @@ public class KbMigrationRuntimeService {
 
     public void migrate(KbMigrationInput input, TaskExecutionContext context) {
         validate(input, context);
-        KbMigrationRunView run = repository.findRun(input.migrationRunId())
+        KbMigrationRunView run = repository.findByTaskId(context.task().id())
                 .orElseThrow(() -> new TaskExecutionException(TaskErrorCode.RESOURCE_NOT_FOUND, "迁移运行不存在", null));
         if (!Objects.equals(run.taskId(), context.task().id())) {
             throw new TaskExecutionException(TaskErrorCode.PROJECT_MISMATCH, "迁移运行与任务不匹配", null);
@@ -80,6 +80,8 @@ public class KbMigrationRuntimeService {
         } catch (ApiException ex) {
             throw new TaskExecutionException(TaskErrorCode.KB_MIGRATION_MODEL_NOT_CONFIGURED, ex.getMessage(), null);
         } catch (IOException ex) {
+            context.log(cn.rvport.backend.task.TaskLogType.STDERR,
+                    "AGENT_IO_FAILURE " + ex.getClass().getName() + ": " + ex.getMessage());
             throw translate(ex);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();

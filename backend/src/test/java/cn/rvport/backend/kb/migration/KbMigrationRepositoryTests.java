@@ -183,4 +183,42 @@ class KbMigrationRepositoryTests {
             db.verifyComplete();
         }
     }
+
+    @Test
+    void 按任务查询映射视图() throws Exception {
+        try (var db = new JooqMockDatabase()) {
+            var repository = new KbMigrationRepository(db.dsl(), mapper);
+            var fields = KbMigrationRuns.KB_MIGRATION_RUNS.fields();
+            var byName = new java.util.HashMap<org.jooq.Field<?>, Object>();
+            byName.put(KbMigrationRuns.KB_MIGRATION_RUNS.ID, runId);
+            byName.put(KbMigrationRuns.KB_MIGRATION_RUNS.PROJECT_ID, project);
+            byName.put(KbMigrationRuns.KB_MIGRATION_RUNS.TASK_ID, taskId);
+            byName.put(KbMigrationRuns.KB_MIGRATION_RUNS.SCAN_RUN_ID, scanRun);
+            byName.put(KbMigrationRuns.KB_MIGRATION_RUNS.STATUS, "RUNNING");
+            byName.put(KbMigrationRuns.KB_MIGRATION_RUNS.MODEL_PROFILE_ID, profile);
+            byName.put(KbMigrationRuns.KB_MIGRATION_RUNS.AGENT_RUNTIME_ID, runtime);
+            var allFields = new org.jooq.Field<?>[fields.length + 1];
+            System.arraycopy(fields, 0, allFields, 0, fields.length);
+            allFields[fields.length] = KbScanRuns.KB_SCAN_RUNS.SOURCE_REVISION_ID;
+            byName.put(KbScanRuns.KB_SCAN_RUNS.SOURCE_REVISION_ID, revision);
+            var values = new Object[allFields.length];
+            for (int i = 0; i < allFields.length; i++) {
+                values[i] = byName.get(allFields[i]);
+            }
+            db.enqueueResult(db.result(allFields, values));
+            db.enqueueResult(db.result(allFields, values));
+            assertThat(repository.findByTaskId(taskId)).isPresent();
+            assertThat(repository.findByTaskId(taskId).orElseThrow().taskId()).isEqualTo(taskId);
+        }
+    }
+
+    @Test
+    void 按任务查询无结果返回空() throws Exception {
+        try (var db = new JooqMockDatabase()) {
+            var repository = new KbMigrationRepository(db.dsl(), mapper);
+            db.enqueueResult(db.result(KbMigrationRuns.KB_MIGRATION_RUNS.fields()));
+            assertThat(repository.findByTaskId(taskId)).isEmpty();
+            db.verifyComplete();
+        }
+    }
 }

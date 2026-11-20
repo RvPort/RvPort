@@ -102,6 +102,11 @@ public class KbMigrationAgentRuntime {
             var execution = adapters.get(config.runtime().getAgentType()).run(new AgentRuntimeExecutionRequest(
                     config.runtime(), config.model(), workspace, prompt(), Duration.ofSeconds(config.model().maxRuntimeSeconds())));
             context.throwIfCancellationRequested();
+            if (execution.timedOut() || execution.exitCode() != 0) {
+                context.log(TaskLogType.STDOUT, "AGENT_EXECUTION exitCode=" + execution.exitCode()
+                        + " timedOut=" + execution.timedOut()
+                        + (execution.mergedOutput() == null ? "" : "\n" + execution.mergedOutput()));
+            }
             if (execution.timedOut()) {
                 throw new IOException("KB_MIGRATION_AGENT_TIMEOUT");
             }
@@ -121,9 +126,11 @@ public class KbMigrationAgentRuntime {
                         projection.items().stream().map(KbMigrationProjector.Item::id).toList(),
                         mapper.readTree(Files.readString(resultFile, StandardCharsets.UTF_8)));
             } catch (IllegalArgumentException malformed) {
+                context.log(TaskLogType.STDERR, "AGENT_RESULT_INVALID " + excerpt(resultFile));
                 throw new IOException("AGENT_OUTPUT_INVALID");
             }
             if (result.allMissing()) {
+                context.log(TaskLogType.STDERR, "AGENT_RESULT_ALL_MISSING " + excerpt(resultFile));
                 throw new IOException("AGENT_OUTPUT_INVALID");
             }
             return new Executed(result, diffPatch(workspace));
@@ -155,7 +162,7 @@ public class KbMigrationAgentRuntime {
         }
         Path target = targetRoot.resolve(relative);
         Files.createDirectories(target.getParent());
-        Files.copy(resolved, target);
+        Files.copy(resolved, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         return true;
     }
 
@@ -189,6 +196,11 @@ public class KbMigrationAgentRuntime {
                 最终回复只输出一行：DONE 或 FAIL: <原因>。不输出 Markdown，不访问其他项目、
                 远程主机或 workspace 之外的文件。
                 """;
+    }
+
+    static String excerpt(Path file) throws IOException {
+        String text = Files.readString(file, StandardCharsets.UTF_8);
+        return text.length() > 4096 ? text.substring(0, 4096) + "..." : text;
     }
 
     static String sha256(Path path) throws IOException {

@@ -87,6 +87,28 @@ class KbMigrationAgentRuntimeTests {
     }
 
     @Test
+    void 同文件多条目幂等物化() throws Exception {
+        Files.createDirectories(sourceRoot.resolve("src"));
+        Files.writeString(sourceRoot.resolve("src/shared.h"), "#define A 1\n");
+        FindingView first = finding("finding:s1", "src/shared.h", "intrinsic_call");
+        FindingView second = finding("finding:s2", "src/shared.h", "macro_invocation");
+        var projection = KbMigrationProjector.project(UUID.randomUUID(), List.of(first, second));
+        when(adapter.run(any())).thenAnswer(invocation -> {
+            AgentRuntimeExecutionRequest request = invocation.getArgument(0);
+            assertThat(Files.exists(request.workspace().resolve("baseline/src/shared.h"))).isTrue();
+            Files.writeString(request.workspace().resolve("output/migration_result.json"), json.writeValueAsString(
+                    Map.of("entries", List.of(
+                            Map.of("id", "finding:s1", "status", "DONE"),
+                            Map.of("id", "finding:s2", "status", "PENDING", "reason", "无把握")))));
+            return new CodexProcessResult(0, false, "DONE", "");
+        });
+
+        var executed = service.run(projection, sourceRoot, selection, context);
+
+        assertThat(executed.result().expectedCount()).isEqualTo(2);
+    }
+
+    @Test
     void null投影拒绝() {
         assertThatThrownBy(() -> service.run(null, sourceRoot, selection, context))
                 .isInstanceOf(IOException.class).hasMessage("KB_MIGRATION_NO_ENTRIES");

@@ -65,7 +65,7 @@ class KbMigrationRuntimeServiceTests {
         var task = new TaskView(taskId, project, "KB_MIGRATION", TaskStatus.RUNNING, 0, null, actor, null, null,
                 null, null, 3600, null, null, 0);
         when(context.task()).thenReturn(task);
-        when(repository.findRun(runId)).thenReturn(Optional.of(runView()));
+        when(repository.findByTaskId(taskId)).thenReturn(Optional.of(runView()));
         when(kbScanRepository.listAllFindingViews(scanRun)).thenReturn(List.of(
                 finding("finding:a", "intrinsic_call"),
                 finding("finding:b", "macro_invocation"),
@@ -142,7 +142,7 @@ class KbMigrationRuntimeServiceTests {
     @Test
     void 任务不匹配与输入非法拒绝() throws Exception {
         var mismatch = new KbMigrationInput(project, runId, scanRun, revision, selection, Map.of());
-        when(repository.findRun(runId)).thenReturn(Optional.of(new KbMigrationRunView(runId, project,
+        when(repository.findByTaskId(taskId)).thenReturn(Optional.of(new KbMigrationRunView(runId, project,
                 UUID.randomUUID(), scanRun, revision, "PENDING", Map.of(), 0, 0, 0, 0, profileId, runtimeId, null,
                 null, null)));
         assertThatThrownBy(() -> service.migrate(mismatch, context))

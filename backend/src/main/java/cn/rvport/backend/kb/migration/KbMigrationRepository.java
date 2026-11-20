@@ -77,6 +77,19 @@ public class KbMigrationRepository {
                         fromJsonb(record.get(KbMigrationRuns.KB_MIGRATION_RUNS.SUMMARY))));
     }
 
+    public Optional<KbMigrationRunView> findByTaskId(UUID taskId) {
+        return dsl.select(KbMigrationRuns.KB_MIGRATION_RUNS.asterisk(), KbScanRuns.KB_SCAN_RUNS.SOURCE_REVISION_ID)
+                .from(KbMigrationRuns.KB_MIGRATION_RUNS)
+                .join(KbScanRuns.KB_SCAN_RUNS).on(KbScanRuns.KB_SCAN_RUNS.ID.eq(KbMigrationRuns.KB_MIGRATION_RUNS.SCAN_RUN_ID))
+                .where(KbMigrationRuns.KB_MIGRATION_RUNS.TASK_ID.eq(taskId))
+                .fetch()
+                .stream().findFirst()
+                .map(record -> KbMigrationRunView.from(
+                        record.into(KbMigrationRuns.KB_MIGRATION_RUNS),
+                        record.get(KbScanRuns.KB_SCAN_RUNS.SOURCE_REVISION_ID),
+                        fromJsonb(record.get(KbMigrationRuns.KB_MIGRATION_RUNS.SUMMARY))));
+    }
+
     public List<KbMigrationRunView> listRuns(UUID projectId, int offset, int limit) {
         return dsl.select(KbMigrationRuns.KB_MIGRATION_RUNS.asterisk(), KbScanRuns.KB_SCAN_RUNS.SOURCE_REVISION_ID)
                 .from(KbMigrationRuns.KB_MIGRATION_RUNS)
