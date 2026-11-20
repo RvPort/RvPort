@@ -191,7 +191,9 @@ public class KbMigrationAgentRuntime {
                 迁移改动只允许写入 source/ 下的文件；禁止修改 input/ 与 baseline/。
                 全部条目结论（含 NO_WORK_NEEDED 的依据、PENDING 的原因）写入 output/migration_result.json，
                 每个条目 id 恰好一条，不允许缺失、重复或添加未知条目；status 只能为 DONE、
-                NO_WORK_NEEDED、PENDING。
+                NO_WORK_NEEDED、PENDING。该文件必须是如下形态（顶层仅 entries 数组，不得套用输入文件的
+                schemaVersion/items 结构，也不得把条目放在其他字段名下）：
+                {"entries":[{"id":"<条目id>","status":"DONE","changeSummary":"一句话改动说明","files":["src/a.c"],"reason":"NO_WORK_NEEDED 或 PENDING 时必填"}]}
                 manifest 的 missingFiles 中列出的文件不可用，对应条目应保持 PENDING 并说明原因。
                 最终回复只输出一行：DONE 或 FAIL: <原因>。不输出 Markdown，不访问其他项目、
                 远程主机或 workspace 之外的文件。

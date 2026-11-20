@@ -80,6 +80,22 @@ class KbMigrationResultValidatorTests {
     }
 
     @Test
+    void 信封形态与同义字段容错() throws Exception {
+        var root = mapper.readTree("""
+                {"schemaVersion":"kb-migration.v1","scanRunId":"x","results":[
+                  {"id":"finding:a","status":"DONE","summary":"改动说明","files":["src/a.c"]},
+                  {"id":"finding:b","status":"NO_WORK_NEEDED","marking":"已有 __riscv 分支"}
+                ]}
+                """);
+        var result = KbMigrationResultValidator.validate(List.of("finding:a", "finding:b"), root);
+        assertThat(result.entries()).hasSize(2);
+        assertThat(result.entries().get(0).changeSummary()).isEqualTo("改动说明");
+        assertThat(result.entries().get(1).reason()).isEqualTo("已有 __riscv 分支");
+        assertThat(result.doneCount()).isEqualTo(1);
+        assertThat(result.noWorkNeededCount()).isEqualTo(1);
+    }
+
+    @Test
     void 非常规形态容错() throws Exception {
         var root = mapper.readTree("""
                 {"entries":[

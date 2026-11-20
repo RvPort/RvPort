@@ -42,7 +42,12 @@ public final class KbMigrationResultValidator {
     }
 
     public static Result validate(Collection<String> expectedIds, JsonNode root) {
-        if (root == null || !root.path("entries").isArray()) {
+        JsonNode entriesNode = root == null ? com.fasterxml.jackson.databind.node.MissingNode.getInstance() : root.path("entries");
+        if (!entriesNode.isArray()) {
+            // 容错：agent 可能把自己的条目结论放在 results 数组下（把输入信封复制到输出）。
+            entriesNode = root == null ? com.fasterxml.jackson.databind.node.MissingNode.getInstance() : root.path("results");
+        }
+        if (!entriesNode.isArray()) {
             throw new IllegalArgumentException("entries 必须为数组");
         }
         Set<String> expected = new HashSet<>(expectedIds);
@@ -53,7 +58,7 @@ public final class KbMigrationResultValidator {
         int done = 0;
         int noWork = 0;
         int pending = 0;
-        for (JsonNode node : root.path("entries")) {
+        for (JsonNode node : entriesNode) {
             String id = node.path("id").asText("").trim();
             String status = node.path("status").asText("").trim();
             if (id.isEmpty() || !STATUSES.contains(status)) {
@@ -74,9 +79,9 @@ public final class KbMigrationResultValidator {
             entries.add(new Entry(
                     id,
                     status,
-                    node.path("changeSummary").asText(null),
+                    textOrNull(node, "changeSummary", "summary"),
                     texts(node.path("files")),
-                    node.path("reason").asText(null)));
+                    textOrNull(node, "reason", "marking")));
             switch (status) {
                 case "DONE" -> done++;
                 case "NO_WORK_NEEDED" -> noWork++;
@@ -86,6 +91,17 @@ public final class KbMigrationResultValidator {
         int missing = expected.size() - entries.size();
         return new Result(expected.size(), List.copyOf(entries), List.copyOf(unknownIds), List.copyOf(duplicateIds),
                 missing, done, noWork, pending);
+    }
+
+    /** 容错取首个非空字段：agent 可能用 summary/marking 等同义字段名。 */
+    private static String textOrNull(JsonNode node, String... fields) {
+        for (String field : fields) {
+            String text = node.path(field).asText(null);
+            if (text != null && !text.isBlank()) {
+                return text;
+            }
+        }
+        return null;
     }
 
     private static List<String> texts(JsonNode node) {
