@@ -60,7 +60,7 @@ public class KbScanContextService {
     }
 
     public Optional<KbScanView> latest(Selection selection) {
-        return selection.ready() ? scans.findLatestRunByContext(selection.projectId(), selection.sourceRevisionId(),
+        return selection.sourceRevisionId() != null ? scans.findLatestRunByContext(selection.projectId(), selection.sourceRevisionId(),
                 selection.executionContext()) : Optional.empty();
     }
 
@@ -76,7 +76,7 @@ public class KbScanContextService {
                     StagePrerequisiteStatus.STALE, run.executionContext() == null ? null : run.executionContext().buildRunId(),
                     reason == null ? "KB_SCAN_INPUT_CONTEXT_MISMATCH" : reason));
         }
-        return selected.build();
+        return run.sourceOnly() ? null : selected.build();
     }
 
     public record Selection(UUID projectId, UUID sourceRevisionId, UUID sourceEnvironmentId,
@@ -125,6 +125,11 @@ public class KbScanContextService {
             if (!Objects.equals(projectId, run.projectId()) || !Objects.equals(sourceRevisionId, run.sourceRevisionId()))
                 return "KB_SCAN_SOURCE_CHANGED";
             KbExecutionContext recorded = run.executionContext();
+            if (run.sourceOnly()) {
+                var actual = run.effectiveInputPlan() == null ? recorded.inputPlan() : run.effectiveInputPlan();
+                return Objects.equals(projectId, actual.projectId()) && Objects.equals(sourceRevisionId, actual.sourceRevisionId())
+                        ? null : "KB_SCAN_INPUT_CONTEXT_MISMATCH";
+            }
             if (!Objects.equals(sourceEnvironmentId, recorded.sourceEnvironmentId())
                     || !Objects.equals(runtimeEnvironmentVersion, recorded.runtimeEnvironmentVersion()))
                 return "KB_SCAN_ENVIRONMENT_CHANGED";

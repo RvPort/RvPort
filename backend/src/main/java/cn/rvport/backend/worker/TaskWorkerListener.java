@@ -34,7 +34,7 @@ public class TaskWorkerListener {
         this.taskQueueClient = taskQueueClient;
     }
 
-    @RabbitListener(id = TASK_LISTENER_ID, queues = "${rvport.queue.task.queue}", containerFactory = "rabbitListenerContainerFactory")
+    @RabbitListener(id = TASK_LISTENER_ID, queues = "${rvport.queue.task.queue}", containerFactory = "rabbitListenerContainerFactory", autoStartup = "false")
     public void onMessage(TaskQueueMessage taskMessage, Message message, Channel channel) throws IOException {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         int attempt = taskMessage.attempt();

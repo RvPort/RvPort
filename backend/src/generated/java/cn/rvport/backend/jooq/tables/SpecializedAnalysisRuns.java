@@ -98,7 +98,7 @@ public class SpecializedAnalysisRuns extends TableImpl<SpecializedAnalysisRunsRe
     /**
      * The column <code>public.specialized_analysis_runs.build_run_id</code>.
      */
-    public final TableField<SpecializedAnalysisRunsRecord, UUID> BUILD_RUN_ID = createField(DSL.name("build_run_id"), SQLDataType.UUID.nullable(false), this, "");
+    public final TableField<SpecializedAnalysisRunsRecord, UUID> BUILD_RUN_ID = createField(DSL.name("build_run_id"), SQLDataType.UUID, this, "");
 
     /**
      * The column <code>public.specialized_analysis_runs.artifact_set_id</code>.
@@ -250,6 +250,17 @@ public class SpecializedAnalysisRuns extends TableImpl<SpecializedAnalysisRunsRe
      */
     public final TableField<SpecializedAnalysisRunsRecord, String> BC_DEGRADATION_REASON = createField(DSL.name("bc_degradation_reason"), SQLDataType.CLOB, this, "");
 
+    /**
+     * The column <code>public.specialized_analysis_runs.input_plan</code>.
+     */
+    public final TableField<SpecializedAnalysisRunsRecord, JSONB> INPUT_PLAN = createField(DSL.name("input_plan"), SQLDataType.JSONB, this, "");
+
+    /**
+     * The column
+     * <code>public.specialized_analysis_runs.effective_input_plan</code>.
+     */
+    public final TableField<SpecializedAnalysisRunsRecord, JSONB> EFFECTIVE_INPUT_PLAN = createField(DSL.name("effective_input_plan"), SQLDataType.JSONB, this, "");
+
     private SpecializedAnalysisRuns(Name alias, Table<SpecializedAnalysisRunsRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
     }
@@ -321,7 +332,7 @@ public class SpecializedAnalysisRuns extends TableImpl<SpecializedAnalysisRunsRe
 
     @Override
     public List<Index> getIndexes() {
-        return Arrays.asList(Indexes.SPECIALIZED_ANALYSIS_RUNS_BUILD_IDX, Indexes.SPECIALIZED_ANALYSIS_RUNS_PROJECT_ANALYZER_CREATED_IDX, Indexes.SPECIALIZED_ANALYSIS_RUNS_PROJECT_SOURCE_ANALYZER_STATUS_IDX, Indexes.SPECIALIZED_ANALYSIS_RUNS_TASK_IDX);
+        return Arrays.asList(Indexes.SPECIALIZED_ANALYSIS_RUNS_BUILD_IDX, Indexes.SPECIALIZED_ANALYSIS_RUNS_PROJECT_ANALYZER_CREATED_IDX, Indexes.SPECIALIZED_ANALYSIS_RUNS_PROJECT_SOURCE_ANALYZER_STATUS_IDX, Indexes.SPECIALIZED_ANALYSIS_RUNS_TASK_IDX, Indexes.SPECIALIZED_SOURCE_PLAN_IDX);
     }
 
     @Override
@@ -336,7 +347,7 @@ public class SpecializedAnalysisRuns extends TableImpl<SpecializedAnalysisRunsRe
 
     @Override
     public List<ForeignKey<SpecializedAnalysisRunsRecord, ?>> getReferences() {
-        return Arrays.asList(Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_AUDIT_BUNDLE_ARTIFACT_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_BUILD_RUN_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_CREATED_BY_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_PROJECT_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_REQUEST_ARTIFACT_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_RESULT_HTML_ARTIFACT_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_RESULT_JSON_ARTIFACT_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_SOURCE_REVISION_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_TASK_ID_FKEY);
+        return Arrays.asList(Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_AUDIT_BUNDLE_ARTIFACT_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_BUILD_RUN_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_CREATED_BY_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_PROJECT_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_REQUEST_ARTIFACT_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_RESULT_HTML_ARTIFACT_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_RESULT_JSON_ARTIFACT_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_SOURCE_REVISION_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_TASK_ID_FKEY, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_PROJECT_SOURCE_BUILD_FK, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_PROJECT_SOURCE_FK);
     }
 
     private transient StoredArtifactsPath _specializedAnalysisRunsAuditBundleArtifactIdFkey;
@@ -353,16 +364,17 @@ public class SpecializedAnalysisRuns extends TableImpl<SpecializedAnalysisRunsRe
         return _specializedAnalysisRunsAuditBundleArtifactIdFkey;
     }
 
-    private transient BuildRunsPath _buildRuns;
+    private transient BuildRunsPath _specializedAnalysisRunsBuildRunIdFkey;
 
     /**
-     * Get the implicit join path to the <code>public.build_runs</code> table.
+     * Get the implicit join path to the <code>public.build_runs</code> table,
+     * via the <code>specialized_analysis_runs_build_run_id_fkey</code> key.
      */
-    public BuildRunsPath buildRuns() {
-        if (_buildRuns == null)
-            _buildRuns = new BuildRunsPath(this, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_BUILD_RUN_ID_FKEY, null);
+    public BuildRunsPath specializedAnalysisRunsBuildRunIdFkey() {
+        if (_specializedAnalysisRunsBuildRunIdFkey == null)
+            _specializedAnalysisRunsBuildRunIdFkey = new BuildRunsPath(this, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_BUILD_RUN_ID_FKEY, null);
 
-        return _buildRuns;
+        return _specializedAnalysisRunsBuildRunIdFkey;
     }
 
     private transient UsersPath _users;
@@ -431,17 +443,18 @@ public class SpecializedAnalysisRuns extends TableImpl<SpecializedAnalysisRunsRe
         return _specializedAnalysisRunsResultJsonArtifactIdFkey;
     }
 
-    private transient SourceRevisionsPath _sourceRevisions;
+    private transient SourceRevisionsPath _specializedAnalysisRunsSourceRevisionIdFkey;
 
     /**
      * Get the implicit join path to the <code>public.source_revisions</code>
-     * table.
+     * table, via the
+     * <code>specialized_analysis_runs_source_revision_id_fkey</code> key.
      */
-    public SourceRevisionsPath sourceRevisions() {
-        if (_sourceRevisions == null)
-            _sourceRevisions = new SourceRevisionsPath(this, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_SOURCE_REVISION_ID_FKEY, null);
+    public SourceRevisionsPath specializedAnalysisRunsSourceRevisionIdFkey() {
+        if (_specializedAnalysisRunsSourceRevisionIdFkey == null)
+            _specializedAnalysisRunsSourceRevisionIdFkey = new SourceRevisionsPath(this, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_SOURCE_REVISION_ID_FKEY, null);
 
-        return _sourceRevisions;
+        return _specializedAnalysisRunsSourceRevisionIdFkey;
     }
 
     private transient TasksPath _tasks;
@@ -454,6 +467,32 @@ public class SpecializedAnalysisRuns extends TableImpl<SpecializedAnalysisRunsRe
             _tasks = new TasksPath(this, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_TASK_ID_FKEY, null);
 
         return _tasks;
+    }
+
+    private transient BuildRunsPath _specializedProjectSourceBuildFk;
+
+    /**
+     * Get the implicit join path to the <code>public.build_runs</code> table,
+     * via the <code>specialized_project_source_build_fk</code> key.
+     */
+    public BuildRunsPath specializedProjectSourceBuildFk() {
+        if (_specializedProjectSourceBuildFk == null)
+            _specializedProjectSourceBuildFk = new BuildRunsPath(this, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_PROJECT_SOURCE_BUILD_FK, null);
+
+        return _specializedProjectSourceBuildFk;
+    }
+
+    private transient SourceRevisionsPath _specializedProjectSourceFk;
+
+    /**
+     * Get the implicit join path to the <code>public.source_revisions</code>
+     * table, via the <code>specialized_project_source_fk</code> key.
+     */
+    public SourceRevisionsPath specializedProjectSourceFk() {
+        if (_specializedProjectSourceFk == null)
+            _specializedProjectSourceFk = new SourceRevisionsPath(this, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_PROJECT_SOURCE_FK, null);
+
+        return _specializedProjectSourceFk;
     }
 
     private transient SpecializedAnalysisFindingsPath _specializedAnalysisFindings;
@@ -477,7 +516,9 @@ public class SpecializedAnalysisRuns extends TableImpl<SpecializedAnalysisRunsRe
             Internal.createCheck(this, DSL.name("specialized_analysis_runs_bc_counts_chk"), "(((bc_planned_count >= 0) AND (bc_usable_count >= 0) AND (bc_failed_count >= 0) AND (bc_usable_count <= bc_planned_count) AND (bc_failed_count <= bc_planned_count)))", true),
             Internal.createCheck(this, DSL.name("specialized_analysis_runs_counts_chk"), "(((finding_count >= 0) AND (candidate_count >= 0) AND (diagnostic_count >= 0)))", true),
             Internal.createCheck(this, DSL.name("specialized_analysis_runs_environment_version_chk"), "(((environment_config_version IS NULL) OR (environment_config_version > 0)))", true),
-            Internal.createCheck(this, DSL.name("specialized_analysis_runs_status_chk"), "((status = ANY (ARRAY['PENDING'::text, 'QUEUED'::text, 'RUNNING'::text, 'COMPLETE'::text, 'COMPLETE_WITH_RISK'::text, 'PARTIAL'::text, 'FAILED'::text, 'CANCELLED'::text, 'TIMEOUT'::text])))", true)
+            Internal.createCheck(this, DSL.name("specialized_analysis_runs_status_chk"), "((status = ANY (ARRAY['PENDING'::text, 'QUEUED'::text, 'RUNNING'::text, 'COMPLETE'::text, 'COMPLETE_WITH_RISK'::text, 'PARTIAL'::text, 'FAILED'::text, 'CANCELLED'::text, 'TIMEOUT'::text])))", true),
+            Internal.createCheck(this, DSL.name("specialized_effective_plan_chk"), "(((effective_input_plan IS NULL) OR (((input_plan IS NOT NULL) AND (jsonb_typeof(effective_input_plan) = 'object'::text) AND ((effective_input_plan ->> 'planVersion'::text) = '1'::text) AND ((effective_input_plan ->> 'projectId'::text) = (project_id)::text) AND ((effective_input_plan ->> 'sourceRevisionId'::text) = (source_revision_id)::text) AND ((effective_input_plan ->> 'inputOrigin'::text) = ANY (ARRAY['SOURCE_DISCOVERY'::text, 'BUILD_ARTIFACTS'::text]))) IS TRUE)))", true),
+            Internal.createCheck(this, DSL.name("specialized_input_plan_chk"), "((((input_plan IS NULL) AND (build_run_id IS NOT NULL)) OR (((jsonb_typeof(input_plan) = 'object'::text) AND ((input_plan ->> 'planVersion'::text) = '1'::text) AND ((input_plan ->> 'projectId'::text) = (project_id)::text) AND ((input_plan ->> 'sourceRevisionId'::text) = (source_revision_id)::text) AND ((((input_plan ->> 'inputOrigin'::text) = 'SOURCE_DISCOVERY'::text) AND (build_run_id IS NULL) AND (environment_config_version IS NULL) AND (artifact_set_id IS NULL) AND (analysis_mode = 'AST_ONLY'::text) AND ((input_plan -> 'build'::text) = 'null'::jsonb) AND ((input_plan -> 'artifacts'::text) = '[]'::jsonb)) OR (((input_plan ->> 'inputOrigin'::text) = 'BUILD_ARTIFACTS'::text) AND (build_run_id IS NOT NULL) AND (((input_plan -> 'build'::text) ->> 'id'::text) = (build_run_id)::text) AND (((input_plan -> 'build'::text) ->> 'environmentVersion'::text) = (environment_config_version)::text)))) IS TRUE)))", true)
         );
     }
 

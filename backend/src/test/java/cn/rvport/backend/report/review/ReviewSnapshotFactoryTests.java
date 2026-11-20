@@ -75,6 +75,19 @@ class ReviewSnapshotFactoryTests {
         assertThat(items(List.of(row), base(source), List.of(prior)).getFirst().inheritance())
                 .containsEntry("inherited", false);
     }
+    @Test void changedAnalysisScopeOrEvidenceAvailabilityRequiresHumanRecheck() {
+        var row=fact("KB_FINDING");
+        row.put("analysisEvidence",Map.of("effectiveInputDigest","source-only","missingEvidence",List.of("BITCODE_UNAVAILABLE")));
+        var first=items(List.of(row),null,List.of()).getFirst();
+        assertThat(items(List.of(row),base(source),List.of(old(first))).getFirst().decision().state())
+                .isEqualTo(ReviewState.EXCLUDED);
+        row.put("analysisEvidence",Map.of("effectiveInputDigest","enhanced","missingEvidence",List.of()));
+        var regenerated=items(List.of(row),base(source),List.of(old(first))).getFirst();
+        assertThat(regenerated.decision().state()).isEqualTo(ReviewState.PENDING_REVIEW);
+        assertThat(regenerated.inheritance()).containsEntry("reasonCode","EVIDENCE_CHANGED");
+        assertThat(first.originalSnapshot().get("analysisEvidence")).isEqualTo(Map.of(
+                "effectiveInputDigest","source-only","missingEvidence",List.of("BITCODE_UNAVAILABLE")));
+    }
     @Test void duplicateIdentityOnEitherSideNeverCopiesAUsersExclusion() {
         var row=fact("KB_FINDING");var prior=old(items(List.of(row),null,List.of()).getFirst());
         var second=new LinkedHashMap<>(row);second.put("sourceRefId",UUID.randomUUID());

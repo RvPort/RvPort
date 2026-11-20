@@ -55,7 +55,7 @@ public class ReportReviewPublication {
                 report,attempt,result.inputId(),result.verdict().name(),reviews.json(result));
         reviews.finish(report,current?"CURRENT":"HISTORICAL_CONTEXT_CHANGED",reviewed.summary());
         var saved=new LinkedHashMap<>(summary); saved.put("aiSummary",reviewed.summary()); saved.put("organizationAvailable",true);
-        saved.put("schemaVersion","report-review.v1"); saved.put("publishState",current?"CURRENT":"HISTORICAL_CONTEXT_CHANGED");
+        saved.put("schemaVersion","report-review.v2"); saved.put("publishState",current?"CURRENT":"HISTORICAL_CONTEXT_CHANGED");
         return reports.markSucceeded(report,saved,risk);
     }
     private static ApiException conflict(String code) { return new ApiException(HttpStatus.CONFLICT,code,"生成期间复核基线已变化，请重新生成"); }

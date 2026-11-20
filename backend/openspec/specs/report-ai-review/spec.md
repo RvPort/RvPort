@@ -5,23 +5,31 @@
 ## Requirements
 
 ### Requirement: 报告输入必须来自四类当前有效成功分析
-后端 SHALL 统一选择当前项目、active 源码及实际依赖 Context 下的知识库、依赖、浮点、内存序结果；至少一类有效成功运行才可生成，MUST NOT 以旧 reference 确认状态或 Finding 数量代替生成资格。
+后端 SHALL 统一选择当前项目、active 源码及实际依赖 Context 下的知识库、依赖、浮点、内存序结果；至少一类当前有效且合法完整发布的分析产出才可生成，包含专项 PARTIAL，MUST NOT 以旧 reference 确认状态或 Finding 数量代替生成资格。
 
 #### Scenario: 一类成功且零发现
 - **WHEN** 唯一有效分析成功完成但零发现
 - **THEN** SHALL 允许普通报告及显式空清单确认，记录运行 ID 和零计数；其余来源标为未运行或不可用。
 
 #### Scenario: 没有合格成功运行
-- **WHEN** 无 active 源码或四类均未运行、失效、失败、取消、超时或仅 PARTIAL
+- **WHEN** 无 active 源码或四类均未运行、失效、失败、取消、超时，且没有合法完整发布的 COMPLETE/COMPLETE_WITH_RISK/PARTIAL 产出
 - **THEN** SHALL 拒绝创建并返回双语原因和恢复事实；历史仍可读，不投递任务。
 
 #### Scenario: 四类状态与上下文
 - **WHEN** 查询最新有效结果
-- **THEN** KB/依赖 SHALL 要求 SUCCEEDED；专项 SHALL 要求 COMPLETE/COMPLETE_WITH_RISK 且完整发布；分别校验源码、实际环境/构建/artifact-set 及结果版本，不跨上下文回退。
+- **THEN** KB/依赖 SHALL 要求 SUCCEEDED；专项 SHALL 要求 COMPLETE/COMPLETE_WITH_RISK/PARTIAL 且协议合法、必要制品完整发布；分别校验源码、实际环境/构建/artifact-set 及结果版本，不跨上下文回退。
 
 #### Scenario: 新运行尚未成功
 - **WHEN** 同一有效 Context 的新运行排队、失败或取消
-- **THEN** SHALL 保留仍有效旧成功运行作为可选事实；Context 变化时不得回退旧结果，新有效成功发布后旧运行不再作为当前输入。
+- **THEN** SHALL 保留仍有效旧合法发布运行作为可选事实；Context 变化时不得回退旧结果，新有效成功发布后旧运行不再作为当前输入。
+
+#### Scenario: 仅有合法部分产出
+- **WHEN** 唯一有效来源是合法发布的 PARTIAL，候选可为零
+- **THEN** SHALL 允许生成并固定覆盖、解析假设和缺失证据；不得表达全项目安全，不能用更早 COMPLETE 掩盖最新合法 PARTIAL。
+
+#### Scenario: 无关环境变化
+- **WHEN** SOURCE_DISCOVERY 结果未消费的远程环境或构建发生变化
+- **THEN** SHALL 不因此使该来源失效；增强产物后来可用只提示增强机会，worker 不重新绑定。
 
 ### Requirement: 依赖候选必须仅包含未解决的中以上或未知项
 后端 SHALL 使用结构化策略判断 unresolved && (MEDIUM/HIGH/CRITICAL 或 unknown)，MUST NOT 按建议文本、人工排除或旧修复任务状态推断已解决。
@@ -57,6 +65,14 @@
 - **WHEN** 多个来源看似描述同一问题
 - **THEN** SHALL 第一版仅分组展示并保留逐来源身份、证据、处置与计数，不按标题近似丢弃记录。
 
+#### Scenario: 源码候选和大量发现
+- **WHEN** 工具提供真实低置信候选、多个 occurrence 或大量发现
+- **THEN** SHALL 保留原始身份、全部位置和证据；不因缺少构建、BC 或数量多而静默丢弃，不扩展既有依赖中以上或未知且未解决的筛选范围。
+
+#### Scenario: AI 判断与原始证据独立
+- **WHEN** AI 确认源码候选存在问题
+- **THEN** SHALL 保留原始 evidenceLevel、解析假设、coverage、missingEvidence 和正式风险计数，不将其改写为已编译、已运行验证或完整分析；仅对选定条目复核，不扩展全源码主动审计。
+
 ### Requirement: AI 必须使用触发者个人配置并完整成功
 后端 SHALL 使用 REPORT_AI_REVIEW 个人阶段绑定，复用既有持久身份/租约/恢复机制；AI 结论用于初始化未获人工处置的草稿条目，人工决定优先，最终确认须手动提交。
 
@@ -84,6 +100,18 @@
 #### Scenario: 重试恢复
 - **WHEN** 自动重试/恢复或另一用户手动重新生成
 - **THEN** SHALL 前者保持原主体与固定引用，后者建立新执行使用新操作者；每次领取校验账号、项目及配置归属。
+
+#### Scenario: 多批复核与恢复
+- **WHEN** 候选超过单批条数或输入字节预算
+- **THEN** SHALL 固定全部 AI 输入 ID、批次、输入摘要及配置快照；逐批持久化已验证结果，恢复复用同计划同配置批次，全部应复核 ID 恰好覆盖且制品完整才发布成功。
+
+#### Scenario: 超限与无效输出
+- **WHEN** 单项超限、总预算不足、批次漏项、重复/未知 ID 或非法证据
+- **THEN** SHALL 返回稳定失败原因和已验证进度，不截断候选、自动排除未复核项或发布不完整增强报告；配置快照改变不得混用旧批次。
+
+#### Scenario: 默认处置与人工优先
+- **WHEN** 合法逐项复核完成
+- **THEN** SHALL 将 CONFIRMED_ISSUE 默认映射 TO_FIX，将 SUSPECTED_FALSE_POSITIVE/INSUFFICIENT_EVIDENCE 默认映射 PENDING_REVIEW；可靠继承的人工决定优先，最终清单须用户手动提交，尚有待复核时拒绝提交。
 
 ### Requirement: 源码与 Agent 输入必须固定且受控
 后端 SHALL 以版本 manifest/内容哈希和制品固化源码，Agent 只读来源、专用 output 可写；MUST NOT 使用当前工作副本替代历史源码或把源码文本当平台指令。

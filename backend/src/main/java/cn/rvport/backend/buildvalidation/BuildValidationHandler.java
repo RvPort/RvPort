@@ -65,6 +65,10 @@ public class BuildValidationHandler implements TaskHandler {
     private final StoredArtifactService storedArtifactService;
     private final BitcodeArtifactService bitcodeArtifactService;
     private final ObjectMapper objectMapper;
+    @org.springframework.beans.factory.annotation.Autowired
+    private cn.rvport.backend.source.SourceRepository analysisSources;
+    @org.springframework.beans.factory.annotation.Autowired
+    private cn.rvport.backend.report.review.ReportSourceSnapshotService analysisSnapshots;
 
     public BuildValidationHandler(
             BuildValidationRepository buildValidationRepository,
@@ -1151,6 +1155,18 @@ PY
             summary.put("buildScope", input.buildScope() == null ? BuildValidationScope.BOTH.name() : input.buildScope().name());
             summary.put("source", "REMOTE_BUILD_WORKDIR");
             summary.put("commandCount", commandCount);
+            summary.put("remoteSourceRoot", deployment.remotePath());
+            if (analysisSources != null && analysisSnapshots != null) {
+                var revision = analysisSources.findById(input.sourceRevisionId())
+                        .filter(value -> input.projectId().equals(value.projectId())).orElseThrow();
+                var manifest = analysisSnapshots.prepare(revision);
+                if (manifest.sourceDigest() == null || manifest.reasonCode() != null)
+                    return compileDatabaseWarning(context, "SOURCE_IDENTITY_UNAVAILABLE");
+                var identity = cn.rvport.backend.analysis.AnalysisInputPlan.Identity.of("c,cpp", environment.arch(),
+                        "riscv64", Map.of(), List.of(), "build-source@1");
+                summary.put("sourceDigest", manifest.sourceDigest());
+                if (!identity.architectureAssumed()) summary.put("sourceArch", identity.effectiveSourceArch());
+            }
             StoredArtifactView artifact = storedArtifactService.store(new StoredArtifactCreateCommand(
                     input.projectId(),
                     context.task().id(),

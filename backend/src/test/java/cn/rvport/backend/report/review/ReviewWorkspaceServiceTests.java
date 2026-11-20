@@ -34,6 +34,11 @@ class ReviewWorkspaceServiceTests {
         when(repository.item(report,item)).thenReturn(Optional.of(Map.of("id",item,"reviewState","PENDING_REVIEW")));
         when(repository.advanceDraft(report,2)).thenReturn(true);
         when(repository.summary(report)).thenReturn(counts(1,1,0,0));
+        var evidence = new ReportInputSelectionPolicy.Source("FLOATING_POINT_FINDING",UUID.randomUUID(),"PARTIAL","2.0",null,
+                Map.of("summary",Map.of("analysisComplete",false,"missingEvidence",List.of("BITCODE_UNAVAILABLE"))),List.of(),List.of());
+        when(repository.manifest(report)).thenReturn(new ReportReviewManifest(project,source,"ctx",ReportMode.STANDARD,
+                new ReportInputSelectionPolicy.Selection(project,source,"ctx",List.of(evidence)),
+                new ReportSourceSnapshotService.Manifest(source,"fixed-source",List.of(),null),List.of(),null,null));
     }
     @Test void validatesEntireBatchBeforeAnyWriteAndRejectsDuplicates() {
         UUID missing=UUID.randomUUID();
@@ -114,6 +119,10 @@ class ReviewWorkspaceServiceTests {
         var result=service.confirm(report,2L,"key",actor,false);
         assertThat(result).containsEntry("confirmationState","CONFIRMED_EMPTY").containsEntry("confirmationId",confirmation);
         verify(repository).event(report,null,actor,"CONFIRM",2L,null,Map.of("confirmationId",confirmation));
+        var frozen=org.mockito.ArgumentCaptor.forClass(cn.rvport.backend.artifact.StoredArtifactCreateCommand.class);
+        verify(artifacts,times(2)).store(frozen.capture());
+        for(var artifact:frozen.getAllValues()) assertThat(new String(artifact.content(),StandardCharsets.UTF_8))
+                .contains("BITCODE_UNAVAILABLE","confirmed-fix-list.v2","analysisComplete");
     }
     @Test void reusesSameDraftConfirmationAndSupportsNonEmpty() {
         UUID confirmation=UUID.randomUUID();

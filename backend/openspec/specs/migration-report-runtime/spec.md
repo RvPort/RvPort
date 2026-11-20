@@ -210,6 +210,10 @@ JSON 和 HTML 报告 SHALL 使用同一输入快照和聚合数据，且 SHALL �
 - **WHEN** 初始化并生成报告
 - **THEN** SHALL 只创建四类新来源快照，不兼容旧 SBOM_RESULT 或 MIGRATION_INPUT_REF 制品。
 
+#### Scenario: 部分分析与覆盖快照
+- **WHEN** 固定普通或 AI 报告输入
+- **THEN** SHALL 同时固定来源运行、taskStatus、analysisStatus、resultAvailable、inputOrigin、实际模式、coverage、assumptions、missingEvidence 和 limitations；缺口与问题候选分开，不凭缺口自动制造源码缺陷。
+
 ### Requirement: 报告 readiness 必须表达来源模式与当前清单
 后端 SHALL 统一报告 readiness、stage readiness、overview 和 latest 的有效性；报告来源资格与个人 AI 资格分开。
 
@@ -217,12 +221,12 @@ JSON 和 HTML 报告 SHALL 使用同一输入快照和聚合数据，且 SHALL �
 - **WHEN** 用户查询 readiness 或 input-preview
 - **THEN** SHALL 返回 active 源码、四类运行状态/有效性/版本、来源候选数、继承排除数、实际 AI 数、模式可用性及稳定原因，预览分页且无写入。
 
-#### Scenario: 没有成功分析
-- **WHEN** 存在源码但没有有效成功运行
+#### Scenario: 没有合法发布分析
+- **WHEN** 存在源码但没有有效合法发布产出
 - **THEN** SHALL canGenerate=false；不能因 INCLUDED_FINDINGS 默认 SATISFIED 而允许生成。
 
 #### Scenario: 一类成功零问题
-- **WHEN** 只有一个成功有效运行且候选数为零
+- **WHEN** 只有一个当前有效且合法发布的运行（含 PARTIAL）且候选数为零
 - **THEN** SHALL canGenerateStandard=true，AI 资格独立，不能返回无确认输入阻塞；来源事实不得伪装成未运行。
 
 #### Scenario: 当前与最近任务
@@ -267,7 +271,7 @@ JSON 和 HTML 报告 SHALL 使用同一输入快照和聚合数据，且 SHALL �
 - **THEN** SHALL 对齐报告与任务失败/取消，脱敏诊断不随主事务回滚，旧有效报告保持；无自动普通降级。
 
 #### Scenario: 有效空输入
-- **WHEN** 至少一类有效成功分析但候选集合为空
+- **WHEN** 至少一类有效合法发布分析（含 PARTIAL）但候选集合为空
 - **THEN** SHALL 保存可识别的空 manifest 和双格式报告，不因集合为空失败；仍需明确确认空清单。
 
 #### Scenario: 当前上下文已变化
@@ -284,3 +288,29 @@ JSON 和 HTML 报告 SHALL 使用同一输入快照和聚合数据，且 SHALL �
 #### Scenario: 无文件定位
 - **WHEN** 依赖没有源码位置
 - **THEN** SHALL 在全局列表和统计展示依赖证据，不伪造文件树路径；只针对中以上/未知未解决问题生成决策项。
+
+### Requirement: 报告必须独立表达证据完整性和最终处置
+报告 SHALL 固定未执行、技术失败、已发布部分结果、范围内零发现及无法判定这些不同事实，HTML/JSON、历史与确认清单下载 SHALL 使用同一固定证据视图。
+
+#### Scenario: 分析分母未知
+- **WHEN** 只有内部源码枚举且不能证明真实构建全部 TU
+- **THEN** SHALL 分别返回 knownSourceFileCount、plannedTuCount、analyzedTuCount、failedTuCount、unsupportedTuCount、omittedTuCount 及 denominatorKnown=false，不混用文件/TU 计数或声称完整构建覆盖。
+
+#### Scenario: AI 或人工收敛
+- **WHEN** 用户排除全部问题或确认空清单
+- **THEN** SHALL 保存该版本证据限制和人工确认，不能将零待修复解释为完整验证或全项目安全；后续构建和测试仍按真实状态执行。
+
+#### Scenario: 历史下载
+- **WHEN** 新构建、源码或分析发布后下载旧报告或指定确认
+- **THEN** SHALL 返回原版本覆盖和限制，不根据当前环境补写旧报告的验证依据。
+
+### Requirement: 报告必须固定逐语言范围和失败来源诊断
+报告 SHALL 保存各来源规范化语言、源/目标架构、选择范围、逐语言覆盖及实际输入摘要，区别未选择、不支持、排除、失败与已分析；AI SHALL 获取同一固定事实，不补写其他架构或语言的验证依据。
+
+#### Scenario: 多语言工程部分覆盖
+- **WHEN** KB有多语言结果而专项仅分析C/C++
+- **THEN** SHALL 分别展示各来源范围，不能以KB文件数作为专项已分析TU分母，不能将未支持语言解释为零风险。
+
+#### Scenario: 失败尝试和旧有效来源并存
+- **WHEN** 最近尝试内存超限而同选择身份仍有旧有效结果
+- **THEN** SHALL 固定实际选中旧运行ID，并单列最新尝试失败诊断，不把二者混成同一成功运行；仅失败无合法产出时拒绝生成。

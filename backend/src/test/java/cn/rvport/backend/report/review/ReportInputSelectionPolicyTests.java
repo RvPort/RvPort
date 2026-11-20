@@ -52,14 +52,14 @@ class ReportInputSelectionPolicyTests {
     }
     @Test void selectsAllSourcesUsingTheirExactBuildEnvironmentArtifactAndSnapshotContext() {
         UUID srcSnapshot=UUID.randomUUID(),dstSnapshot=UUID.randomUUID(),depRun=UUID.randomUUID(),fpRun=UUID.randomUUID(),memRun=UUID.randomUUID();
-        when(builds.findLatestSucceededSourceBuild(project,revision,sourceEnv,4L)).thenReturn(Optional.of(build));
-        when(builds.findLatestSucceededSourceBuildWithCompileDatabase(project,revision,sourceEnv,4L)).thenReturn(Optional.of(build));
+        when(builds.findLatest(project,revision,sourceEnv,4L,BuildValidationScope.SOURCE_ONLY)).thenReturn(Optional.of(build));
+
         when(dependencies.findLatestSucceededSnapshotId(project,sourceEnv)).thenReturn(Optional.of(srcSnapshot));
         when(dependencies.findLatestSucceededSnapshotId(project,targetEnv)).thenReturn(Optional.of(dstSnapshot));
         when(sources.dependency(project,revision,targetEnv,4,buildId,srcSnapshot,dstSnapshot)).thenReturn(Optional.of(Map.of("id",depRun,"status","SUCCEEDED")));
         when(capabilities.resolve(buildId)).thenReturn(new SpecializedBitcodeCapability(SpecializedAnalysisMode.AST_BC_MIXED,"PARTIAL",2,1,1,"r",null,null,"set"));
         when(sources.specialized(project,revision,"FLOATING_POINT",buildId,4L,"AST_BC_MIXED","set")).thenReturn(Optional.of(Map.of("id",fpRun,"status","COMPLETE","resultSchemaVersion","2.0")));
-        when(sources.specialized(project,revision,"MEMORY_ORDER",buildId,null,"AST_BC_MIXED","set")).thenReturn(Optional.of(Map.of("id",memRun,"status","COMPLETE_WITH_RISK","resultSchemaVersion","1")));
+        when(sources.specialized(project,revision,"MEMORY_ORDER",buildId,4L,"AST_BC_MIXED","set")).thenReturn(Optional.of(Map.of("id",memRun,"status","COMPLETE_WITH_RISK","resultSchemaVersion","1")));
         when(sources.findings("DEPENDENCY_RESULT",depRun)).thenReturn(List.of(
                 finding("TARGET_INSTALLED","LOW"),finding("MISSING","HIGH"),finding("unrecognized","LOW"),finding("MISSING","unrecognized")));
         when(sources.findings("FLOATING_POINT_FINDING",fpRun)).thenReturn(List.of(Map.of("id",UUID.randomUUID(),"findingKind","FINDING")));
@@ -70,10 +70,10 @@ class ReportInputSelectionPolicyTests {
         assertThat(result.candidates().getLast()).containsEntry("findingKind","SOURCE_CANDIDATE");
         assertThat(result.sources().get(2).resultVersion()).isEqualTo("2.0");
         verify(sources).dependency(project,revision,targetEnv,4,buildId,srcSnapshot,dstSnapshot);
-        verify(sources).specialized(project,revision,"MEMORY_ORDER",buildId,null,"AST_BC_MIXED","set");
+        verify(sources).specialized(project,revision,"MEMORY_ORDER",buildId,4L,"AST_BC_MIXED","set");
     }
     @Test void missingDependencySnapshotsOrTargetDoesNotFallBackToOldRun() {
-        when(builds.findLatestSucceededSourceBuild(project,revision,sourceEnv,4L)).thenReturn(Optional.of(build));
+        when(builds.findLatest(project,revision,sourceEnv,4L,BuildValidationScope.SOURCE_ONLY)).thenReturn(Optional.of(build));
         policy.current(project);
         verify(sources,never()).dependency(any(),any(),any(),anyLong(),any(),any(),any());
         when(dependencies.findLatestSucceededSnapshotId(project,sourceEnv)).thenReturn(Optional.of(UUID.randomUUID()));
@@ -92,6 +92,43 @@ class ReportInputSelectionPolicyTests {
             assertThat(source.status()).isEqualTo(status);
             verify(sources,never()).findings("KB_FINDING",run);
         }
+    }
+    @Test void publishedPartialZeroFindingsWithoutBuildIsEligibleAndUnrelatedEnvironmentDoesNotInvalidateIt() {
+        UUID run = UUID.randomUUID();
+        when(contexts.current(project)).thenReturn(new KbScanContextService.Selection(project, revision, null, 0, null));
+        when(environments.find(project)).thenReturn(Optional.empty());
+        when(sources.specialized(project, revision, "MEMORY_ORDER", null, null, null, null)).thenReturn(Optional.of(
+                Map.of("id", run, "status", "PARTIAL", "resultJsonArtifactId", UUID.randomUUID(),
+                        "summary", Map.of("missingEvidence", List.of("BITCODE_UNAVAILABLE")))));
+        var first = policy.current(project);
+        assertThat(first.canGenerate()).isTrue();
+        assertThat(first.sources().getLast().status()).isEqualTo("PARTIAL");
+        assertThat(first.candidates()).isEmpty();
+        when(environments.find(project)).thenReturn(Optional.of(new ProjectRuntimeEnvironmentView(project,sourceEnv,targetEnv,999,null,null,null)));
+        assertThat(policy.current(project).contextHash()).isEqualTo(first.contextHash());
+        verify(builds, never()).findLatestSucceededSourceBuild(any(),any(),any(),any());
+        verify(builds, never()).findLatestSucceededSourceBuildWithCompileDatabase(any(),any(),any(),any());
+    }
+    @Test void candidateEvidencePreservesCoverageAndMissingEvidenceWithoutCopyingOperationalFields() {
+        UUID run = UUID.randomUUID(), finding = UUID.randomUUID();
+        var evidence = Map.of("coverage",Map.of("plannedTuCount",2,"failedTuCount",1),
+                "missingEvidence",List.of("BITCODE_UNAVAILABLE"),"analysisReasonCodes",List.of("source_failed"),
+                "effectiveInputDigest","fixed-input");
+        var summary = new LinkedHashMap<String,Object>(evidence);
+        summary.put("durationMs",500);
+        when(sources.kb(project,revision,sourceEnv,4,buildId)).thenReturn(Optional.of(Map.of(
+                "id",run,"status","SUCCEEDED","summary",summary)));
+        when(sources.findings("KB_FINDING",run)).thenReturn(List.of(Map.of("id",finding)));
+        assertThat(policy.current(project).candidates().getFirst()).containsEntry("analysisEvidence",evidence);
+        when(sources.kb(project,revision,sourceEnv,4,buildId)).thenReturn(Optional.of(Map.of(
+                "id",run,"status","SUCCEEDED","summary",Map.of("durationMs",500))));
+        assertThat(policy.current(project).candidates().getFirst()).doesNotContainKey("analysisEvidence");
+    }
+    @Test void completeStatusWithoutPublishedArtifactDoesNotSupplyCandidates() {
+        when(sources.kb(project,revision,sourceEnv,4,buildId)).thenReturn(Optional.of(Map.of(
+                "id",UUID.randomUUID(),"status","SUCCEEDED","resultAvailable",false)));
+        assertThat(policy.current(project).canGenerate()).isFalse();
+        verify(sources,never()).findings(any(),any());
     }
     private Map<String,Object> finding(String status,String risk) { return Map.of("id",UUID.randomUUID(),"targetMatchStatus",status,"riskLevel",risk); }
 }

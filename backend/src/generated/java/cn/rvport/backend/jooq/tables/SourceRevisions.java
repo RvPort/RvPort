@@ -368,17 +368,32 @@ public class SourceRevisions extends TableImpl<SourceRevisionsRecord> {
         return _findings;
     }
 
-    private transient KbScanRunsPath _kbScanRuns;
+    private transient KbScanRunsPath _kbScanProjectSourceFk;
 
     /**
      * Get the implicit to-many join path to the
-     * <code>public.kb_scan_runs</code> table
+     * <code>public.kb_scan_runs</code> table, via the
+     * <code>kb_scan_project_source_fk</code> key
      */
-    public KbScanRunsPath kbScanRuns() {
-        if (_kbScanRuns == null)
-            _kbScanRuns = new KbScanRunsPath(this, null, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_SOURCE_REVISION_ID_FKEY.getInverseKey());
+    public KbScanRunsPath kbScanProjectSourceFk() {
+        if (_kbScanProjectSourceFk == null)
+            _kbScanProjectSourceFk = new KbScanRunsPath(this, null, Keys.KB_SCAN_RUNS__KB_SCAN_PROJECT_SOURCE_FK.getInverseKey());
 
-        return _kbScanRuns;
+        return _kbScanProjectSourceFk;
+    }
+
+    private transient KbScanRunsPath _kbScanRunsSourceRevisionIdFkey;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.kb_scan_runs</code> table, via the
+     * <code>kb_scan_runs_source_revision_id_fkey</code> key
+     */
+    public KbScanRunsPath kbScanRunsSourceRevisionIdFkey() {
+        if (_kbScanRunsSourceRevisionIdFkey == null)
+            _kbScanRunsSourceRevisionIdFkey = new KbScanRunsPath(this, null, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_SOURCE_REVISION_ID_FKEY.getInverseKey());
+
+        return _kbScanRunsSourceRevisionIdFkey;
     }
 
     private transient OptimizationCyclesPath _optimizationCycles;
@@ -513,17 +528,32 @@ public class SourceRevisions extends TableImpl<SourceRevisionsRecord> {
         return _specializedAnalysisFindings;
     }
 
-    private transient SpecializedAnalysisRunsPath _specializedAnalysisRuns;
+    private transient SpecializedAnalysisRunsPath _specializedAnalysisRunsSourceRevisionIdFkey;
 
     /**
      * Get the implicit to-many join path to the
-     * <code>public.specialized_analysis_runs</code> table
+     * <code>public.specialized_analysis_runs</code> table, via the
+     * <code>specialized_analysis_runs_source_revision_id_fkey</code> key
      */
-    public SpecializedAnalysisRunsPath specializedAnalysisRuns() {
-        if (_specializedAnalysisRuns == null)
-            _specializedAnalysisRuns = new SpecializedAnalysisRunsPath(this, null, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_SOURCE_REVISION_ID_FKEY.getInverseKey());
+    public SpecializedAnalysisRunsPath specializedAnalysisRunsSourceRevisionIdFkey() {
+        if (_specializedAnalysisRunsSourceRevisionIdFkey == null)
+            _specializedAnalysisRunsSourceRevisionIdFkey = new SpecializedAnalysisRunsPath(this, null, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_SOURCE_REVISION_ID_FKEY.getInverseKey());
 
-        return _specializedAnalysisRuns;
+        return _specializedAnalysisRunsSourceRevisionIdFkey;
+    }
+
+    private transient SpecializedAnalysisRunsPath _specializedProjectSourceFk;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.specialized_analysis_runs</code> table, via the
+     * <code>specialized_project_source_fk</code> key
+     */
+    public SpecializedAnalysisRunsPath specializedProjectSourceFk() {
+        if (_specializedProjectSourceFk == null)
+            _specializedProjectSourceFk = new SpecializedAnalysisRunsPath(this, null, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_PROJECT_SOURCE_FK.getInverseKey());
+
+        return _specializedProjectSourceFk;
     }
 
     private transient TestRunsPath _testRuns;

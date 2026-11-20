@@ -173,6 +173,14 @@
 - **THEN** 前端 SHALL 默认调用 `buildScope=BOTH` 或省略该参数
 - **AND** 后端 SHALL 同时验证 source/x86 和 target/RISC-V 构建结果
 
+#### Scenario: 前置构建可选
+- **WHEN** 用户没有发起 SOURCE_ONLY 构建
+- **THEN** SHALL 保持未执行事实，不创建跳过记录，不阻止三个源码分析或后续 BOTH 构建。
+
+#### Scenario: source-only 无目标环境
+- **WHEN** 源码、源环境与脚本有效但目标环境尚未配置
+- **THEN** SHALL 允许 SOURCE_ONLY，只准备源端，不以 requireComplete 双环境配置阻塞。
+
 ### Requirement: 构建验证必须采集 CMake compiler flag probe 映射
 构建验证运行时 SHALL 在构建事实采集中扫描 CMake 脚本并输出 compiler flag probe 映射，供依赖分析准确解释构建 define。
 
@@ -303,6 +311,10 @@
 - **WHEN** 构建相关记录的 `environmentConfigVersion` 不等于项目当前运行环境版本
 - **THEN** 对应 prerequisite SHALL 返回 `STALE`
 - **AND** `reasonCode` SHALL 为 `RUNTIME_ENVIRONMENT_CHANGED`
+
+#### Scenario: 直接发起后续构建验证
+- **WHEN** 源码、所需源/目标环境和有效脚本已具备，但没有前置 x86 成功记录或报告
+- **THEN** SHALL 允许 BOTH 验证创建并在任务内准备源码，不要求前置构建、报告或人工确认；配置就绪不承诺实际连接/构建成功，运行失败如实保存。
 
 ### Requirement: x86 构建必须执行非阻断共享 BC 后处理
 构建验证 worker SHALL 在当前 source/x86 构建成功后执行共享 LLVM BC 后处理，但真实构建退出码 MUST 是决定构建成功或失败的唯一依据。
