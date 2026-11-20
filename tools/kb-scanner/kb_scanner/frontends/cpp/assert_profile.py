@@ -1,4 +1,9 @@
-"""复制已解析 TU 中的标准 assert 定义；不把主机配置当作 RISC-V 配置。"""
+"""复制已解析 TU 中的标准 assert 定义；不把主机配置当作 RISC-V 配置。
+
+kb-scanner frontend 阶段的 clang enrichment 辅助模块：仅当宏定义与已知
+glibc assert 展开体逐 token 匹配时才记录 profile，其余情况一律不产出，
+避免把构建主机的 assert 配置误标为目标机事实。
+"""
 from itertools import islice
 from pathlib import Path
 
@@ -15,6 +20,12 @@ _BODIES = {
 
 
 def capture(cursor, context_id, has_error):
+    """尝试从 assert 宏实例化游标复制标准 assert profile。
+
+    仅当游标是 assert 宏展开、其定义位于系统头 assert.h、且定义体与
+    _BODIES 中某个已知 glibc 展开体逐 token 一致时才返回元数据；
+    解析出错时状态降级为 unknown。任何不满足条件的情况都返回空 dict。
+    """
     if cursor.spelling != "assert" or cursor.kind.name not in {"MACRO_INSTANTIATION", "MACRO_EXPANSION"}:
         return {}
     try:

@@ -1,3 +1,11 @@
+"""流水线编排器：按固定顺序驱动八个阶段并聚合诊断与状态。
+
+StagedPipelineRunner 是唯一的执行中枢：workspace→knowledge→frontend→
+normalizer→analyzer→detector→classifier→assessor→projector 逐阶段推进，
+任一阶段 failed/unavailable 即短路停止；所有阶段诊断去重合并，
+退出码由 affects_exit_code 的诊断决定。
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,14 +17,40 @@ from .profile import PipelineProfile
 
 
 class StagedPipelineRunner:
+    """八阶段流水线编排器（实现 core.protocols.PipelineRunner）。
+
+    无内部可变状态（仅持有 frozen 的 profile），可并发复用。
+    """
+
     __slots__ = ("_profile",)
 
     def __init__(self, profile: PipelineProfile) -> None:
+        """以给定的阶段组件装配（PipelineProfile）构造编排器。"""
         self._profile = profile
 
     def run(self, context: ScanContext, initial_diagnostics: tuple[Diagnostic, ...] = ()) -> PipelineResult:
+        """执行完整流水线；任何未捕获异常都转换为 FATAL 诊断而非崩溃。
+
+        initial_diagnostics 是上游（如 workspace 构建）已产生的诊断，
+        会并入最终结果。始终返回 PipelineResult，绝不向上抛异常。
+        """
         try:
             return self._run(context, initial_diagnostics)
+        except MemoryError as exc:
+            # 内存预算闸门（入口 setrlimit 或系统 OOM 前沿）：把无界分配转换为
+            # 明确的 FATAL 诊断，进程在秒级退出而不是换页抖动卡死数小时。
+            fatal = Diagnostic(
+                code="pipeline.memory-budget-exceeded",
+                stage="orchestrator",
+                severity=DiagnosticSeverity.FATAL,
+                message=f"Pipeline aborted: memory budget exceeded ({exc})",
+                producer="staged-pipeline-runner",
+                affects_exit_code=True,
+            )
+            return self._stopped_result(
+                CompletionStatus.FAILED,
+                merge_diagnostics(initial_diagnostics, (fatal,)),
+            )
         except Exception as exc:  # noqa: BLE001 - convert stage invariant failures at the boundary
             fatal = Diagnostic(
                 code="pipeline.internal-error",
@@ -32,6 +66,7 @@ class StagedPipelineRunner:
             )
 
     def _run(self, context: ScanContext, initial_diagnostics: tuple[Diagnostic, ...]) -> PipelineResult:
+        """顺序执行八个阶段，每阶段经 _accept 检查是否继续。"""
         diagnostics = tuple(initial_diagnostics)
         overall_status = CompletionStatus.COMPLETE
 
@@ -47,6 +82,8 @@ class StagedPipelineRunner:
             return self._stopped_result(knowledge_result.status, diagnostics)
         knowledge = knowledge_result.value
 
+        # frontend 可选实现 analyze_with_knowledge：有知识包参与的前端解析
+        # 能利用知识做更精确的识别，未实现时退回普通 analyze。
         knowledge_frontend = getattr(self._profile.frontend, "analyze_with_knowledge", None)
         frontend_result = (knowledge_frontend(context, workspace, knowledge) if knowledge_frontend is not None
             else self._profile.frontend.analyze(context, workspace))
@@ -116,6 +153,11 @@ class StagedPipelineRunner:
         overall_status: CompletionStatus,
         result: StageResult[Any],
     ) -> tuple[tuple[Diagnostic, ...], CompletionStatus, bool]:
+        """接纳一个阶段结果：合并诊断并判定是否短路停止。
+
+        返回 (合并后诊断, 总体状态, 是否停止)。failed/unavailable 或
+        值为 None 时停止；partial 把总体状态降级为 partial 但继续。
+        """
         merged = merge_diagnostics(diagnostics, result.diagnostics)
         if result.status is CompletionStatus.FAILED:
             return merged, CompletionStatus.FAILED, True
@@ -127,6 +169,7 @@ class StagedPipelineRunner:
 
     @staticmethod
     def _stopped_result(status: CompletionStatus, diagnostics: tuple[Diagnostic, ...]) -> PipelineResult:
+        """构造短路停止时的结果：failed 退出码 2，其他非成功退出码 1。"""
         exit_code = 2 if status is CompletionStatus.FAILED else 1
         return PipelineResult(
             success=False,

@@ -52,11 +52,38 @@ export function ScanConfig({
             className={styles.configFormItem}
             label="扫描语言"
             name="language"
-            rules={[{ required: true }]}
+            rules={[{ required: true, message: '请选择扫描语言' }]}
           >
-            <Select options={[{ label: 'C/C++', value: 'C/C++' }]} />
+            <Select
+              mode="multiple"
+              options={[
+                { label: 'C/C++', value: 'C/C++' },
+                { label: 'Rust', value: 'rust' },
+                { label: 'Go', value: 'go' },
+                { label: 'Java', value: 'java' },
+                { label: 'Python/Cython', value: 'python' },
+                { label: '汇编', value: 'asm' }
+              ]}
+            />
+          </Form.Item>
+          <Form.Item
+            className={styles.configFormItem}
+            label="源架构"
+            name="sourceArch"
+            rules={[{ required: true, message: '请选择源架构' }]}
+          >
+            <Select
+              options={[
+                { label: 'x86', value: 'x86' },
+                { label: 'ARM64', value: 'arm64' }
+              ]}
+            />
           </Form.Item>
         </Flex>
+        <div className={styles.helpPanel}>
+          多语言可组合（如 C/C++ + Rust 混合扫描）；汇编/其他语言为可选输入域，
+          扫描器未启用时对应文件自动跳过。源架构按工程实际（x86 或 ARM 源码）选择。
+        </div>
         <Form.Item
           className={styles.configFormItem}
           label="扫描范围"

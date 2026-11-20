@@ -12,6 +12,10 @@ from time import monotonic
 from tree_sitter import LANGUAGE_VERSION, MIN_COMPATIBLE_LANGUAGE_VERSION, Language
 import tree_sitter_c
 import tree_sitter_cpp
+import tree_sitter_go
+import tree_sitter_java
+import tree_sitter_python
+import tree_sitter_rust
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +60,10 @@ def inspect_runtime() -> TreeSitterRuntime:
     grammars = (
         GrammarRuntime("tree-sitter-c", version("tree-sitter-c"), Language(tree_sitter_c.language()).abi_version),
         GrammarRuntime("tree-sitter-cpp", version("tree-sitter-cpp"), Language(tree_sitter_cpp.language()).abi_version),
+        GrammarRuntime("tree-sitter-go", version("tree-sitter-go"), Language(tree_sitter_go.language()).abi_version),
+        GrammarRuntime("tree-sitter-java", version("tree-sitter-java"), Language(tree_sitter_java.language()).abi_version),
+        GrammarRuntime("tree-sitter-rust", version("tree-sitter-rust"), Language(tree_sitter_rust.language()).abi_version),
+        GrammarRuntime("tree-sitter-python", version("tree-sitter-python"), Language(tree_sitter_python.language()).abi_version),
     )
     return TreeSitterRuntime(
         binding_version=version("tree-sitter"),

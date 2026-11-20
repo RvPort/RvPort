@@ -1,3 +1,10 @@
+"""CLI 适配器：把 argparse 命名空间转换为扫描请求并构建扫描上下文。
+
+StagedContextFactory 实现 core.protocols.ScanContextFactory，是 workspace
+阶段之前的准备工作：校验输入目录与规则包、读取编译数据库
+（compile_commands.json）、确定 scan_mode，最终产出 ScanContext。
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -10,6 +17,7 @@ from ..frontends.cpp.compilation_database import CompilationDatabaseReader
 
 
 def scan_request_from_namespace(args: argparse.Namespace) -> ScanRequest:
+    """把 argparse 命名空间平铺转换为 frozen 的 ScanRequest。"""
     return ScanRequest(
         input_path=args.input,
         rules_path=args.rules,
@@ -20,6 +28,7 @@ def scan_request_from_namespace(args: argparse.Namespace) -> ScanRequest:
         formats=_split_csv(args.format),
         context_infer=args.context_infer,
         target_arch=args.target_arch,
+        source_arch=getattr(args, "source_arch", "x86"),
         include_inactive_branches=args.include_inactive_branches,
         include_comment_hints=not args.no_comment_hints,
         compile_commands_path=args.compile_commands,
@@ -29,12 +38,21 @@ def scan_request_from_namespace(args: argparse.Namespace) -> ScanRequest:
 
 
 class StagedContextFactory:
+    """扫描上下文工厂（实现 core.protocols.ScanContextFactory）。"""
+
     __slots__ = ("_database",)
 
     def __init__(self, database: CompilationDatabaseReader | None = None) -> None:
         self._database = database or CompilationDatabaseReader()
 
     def build(self, request: ScanRequest) -> StageResult[ScanContext]:
+        """构建扫描上下文：校验输入/规则包，读取编译数据库并定 scan_mode。
+
+        scan_mode 三态：有编译上下文→source_context_with_compile_database；
+        无编译上下文→source_context；用户关闭上下文推断且无编译上下文→
+        syntax_scan（纯语法扫描）。编译数据库缺失不阻断（仅诊断降级为
+        partial），但输入目录/规则包无效直接 FAILED。
+        """
         root = Path(request.input_path).resolve()
         rule_dir = Path(request.rules_path).resolve()
         output_dir = Path(request.output_path).resolve()
@@ -45,6 +63,8 @@ class StagedContextFactory:
         except BundleError as exc:
             return _failed("context.bundle-invalid", str(exc))
         candidate = Path(request.compile_commands_path).resolve() if request.compile_commands_path else root / "compile_commands.json"
+        # 编译数据库缺省位置是输入根下的 compile_commands.json；
+        # "compilation-database.missing" 诊断被过滤（缺失不算错误），其余诊断保留。
         database = self._database.read(candidate if candidate.exists() else None, root)
         contexts = database.value or ()
         diagnostics = tuple(
@@ -65,6 +85,7 @@ class StagedContextFactory:
                 formats=request.formats,
                 context_infer=request.context_infer,
                 target_arch=request.target_arch,
+                source_arch=request.source_arch,
                 include_inactive_branches=request.include_inactive_branches,
                 include_comment_hints=request.include_comment_hints,
                 locale=request.locale,
@@ -85,10 +106,12 @@ class StagedContextFactory:
 
 
 def _split_csv(value: str) -> tuple[str, ...]:
+    """拆分逗号分隔的 CLI 参数值（去空白、去空项）。"""
     return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 def _failed(code: str, message: str) -> StageResult[ScanContext]:
+    """构造上下文构建失败的 StageResult（ERROR 级、影响退出码）。"""
     return StageResult(
         None,
         CompletionStatus.FAILED,

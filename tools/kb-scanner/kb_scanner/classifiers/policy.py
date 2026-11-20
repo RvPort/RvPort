@@ -78,7 +78,7 @@ class ClassificationPolicy:
             return ClassificationDecision("guarded_inactive", "x86-path-statically-excluded", True)
         if confirmed_dependency(observation) and kind not in {"build_selected_x86_dependency", "riscv_test_blocker"} and not selected_reachable and not inactive_reachable:
             return ClassificationDecision("actionable_non_blocking", "confirmed-local-x86-dependency-target-unproven")
-        if kind == "x86_platform_macro_reference" and not selected_reachable and not inactive_reachable:
+        if kind in {"x86_platform_macro_reference", "arm64_platform_macro_reference"} and not selected_reachable and not inactive_reachable:
             return ClassificationDecision("unknown", "architecture-macro-use-unproven")
         if kind.endswith("unknown") or relation_unknown:
             return ClassificationDecision("unknown", "input-or-relation-unknown")
@@ -90,7 +90,7 @@ class ClassificationPolicy:
             if not proof_complete:
                 return ClassificationDecision("unknown", "inactive-proof-incomplete", True)
             return ClassificationDecision("guarded_inactive", "x86-path-statically-excluded", True)
-        if kind in {"riscv_test_coverage_gap", "missing_riscv_selection_path"}:
+        if kind in {"riscv_test_coverage_gap", "missing_riscv_selection_path", "missing_riscv_family_member"}:
             return ClassificationDecision("actionable_non_blocking", "migration-or-test-gap")
         if observation.status == "hint" or str(observation.metadata.get("basis", "")).startswith("comment"):
             return ClassificationDecision("hint", "comment-only-hint")

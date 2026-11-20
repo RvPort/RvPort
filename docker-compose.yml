@@ -12,6 +12,10 @@ services:
         condition: service_healthy
     environment:
       API_UPSTREAM: http://backend:8080
+      http_proxy: ""
+      https_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
     ports:
       - "${FRONTEND_PORT:-8081}:80"
     networks:
@@ -130,6 +134,12 @@ services:
       minio:
         condition: service_healthy
     environment:
+      http_proxy: ""
+      https_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      no_proxy: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
+      NO_PROXY: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
       RVPORT_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-rvport}
       RVPORT_DB_USER: ${POSTGRES_USER:-rvport}
       RVPORT_DB_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
@@ -162,6 +172,7 @@ services:
       RVPORT_KB_SCAN_RULESET_PATH: rulesets/riscv-porting
       RVPORT_KB_SCAN_OUTPUT_DIR: /app/backend/runtime/kb-scans
       RVPORT_KB_SCAN_TIMEOUT_SECONDS: ${RVPORT_KB_SCAN_TIMEOUT_SECONDS:-1800}
+      RVPORT_KB_SCAN_MEMORY_LIMIT_MIB: ${RVPORT_KB_SCAN_MEMORY_LIMIT_MIB:-2048}
       RVPORT_KB_SCAN_MAX_OUTPUT_BYTES: ${RVPORT_KB_SCAN_MAX_OUTPUT_BYTES:-104857600}
       RVPORT_SPECIALIZED_ANALYSIS_ENABLED: ${RVPORT_SPECIALIZED_ANALYSIS_ENABLED:-true}
       RVPORT_SPECIALIZED_ANALYSIS_WORK_DIR: /app/backend/runtime/specialized-analysis
@@ -203,6 +214,10 @@ services:
   backend-worker:
     image: ${BACKEND_IMAGE:-rvport-backend:local}
     restart: unless-stopped
+    # JVM + kb-scanner Python 子进程的容器总量护栏：扫描失控时 OOM 杀本容器
+    # （而非拖垮宿主机/邻居容器）；配合 KB_SCANNER_MEMORY_LIMIT_MIB 让
+    # Python 子进程通常先于容器限额触发自身的 RLIMIT 闸门。
+    mem_limit: ${BACKEND_WORKER_MEM_LIMIT:-4g}
     depends_on:
       postgres:
         condition: service_healthy
@@ -215,6 +230,12 @@ services:
       backend:
         condition: service_healthy
     environment:
+      http_proxy: ""
+      https_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      no_proxy: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
+      NO_PROXY: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
       RVPORT_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-rvport}
       RVPORT_DB_USER: ${POSTGRES_USER:-rvport}
       RVPORT_DB_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
@@ -247,6 +268,7 @@ services:
       RVPORT_KB_SCAN_RULESET_PATH: rulesets/riscv-porting
       RVPORT_KB_SCAN_OUTPUT_DIR: /app/backend/runtime/kb-scans
       RVPORT_KB_SCAN_TIMEOUT_SECONDS: ${RVPORT_KB_SCAN_TIMEOUT_SECONDS:-1800}
+      RVPORT_KB_SCAN_MEMORY_LIMIT_MIB: ${RVPORT_KB_SCAN_MEMORY_LIMIT_MIB:-2048}
       RVPORT_KB_SCAN_MAX_OUTPUT_BYTES: ${RVPORT_KB_SCAN_MAX_OUTPUT_BYTES:-104857600}
       RVPORT_SPECIALIZED_ANALYSIS_ENABLED: ${RVPORT_SPECIALIZED_ANALYSIS_ENABLED:-true}
       RVPORT_SPECIALIZED_ANALYSIS_WORK_DIR: /app/backend/runtime/specialized-analysis

@@ -240,6 +240,53 @@ class KnowledgeProviderTests(unittest.TestCase):
         self.assertEqual(result.diagnostics[0].code, "knowledge.source-invalid")
         self.assertNotIn(str(root), result.diagnostics[0].message)
 
+    def test_collected_arm64_source_loads_with_family_and_bad_order_degrades(self) -> None:
+        """collected-v1 装载：arm64 族透传到条目；乱序/身份不符降级 PARTIAL。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            good_payload = {
+                "schemaVersion": "1.0",
+                "source": {
+                    "sourceId": "collected-arm64", "officialUrl": "https://developer.arm.com/documentation/ddi0487/latest",
+                    "license": "Arm ARM", "collectedAt": "2026-10-28",
+                    "inputFiles": ["collected/arm64/aarch64.opcode"], "inputSha256": ["b" * 64],
+                },
+                "facts": [
+                    {"factKind": "headers", "architectureFamily": "arm64", "canonicalValue": "arm_neon.h",
+                     "semanticScope": "arm64-only"},
+                    {"factKind": "platformMacros", "architectureFamily": "arm64", "canonicalValue": "__ARM_NEON",
+                     "semanticScope": "arm64-only"},
+                ],
+            }
+            good_path, good_hash = write_source(root, "generated/arm64.json", good_payload)
+            manifest_payload = {
+                "schemaVersion": "2.0", "catalogId": "facts", "version": "2", "sources": [
+                    {"sourceId": "collected-arm64", "kind": "collected-v1", "path": good_path,
+                     "sha256": good_hash, "collectedFiles": ["collected/arm64/aarch64.opcode"]},
+                ],
+            }
+            (root / "knowledge-manifest.json").write_text(json.dumps(manifest_payload), encoding="utf-8")
+            result = GeneratedFactsKnowledgeProvider().load(make_context(root, rule_dir=root))
+        self.assertEqual(result.status, CompletionStatus.COMPLETE)
+        source = result.value.sources[0]
+        self.assertEqual("collected-json", source.kind)
+        self.assertIn("officialUrl", source.metadata["upstreamSource"])
+        arm64 = [item for item in result.value.entries if item.architecture_family == "arm64"]
+        self.assertEqual({"headers", "platformMacros"}, {item.fact_kind for item in arm64})
+        # 乱序装载：facts 不按 (factKind, family, value) 排序 → source-invalid。
+        # 该坏源是清单里唯一来源，装载整体 FAILED（无有效来源）。
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bad_payload = dict(good_payload)
+            bad_payload["facts"] = list(reversed(good_payload["facts"]))
+            bad_path, bad_hash = write_source(root, "generated/arm64-bad.json", bad_payload)
+            manifest_payload["sources"][0]["path"] = bad_path
+            manifest_payload["sources"][0]["sha256"] = bad_hash
+            (root / "knowledge-manifest.json").write_text(json.dumps(manifest_payload), encoding="utf-8")
+            bad_result = GeneratedFactsKnowledgeProvider().load(make_context(root, rule_dir=root))
+        self.assertEqual(bad_result.status, CompletionStatus.FAILED)
+        self.assertEqual(bad_result.diagnostics[0].code, "knowledge.source-invalid")
+
 
 if __name__ == "__main__":
     unittest.main()

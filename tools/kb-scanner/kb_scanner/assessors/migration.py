@@ -76,7 +76,7 @@ class MigrationAssessor:
             for item in classifications.classifications
         )
         test_issue = bool(kinds & {"riscv_test_blocker", "riscv_test_coverage_gap"})
-        missing_target = "missing_riscv_selection_path" in kinds
+        missing_target = bool(kinds & {"missing_riscv_selection_path", "missing_riscv_family_member"})
         conflict = scope_properties.get("configurationConflict") is True or _configuration_conflict(analysis)
 
         dimensions = {

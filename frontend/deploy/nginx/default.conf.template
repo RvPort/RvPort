@@ -2,6 +2,10 @@ server {
     listen 80;
     server_name _;
 
+    # 与后端 RVPORT_MAX_FILE_SIZE 对齐：源码压缩包上传走 /api/ 反代，
+    # nginx 默认 1m 会在转发层直接返回 413。
+    client_max_body_size 10g;
+
     root /usr/share/nginx/html;
     index index.html;
 

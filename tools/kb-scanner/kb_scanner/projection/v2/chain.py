@@ -23,7 +23,7 @@ _STEP_KIND = {
     "selection_condition": "source_evidence",
 }
 class EvidenceChainBuilder:
-    def __init__(self, index: SnapshotIndex, knowledge: KnowledgeSnapshot, source_context: SourceContextProjector, *, max_depth: int = 16, max_visited: int = 256, max_paths: int = 32) -> None:
+    def __init__(self, index: SnapshotIndex, knowledge: KnowledgeSnapshot, source_context: SourceContextProjector, *, max_depth: int = 16, max_visited: int = 256, max_paths: int = 32, architecture_family: str = "x86") -> None:
         self._index = index
         self._source_index = SourceChainIndex(index)
         self._knowledge = knowledge
@@ -31,7 +31,7 @@ class EvidenceChainBuilder:
         self._max_depth = max_depth
         self._max_visited = max_visited
         self._max_paths = max_paths
-        self._intrinsic_symbols = intrinsic_symbols(index.knowledge.values())
+        self._intrinsic_symbols = intrinsic_symbols(index.knowledge.values(), architecture_family)
         self._macro_terminals = proven_macro_terminals(index.relations.values())
         self._macro_effects = MacroEffectsProjection(index.relations.values())
         self._step_cache, self._edge_cache, self._incoming_cache = {}, {}, {}

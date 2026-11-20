@@ -118,6 +118,73 @@ DEFAULT_DEFINITIONS = build_registry(
 )
 
 
+# arm64 检测器定义：与 x86 定义同构，detector_id/observation_kind 换为 ARM64 命名，
+# 匹配时经 KnowledgeIndex.by_kind_and_family 只命中 arm64 族知识条目。
+# 语料暂无 intrinsics 函数名/vectorTypes/registers/compilerFlags 词表，对应定义
+# 保留（空集合不产生误报），待词表扩充后自动生效。
+ARM64_DEFINITIONS = build_registry(
+    (
+        DetectorDefinition("C_CPP.ARM64.HEADER", "include", ("headers",), "arm64_header_reference", "exact"),
+        DetectorDefinition("C_CPP.ARM64.INTRINSIC", "symbol", ("intrinsics",), "arm64_intrinsic_reference", "exact"),
+        DetectorDefinition("C_CPP.ARM64.MACRO_ARGUMENT_INTRINSIC", "macro_argument", ("intrinsics",), "arm64_intrinsic_reference", "exact", "candidate"),
+        DetectorDefinition("C_CPP.ARM64.MACRO_ARGUMENT_BUILTIN", "macro_argument", ("builtins",), "arm64_builtin_reference", "exact", "candidate"),
+        DetectorDefinition(
+            "C_CPP.ARM64.MACRO_REPLACEMENT_INTRINSIC",
+            "macro_replacement",
+            ("intrinsics",),
+            "arm64_intrinsic_reference",
+            "exact",
+        ),
+        DetectorDefinition(
+            "C_CPP.ARM64.MACRO_REPLACEMENT_BUILTIN",
+            "macro_replacement",
+            ("builtins",),
+            "arm64_builtin_reference",
+            "exact",
+        ),
+        DetectorDefinition("C_CPP.ARM64.BUILTIN", "symbol", ("builtins",), "arm64_builtin_reference", "exact"),
+        DetectorDefinition("C_CPP.ARM64.VECTOR_TYPE", "type", ("vectorTypes",), "arm64_vector_type_reference", "token"),
+        DetectorDefinition("C_CPP.ARM64.PLATFORM_MACRO", "macro", ("platformMacros",), "arm64_platform_macro_reference", "token"),
+        DetectorDefinition("C_CPP.ARM64.PLATFORM_CONDITION", "preprocessor", ("platformMacros",), "arm64_platform_macro_reference", "token"),
+        DetectorDefinition("C_CPP.ARM64.COMPILER_FLAG", "compiler_argument", ("compilerFlags",), "arm64_compiler_flag", "flag"),
+        DetectorDefinition("C_CPP.ARM64.CPU_PLATFORM_API", "symbol", ("cpuPlatformApis",), "arm64_cpu_platform_api", "exact"),
+        DetectorDefinition("C_CPP.ARM64.ASM_INSTRUCTION", "inline_asm", ("assemblyInstructions",), "arm64_assembly_instruction", "token"),
+        DetectorDefinition("C_CPP.ARM64.ASM_REGISTER", "inline_asm", ("registerNames",), "arm64_register_reference", "token"),
+        DetectorDefinition("C_CPP.ARM64.TARGET_FEATURE", "declaration_attribute", ("targetFeatures",), "arm64_target_feature", "token"),
+        DetectorDefinition(
+            "C_CPP.MIGRATION.FIXED_VECTOR_WIDTH", "declaration_attribute", ("vectorWidthMarkers",),
+            "fixed_vector_width_candidate", "token", "candidate",
+        ),
+        DetectorDefinition(
+            "C_CPP.ARM64.ARCH_ALIAS_ATTRIBUTE", "declaration_attribute", ("architectureAliases",),
+            "arm64_architecture_alias", "token",
+        ),
+        DetectorDefinition("C_CPP.ARM64.COMMENT_HINT", "comment", (), "arm64_comment_hint", "comment_hint", "hint"),
+        DetectorDefinition("C_CPP.ARM64.INLINE_ASM_CANDIDATE", "inline_asm", (), "inline_asm_candidate", "structural", "candidate"),
+        DetectorDefinition("C_CPP.ARM64.ATTRIBUTE_CANDIDATE", "declaration_attribute", (), "target_attribute_candidate", "structural", "candidate"),
+        DetectorDefinition("C_CPP.ARM64.ARCH_MACRO_CANDIDATE", "macro", (), "architecture_identifier_candidate", "architecture_candidate", "candidate"),
+        DetectorDefinition("C_CPP.ARM64.ARCH_CONDITION_CANDIDATE", "preprocessor", (), "architecture_identifier_candidate", "architecture_candidate", "candidate"),
+        DetectorDefinition(
+            "C_CPP.ARM64.ARCH_ENUM_MEMBER_CANDIDATE", "enum_member",
+            ("architectureAliases", "platformMacros", "targetFeatures"),
+            "architecture_enum_candidate", "enum_architecture_candidate", "candidate",
+        ),
+        DetectorDefinition(
+            "C_CPP.ARM64.ARCH_ENUM_REFERENCE_CANDIDATE", "enum_reference",
+            ("architectureAliases", "platformMacros", "targetFeatures"),
+            "architecture_enum_candidate", "enum_architecture_candidate", "candidate",
+        ),
+    )
+)
+
+
+# 源架构族 → 检测器定义注册表；local 检测器按 context.source_arch 选择。
+DEFINITIONS_BY_FAMILY = MappingProxyType({
+    "x86": DEFAULT_DEFINITIONS,
+    "arm64": ARM64_DEFINITIONS,
+})
+
+
 DEFAULT_DEFERRED_CAPABILITIES = MappingProxyType(
     {
         "architecture-alias-amd64-x64": "needs-fixed-normative-source",

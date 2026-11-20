@@ -28,7 +28,10 @@ function toBackendScanRequest(data: ProjectKnowledgeBaseScanConfig) {
     .filter(Boolean)
 
   return {
-    language: data.language === 'C/C++' ? 'c,cpp' : data.language,
+    language: data.language
+      .map((item) => (item === 'C/C++' ? 'c,cpp' : item))
+      .join(','),
+    sourceArch: data.sourceArch ?? 'x86',
     scanScope: scope === './' ? { mode: 'ALL', paths: [] } : { mode: 'PATHS', paths: [scope] },
     excludePaths: [...excludedDirectoryNames, ...excludedPaths]
   }

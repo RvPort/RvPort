@@ -1,8 +1,8 @@
 """Evidence-kind labels backed by exact, applicable compiler knowledge."""
 
 
-def intrinsic_symbols(entries):
-    return frozenset(item.canonical_value for item in entries if item.architecture_family == "x86" and item.fact_kind in {"intrinsics", "builtins"})
+def intrinsic_symbols(entries, architecture_family: str = "x86"):
+    return frozenset(item.canonical_value for item in entries if item.architecture_family == architecture_family and item.fact_kind in {"intrinsics", "builtins"})
 
 
 def is_intrinsic(evidence, symbols):

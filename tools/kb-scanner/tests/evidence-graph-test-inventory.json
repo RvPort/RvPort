@@ -42,7 +42,8 @@
         "tests/unit/evidence_graph/test_architecture_guards.py",
         "tests/unit/frontends/cpp/test_fake_enum_graph.py",
         "tests/unit/performance/test_proof_queries.py",
-        "tests/unit/test_source_chain_relations.py"
+        "tests/unit/test_source_chain_relations.py",
+        "tests/unit/evidence_graph/test_target_family_role.py"
       ]
     }
   }

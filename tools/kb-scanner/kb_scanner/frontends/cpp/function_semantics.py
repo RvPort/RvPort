@@ -1,4 +1,10 @@
-"""Optional scalar hints from a live translation unit, never compiler profiles."""
+"""Optional scalar hints from a live translation unit, never compiler profiles.
+
+kb-scanner frontend 阶段的 clang enrichment 辅助模块：在 libclang TU
+存活期间，为 tree-sitter 基线已定位的函数声明补充可选的标量语义提示
+（canonical key、签名、定义位置）。所有字段都是纯标量，不保留 Cursor
+等原生对象；编译器画像（compilerProfile）恒为 unknown，绝不冒充事实。
+"""
 from pathlib import Path
 
 from ...core import SourceLocation, SourceSpan, stable_id
@@ -6,6 +12,7 @@ from .vocabulary import make_evidence
 
 
 def _location(cursor, root, entities):
+    """把游标位置换算为工作区相对路径的 SourceLocation；无法落在已注册实体内的返回 None。"""
     location = cursor.location
     if location.file is None or location.line < 1 or location.column < 1:
         return None
@@ -19,7 +26,13 @@ def _location(cursor, root, entities):
 
 
 def function_semantics(cursor, root, entities, targets, context_id, producer, parse_has_error):
-    """Only materialize exact baseline function-name positions in this context."""
+    """Only materialize exact baseline function-name positions in this context.
+
+    只在游标位置与 tree-sitter 基线给出的函数名锚点 (path, line, column)
+    完全一致时产出 function_semantics 证据；canonical_key 为基于
+    canonical 位置与签名的稳定ID（SHA-256）。任何可选游标数据不可用
+    都降级为 unknown，而不是让基线事实失败。
+    """
     if cursor.kind.name != "FUNCTION_DECL" or not targets:
         return None
     location = _location(cursor, root, entities)

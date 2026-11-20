@@ -10,6 +10,7 @@
     "kb_scanner/analyzers/architecture_family/paths.py",
     "kb_scanner/analyzers/architecture_family/grouping.py",
     "kb_scanner/analyzers/architecture_family/bindings.py",
+    "kb_scanner/analyzers/architecture_family/absence.py",
     "kb_scanner/analyzers/architecture_family/analyzer.py",
     "kb_scanner/pipeline/composite.py",
     "kb_scanner/projection/v2/families.py",
@@ -17,5 +18,6 @@
     "kb_scanner/projection/v2/projector.py",
     "kb_scanner/projection/v2/renderers.py"
   ],
-  "componentSuite": "tests.test_architecture_family_component"
+  "unitSuites": ["tests.unit.test_architecture_family", "tests.unit.test_architecture_family_absence"],
+  "componentSuites": ["tests.test_architecture_family_component", "tests.test_architecture_family_absence_component"]
 }

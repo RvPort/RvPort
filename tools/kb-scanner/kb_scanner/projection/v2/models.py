@@ -213,7 +213,7 @@ class Tool(ClosedModel):
 
 
 class Scope(ClosedModel):
-    domain: Literal["c-cpp-x86-to-riscv"] = "c-cpp-x86-to-riscv"
+    domain: Literal["c-cpp-x86-to-riscv", "c-cpp-arm64-to-riscv", "rust-x86-to-riscv", "rust-arm64-to-riscv", "go-x86-to-riscv", "go-arm64-to-riscv", "java-x86-to-riscv", "java-arm64-to-riscv", "python-x86-to-riscv", "python-arm64-to-riscv"]
     targetArchitecture: Literal["riscv32", "riscv64"]
     staticAnalysisOnly: Literal[True] = True
     compiled: Literal[False] = False
@@ -223,7 +223,7 @@ class Scope(ClosedModel):
 
 class KnowledgeSourceView(ClosedModel):
     id: str
-    kind: Literal["compiler-derived", "curated"]
+    kind: Literal["compiler-derived", "curated", "collected"]
     sha256: str
 
 
@@ -256,7 +256,7 @@ class Summary(ClosedModel):
     referenceSources: int = Field(ge=0)
     references: int = Field(ge=0)
     countUnit: Literal["finding"] = "finding"
-    readiness: Literal["x86_only", "provisional", "unknown", "ready"]
+    readiness: Literal["x86_only", "arm64_only", "provisional", "unknown", "ready"]
     status: Completion
     reasonCodes: tuple[Reason, ...] = ()
     extensions: dict[str, dict[str, Any]] | None = None

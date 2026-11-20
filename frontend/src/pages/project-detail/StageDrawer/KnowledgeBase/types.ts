@@ -15,7 +15,8 @@ export interface FindingFilters {
 }
 
 export const initialScanConfig: ProjectKnowledgeBaseScanConfig = {
-  language: 'C/C++',
+  language: ['C/C++'],
+  sourceArch: 'x86',
   scope: './',
   excludedDirectoryNames: 'build,node_modules,.git,target,__pycache__',
   excludedPaths: 'third_party/simd\nvendor/x86'

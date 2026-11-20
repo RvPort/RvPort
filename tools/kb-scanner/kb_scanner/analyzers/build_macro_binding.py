@@ -1,4 +1,8 @@
 """Static build argument/translation-unit binding; never executes input."""
+# 构建参数与翻译单元的静态绑定（analyzer 阶段）：把 Make recipe 中的
+# -D 宏参数与源码翻译单元通过 MacroSession 串联，产出带作用域的
+# 出现级边（source_occurrence 实体 + 选择/展开/包含关系）。
+# 全程静态分析，绝不执行任何输入。
 from pathlib import PurePosixPath
 
 from ..core import Entity, Relation, stable_id
@@ -9,12 +13,19 @@ from .macro_effects import MacroEffectIndex
 
 
 def evaluate_condition(evidence, macros):
+    """求值单条预处理条件：返回 (涉及的宏名或 None, 三值真值)。"""
     result = condition(evidence, macros)
     return (result.names[0] if result.names else None), result.truth
 
 
 def bind_build_macros(facts, entities, relations, *, max_relations, demand_symbols=None):
     """Append only scoped occurrence edges; unknown semantics remain unknown."""
+    # 绑定主流程：1) 从证据 sourceChain 元数据分拣出 recipe（配方行）、
+    # argument（-D/-U 参数）与 origin（参数来源）三类记录；
+    # 2) 对每条已证明的 recipe，按其参数构造初始宏环境并对目标源文件
+    # 跑 MacroSession，回调里对条件证据与按需宏调用建边；
+    # 3) 对不在任何 recipe 内但含按需调用的源文件，以空环境补跑一遍。
+    # 返回是否达到关系预算（limited）；语义未知的边一律保持 unknown。
     arguments, origins, recipes = {}, {}, []
     for item in facts.evidence:
         data = item.metadata.get("sourceChain", {})
@@ -43,6 +54,12 @@ def bind_build_macros(facts, entities, relations, *, max_relations, demand_symbo
         return identifier
 
     def edge(left, right, configuration, result, kind="selects", extra=(), effect=None):
+        """在两条证据的出现实体之间建边（就地写入 relations/entities）。
+
+        result 三值：True→selected，False→inactive，None→unknown；
+        带 effect（宏展开效果）时状态另有规则：转发链被证明即 complete，
+        目标活动性未知不掩盖转发本身的证明。预算已满时置 limited 并跳过。
+        """
         nonlocal limited
         status = "unknown" if result is None else "selected" if result else "inactive"
         invocation = effect.get('invocationId') if effect else None
@@ -64,12 +81,20 @@ def bind_build_macros(facts, entities, relations, *, max_relations, demand_symbo
             "high" if result is not None else "medium", status, metadata)
 
     def run(source, macros, configuration, recipe=None):
+        """对单个源文件跑一次宏会话；consume 回调里完成所有建边。
+
+        每次运行前重置会话计数器与原因集合，使各文件独立计量预算。
+        """
         nonlocal limited
         session.events = session.visits = 0
         session.reasons = set()
         session.processed = set()
 
         def consume(item, environment, active, evaluation):
+            # MacroSession 回调：evaluation 非空说明是条件证据——把求值
+            # 溯源证据连到 recipe 与来源参数上；否则若该调用在按需集合中，
+            # 做宏效果展开：被证明的终端逐段建 expands_to 边，
+            # 未被证明的实参 token 建 contains 边并附原因码。
             nonlocal limited
             if evaluation is not None:
                 source_ids = tuple(eid for eid in evaluation.evidence_ids if eid in evidence_by_id)

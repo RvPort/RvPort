@@ -184,6 +184,10 @@
                     <systemPropertyVariables>
                         <spring.profiles.active>unit</spring.profiles.active>
                     </systemPropertyVariables>
+                    <!-- 显式限堆：容器无内存上限时 JVM 默认按宿主机内存的 1/4 预分配，
+                         在小内存环境（开发机/受限容器）fork 出的测试 JVM 直接分配失败。
+                         512m 堆对单套件测试足够；MAVEN_OPTS 已限主 Maven 进程。 -->
+                    <argLine>-Xmx512m</argLine>
                 </configuration>
             </plugin>
             <plugin>

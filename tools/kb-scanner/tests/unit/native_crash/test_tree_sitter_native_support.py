@@ -29,7 +29,9 @@ class TreeSitterNativeSupportTests(unittest.TestCase):
         self.assertEqual((), validate_runtime(runtime))
         payload = runtime_payload(runtime)
         self.assertEqual([13, 15], payload["supportedAbi"])
-        self.assertEqual({"tree-sitter-c", "tree-sitter-cpp"}, {item["package"] for item in payload["grammars"]})
+        self.assertEqual({"tree-sitter-c", "tree-sitter-cpp", "tree-sitter-go",
+                          "tree-sitter-java", "tree-sitter-rust", "tree-sitter-python"},
+                         {item["package"] for item in payload["grammars"]})
         self.assertTrue(validate_runtime(self.runtime(12)))
         self.assertTrue(validate_runtime(TreeSitterRuntime("x", 16, 15, ())))
 

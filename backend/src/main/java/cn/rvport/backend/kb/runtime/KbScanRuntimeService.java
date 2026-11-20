@@ -219,13 +219,16 @@ public class KbScanRuntimeService {
         } catch (Exception ex) {
             finishFailed(context, run.id(), toolRunId, TaskStatus.FAILED, phaseSummary(phase, "KB 扫描失败"));
             throw new TaskExecutionException(TaskErrorCode.HANDLER_FAILED, "KB 扫描失败", ex);
-        }
+            }
     }
 
     private ProcessResult runScanner(KbScanInput input, Path sourceRoot, Path outputDir, Path compileCommandsPath, TaskExecutionContext context) throws IOException, InterruptedException {
         List<String> command = command(input, sourceRoot, outputDir, compileCommandsPath);
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(scannerRoot().toFile());
+        // kb-scanner 进程级内存硬闸门：扫描器入口据此 setrlimit(RLIMIT_AS)，超限转
+        // FATAL 诊断而非换页抖动；也避免 OOM killer 连带 worker 容器（JVM）。
+        builder.environment().put("KB_SCANNER_MEMORY_LIMIT_MIB", String.valueOf(memoryLimitMib()));
         long started = System.nanoTime();
         Process process = builder.start();
         context.registerLocalProcess(process, Duration.ofSeconds(5));
@@ -256,6 +259,8 @@ public class KbScanRuntimeService {
         command.add(DEFAULT_SCHEMA_VERSION);
         command.add("--language");
         command.add(defaultText(input.language(), defaultLanguage()));
+        command.add("--source-arch");
+        command.add(defaultText(input.sourceArch(), defaultSourceArch()));
         command.add("--target-arch");
         command.add(defaultText(input.targetArch(), defaultTargetArch()));
         command.add("--exclude");
@@ -763,9 +768,18 @@ public class KbScanRuntimeService {
         return properties.kbScan() == null ? "riscv64" : defaultText(properties.kbScan().targetArch(), "riscv64");
     }
 
+    private String defaultSourceArch() {
+        return properties.kbScan() == null ? "x86" : defaultText(properties.kbScan().sourceArch(), "x86");
+    }
+
     private int timeoutSeconds() {
         Integer configured = properties.kbScan() == null ? null : properties.kbScan().timeoutSeconds();
         return configured == null ? 1800 : configured;
+    }
+
+    private int memoryLimitMib() {
+        Integer configured = properties.kbScan() == null ? null : properties.kbScan().memoryLimitMib();
+        return configured == null ? 2048 : configured;
     }
 
     private long maxOutputBytes() {

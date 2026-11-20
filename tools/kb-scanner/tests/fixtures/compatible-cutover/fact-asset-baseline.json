@@ -1,16 +1,44 @@
 {
-  "schemaVersion": "1.0",
-  "facts": {
-    "generated/clang-x86-entries.json": {
-      "sha256": "adf187416c006b120e43f2d2ce0677ee2104a4c27de4dd9cabd1df12add352f7",
-      "bytes": 303286,
-      "counts": {"headers": 125, "intrinsics": 7563, "builtins": 1993, "vectorTypes": 10, "platformMacros": 5, "compilerFlags": 216}
-    },
-    "generated/gcc-x86-entries.json": {
-      "sha256": "89775341ee880b13ac4f10a30558ff5d52875b25a3233114a5765601f0a9dad9",
-      "bytes": 362118,
-      "counts": {"headers": 120, "intrinsics": 7602, "builtins": 3438, "vectorTypes": 10, "platformMacros": 47, "compilerFlags": 225}
-    }
+ "schemaVersion": "1.0",
+ "facts": {
+  "generated/clang-x86-entries.json": {
+   "sha256": "adf187416c006b120e43f2d2ce0677ee2104a4c27de4dd9cabd1df12add352f7",
+   "bytes": 303286,
+   "counts": {
+    "headers": 125,
+    "intrinsics": 7563,
+    "builtins": 1993,
+    "vectorTypes": 10,
+    "platformMacros": 5,
+    "compilerFlags": 216
+   }
   },
-  "legacyYaml": {"files": 24, "generatedSetReferences": 6, "runtimeRole": "frozen-oracle-only"}
+  "generated/gcc-x86-entries.json": {
+   "sha256": "89775341ee880b13ac4f10a30558ff5d52875b25a3233114a5765601f0a9dad9",
+   "bytes": 362118,
+   "counts": {
+    "headers": 120,
+    "intrinsics": 7602,
+    "builtins": 3438,
+    "vectorTypes": 10,
+    "platformMacros": 47,
+    "compilerFlags": 225
+   }
+  },
+  "generated/arm64-collected-entries.json": {
+   "sha256": "4301bb10dd4ae3b035b9eda39caff01be7f52f4daaee55c33efae6917a7554f4",
+   "bytes": 376681,
+   "counts": {
+    "assemblyInstructions": 2161,
+    "platformMacros": 121,
+    "headers": 16,
+    "builtins": 8
+   }
+  }
+ },
+ "legacyYaml": {
+  "files": 24,
+  "generatedSetReferences": 6,
+  "runtimeRole": "frozen-oracle-only"
+ }
 }

@@ -1,4 +1,7 @@
 """Demand-driven fixed-argument macro forwarding; terminal tokens stay original."""
+# 宏效果索引与展开（analyzer 阶段）：按需（demand-driven）做固定参数
+# 宏的转发展开，产出"调用点→…→终端 token"的证据路径。
+# 终端 token（intrinsic/汇编等知识符号）始终保留原始出处，不做改写。
 from collections import defaultdict
 from dataclasses import dataclass
 import re
@@ -6,6 +9,11 @@ import re
 
 @dataclass(frozen=True)
 class Token:
+    """展开过程中的 token（frozen 不可变）。
+
+    forwarding 记录该 token 作为实参被逐层转发时途经的
+    （形参证据, 替换点证据）链，用于构造完整溯源路径。
+    """
     value: str
     evidence_id: str | None
     forwarding: tuple[str, ...] = ()
@@ -13,12 +21,23 @@ class Token:
 
 @dataclass(frozen=True)
 class Effects:
+    """一次宏调用展开的结果（frozen 不可变）。
+
+    paths: 终端证据路径集合（每个元素为证据 ID 元组）；reasons:
+    放弃/降级原因码；expanded_tokens: 消耗的 token 计数（预算审计）。
+    有 reasons 时 paths 为空——截断的展开不能证明任何终端。
+    """
     paths: tuple[tuple[str, ...], ...]
     reasons: tuple[str, ...]
     expanded_tokens: int
 
 
 def arguments(tokens, start):
+    """从 start 起解析实参列表（顶层逗号分隔、括号深度为 0 处切分）。
+
+    返回 (各实参的 token 元组元组, 结束下标)；找不到配对右括号返回
+    (None, len(tokens)) 表示畸形。
+    """
     result, current, depth = [], [], 0
     for index in range(start, len(tokens)):
         token = tokens[index]
@@ -36,7 +55,14 @@ def arguments(tokens, start):
 
 
 class MacroEffectIndex:
+    """宏效果索引：预建宏定义/形参/替换 token 的查询表，并筛选"按需"调用。
+
+    demand_symbols 给定时，从知识符号（含对象别名与作为实参传入的
+    包装名）反向可达的调用才进入 demanded_calls；不给时全部调用入选。
+    索引只用于保守筛选查询，绝不充当展开证明。
+    """
     def __init__(self, evidence, demand_symbols=None):
+        """evidence: 全量证据；demand_symbols: 知识库要求的符号集合（可选）。"""
         self.evidence = {item.id: item for item in evidence}
         self.parameters, self.replacements = defaultdict(list), defaultdict(list)
         self.names = set()
@@ -76,6 +102,13 @@ class MacroEffectIndex:
                     self.demanded_calls.add(item.id)
 
     def resolve(self, call, environment, *, depth_limit=32, token_limit=4096):
+        """展开一次宏调用，返回 Effects。
+
+        先校验实参 token 的证据引用（同文件、同调用、同编译配置），
+        不合法直接返回 invalid-macro-argument-reference；随后 invoke/walk
+        相互递归完成"实参绑定→替换→再扫描嵌套调用"的固定参数展开；
+        环、深度、token 预算或语义不支持都会记入 reasons 并作废全部路径。
+        """
         paths, reasons, count = set(), set(), 0
         data = call.metadata.get('macroCall', {})
         if data.get('status') != 'complete':
@@ -94,6 +127,10 @@ class MacroEffectIndex:
         actual = tuple(tuple(Token(t['value'], t.get('evidenceId')) for t in arg) for arg in data['arguments'])
 
         def invoke(name, args, prefix, trail, terminal=None):
+            # 调用名为 name 的宏：环境未定义它时，terminal 携带的终端
+            # 路径落地（token 保持原始出处），实参继续扫描嵌套调用；
+            # 已定义且证据唯一时，做对象别名转发或形参绑定替换后 walk。
+            # trail 防自引用环；深度/token 超限即记原因并放弃。
             nonlocal count
             if len(trail) >= depth_limit or name in trail:
                 reasons.add('macro-expansion-cycle-or-depth')
@@ -123,6 +160,8 @@ class MacroEffectIndex:
                     reasons.add('unsupported-object-call')
                 return
             params = self.parameters[definition.id]
+            # 固定参数要求：形参数=实参数、无空实参、无变参(...)、
+            # 替换体无不受支持的语义；否则记原因放弃本次展开。
             body = [token for token in self.replacements[definition.id] if token.metadata.get('tokenRole') != 'comment']
             if len(params) != len(args) or any(not arg for arg in args):
                 reasons.add('macro-argument-count')
@@ -131,6 +170,8 @@ class MacroEffectIndex:
                 reasons.add('unsupported-macro-semantics')
                 return
             bindings = {str(parameter.value): (parameter, value) for parameter, value in zip(params, args)}
+            # 形参替换：替换体中的形参位用实参 token 原样代入，并把
+            # （形参证据, 替换点证据）追加进 forwarding 溯源链。
             substituted = []
             for item in body:
                 if item.value in bindings:
@@ -145,6 +186,9 @@ class MacroEffectIndex:
             walk(substituted, prefix, (*trail, name))
 
         def walk(tokens, prefix, trail):
+            # 扫描 token 序列找嵌套调用：先吸收前缀括号并要求右侧配对
+            # 括号（形如 ((f))(…) 的包裹写法），再对"标识符("模式解析
+            # 实参并递归 invoke；其余 token 前移一格。
             index = 0
             while index + 1 < len(tokens):
                 callee, opening = index, index + 1

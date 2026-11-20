@@ -159,3 +159,28 @@ class PublisherProjectorTests(unittest.TestCase):
             result = SchemaV2ReportProjector(FailingPublisher()).project(*graph_with_source(Path(temp)))
             self.assertEqual(CompletionStatus.FAILED, result.status)
             self.assertEqual("projection.v2-failed", result.diagnostics[0].code)
+
+
+class DomainDerivationTests(unittest.TestCase):
+    """domain 语言参数化（Rust change 引入）：第一命中语言取前缀、无命中回退。"""
+
+    def test_first_mapped_language_wins(self):
+        from types import SimpleNamespace
+
+        from kb_scanner.projection.v2.projector import _domain
+
+        self.assertEqual("rust-x86-to-riscv", _domain(SimpleNamespace(languages=("rust",), source_arch="x86")))
+        self.assertEqual("go-arm64-to-riscv", _domain(SimpleNamespace(languages=("go",), source_arch="arm64")))
+        self.assertEqual("java-x86-to-riscv", _domain(SimpleNamespace(languages=("java",), source_arch="x86")))
+        self.assertEqual("python-arm64-to-riscv", _domain(SimpleNamespace(languages=("python",), source_arch="arm64")))
+        self.assertEqual("c-cpp-x86-to-riscv", _domain(SimpleNamespace(languages=("c", "rust"), source_arch="x86")))
+        self.assertEqual("c-cpp-arm64-to-riscv", _domain(SimpleNamespace(languages=("asm",), source_arch="arm64")))
+
+    def test_unmapped_and_missing_languages_fall_back(self):
+        from types import SimpleNamespace
+
+        from kb_scanner.projection.v2.projector import _domain
+
+        self.assertEqual("c-cpp-x86-to-riscv", _domain(SimpleNamespace(languages=("cobol",), source_arch="x86")))
+        self.assertEqual("c-cpp-x86-to-riscv", _domain(SimpleNamespace(languages=(), source_arch="x86")))
+        self.assertEqual("c-cpp-arm64-to-riscv", _domain(SimpleNamespace(source_arch="arm64")))

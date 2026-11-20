@@ -2,25 +2,180 @@
   "schemaVersion": "1.0",
   "scope": "c-cpp-x86-to-riscv-static-analysis",
   "capabilities": [
-    {"id": "x86-header", "status": "generated-fact-local", "reason": "Clang/GCC headers facts exist"},
-    {"id": "x86-intrinsic", "status": "generated-fact-local", "reason": "Clang/GCC intrinsic facts exist"},
-    {"id": "x86-builtin", "status": "generated-fact-local", "reason": "Clang/GCC builtin facts exist"},
-    {"id": "x86-vector-type", "status": "generated-fact-local", "reason": "Clang/GCC vector type facts exist"},
-    {"id": "x86-platform-macro", "status": "generated-fact-local", "reason": "Clang/GCC platform macro facts exist"},
-    {"id": "x86-compiler-flag", "status": "generated-fact-local", "reason": "Clang/GCC compiler flag facts exist"},
-    {"id": "comment-architecture-hint", "status": "structural-candidate", "reason": "Comments are hints and never blocking"},
-    {"id": "ambiguous-architecture-identifier", "status": "structural-candidate", "reason": "Selection and use relations are not available yet"},
-    {"id": "x86-inline-asm-vocabulary", "status": "generated-knowledge-local", "reason": "Fixed Binutils and LLVM sources provide instruction and register facts"},
-    {"id": "x86-cpu-platform-api", "status": "curated-knowledge-local", "reason": "Accepted GCC x86 header spellings provide reviewed API facts"},
-    {"id": "x86-target-attribute", "status": "generated-knowledge-local", "reason": "Fixed LLVM and GCC target definitions provide target feature values"},
-    {"id": "fixed-vector-width-expression", "status": "knowledge-backed-candidate", "reason": "GCC documents the expression but it is migration-sensitive rather than x86-only"},
-    {"id": "x86-architecture-alias", "status": "generated-knowledge-local", "reason": "Fixed LLVM and GCC processor tables provide target CPU and architecture names; amd64/x64 remain deferred"},
-    {"id": "macro-and-alternative-reachability", "status": "graph-backed", "reason": "Evidence Graph provides bounded include, macro and sibling-alternative proof paths"},
-    {"id": "build-source-selection", "status": "graph-backed", "reason": "Build Selection provides bounded selector, source, argument, dependency and target proof paths"},
-    {"id": "rpm-packaging-selection", "status": "graph-backed", "reason": "Static RPM sections, conditions, dependencies and architecture constraints are represented in the build graph"},
-    {"id": "test-role-and-selection", "status": "classification-backed", "reason": "Confirmed test metadata and bounded selection proofs drive test observations and classifications; candidates remain unknown"},
-    {"id": "blocking-severity-readiness", "status": "classification-backed", "reason": "Code-owned classifier and conservative multi-dimensional assessor operate in staged qualification"},
-    {"id": "real-riscv-build-and-test", "status": "external-validation-deferred", "reason": "Static scope does not compile, link, execute project tests or claim they passed"},
-    {"id": "compatibility-report-projection", "status": "classification-backed", "reason": "Versioned code-owned projection maps Classification and Assessment into the existing schema 1.0 result"}
+    {
+      "id": "x86-header",
+      "status": "generated-fact-local",
+      "reason": "Clang/GCC headers facts exist"
+    },
+    {
+      "id": "x86-intrinsic",
+      "status": "generated-fact-local",
+      "reason": "Clang/GCC intrinsic facts exist"
+    },
+    {
+      "id": "x86-builtin",
+      "status": "generated-fact-local",
+      "reason": "Clang/GCC builtin facts exist"
+    },
+    {
+      "id": "x86-vector-type",
+      "status": "generated-fact-local",
+      "reason": "Clang/GCC vector type facts exist"
+    },
+    {
+      "id": "x86-platform-macro",
+      "status": "generated-fact-local",
+      "reason": "Clang/GCC platform macro facts exist"
+    },
+    {
+      "id": "x86-compiler-flag",
+      "status": "generated-fact-local",
+      "reason": "Clang/GCC compiler flag facts exist"
+    },
+    {
+      "id": "comment-architecture-hint",
+      "status": "structural-candidate",
+      "reason": "Comments are hints and never blocking"
+    },
+    {
+      "id": "ambiguous-architecture-identifier",
+      "status": "structural-candidate",
+      "reason": "Selection and use relations are not available yet"
+    },
+    {
+      "id": "x86-inline-asm-vocabulary",
+      "status": "generated-knowledge-local",
+      "reason": "Fixed Binutils and LLVM sources provide instruction and register facts"
+    },
+    {
+      "id": "x86-cpu-platform-api",
+      "status": "curated-knowledge-local",
+      "reason": "Accepted GCC x86 header spellings provide reviewed API facts"
+    },
+    {
+      "id": "x86-target-attribute",
+      "status": "generated-knowledge-local",
+      "reason": "Fixed LLVM and GCC target definitions provide target feature values"
+    },
+    {
+      "id": "fixed-vector-width-expression",
+      "status": "knowledge-backed-candidate",
+      "reason": "GCC documents the expression but it is migration-sensitive rather than x86-only"
+    },
+    {
+      "id": "x86-architecture-alias",
+      "status": "generated-knowledge-local",
+      "reason": "Fixed LLVM and GCC processor tables provide target CPU and architecture names; amd64/x64 remain deferred"
+    },
+    {
+      "id": "macro-and-alternative-reachability",
+      "status": "graph-backed",
+      "reason": "Evidence Graph provides bounded include, macro and sibling-alternative proof paths"
+    },
+    {
+      "id": "build-source-selection",
+      "status": "graph-backed",
+      "reason": "Build Selection provides bounded selector, source, argument, dependency and target proof paths"
+    },
+    {
+      "id": "rpm-packaging-selection",
+      "status": "graph-backed",
+      "reason": "Static RPM sections, conditions, dependencies and architecture constraints are represented in the build graph"
+    },
+    {
+      "id": "test-role-and-selection",
+      "status": "classification-backed",
+      "reason": "Confirmed test metadata and bounded selection proofs drive test observations and classifications; candidates remain unknown"
+    },
+    {
+      "id": "blocking-severity-readiness",
+      "status": "classification-backed",
+      "reason": "Code-owned classifier and conservative multi-dimensional assessor operate in staged qualification"
+    },
+    {
+      "id": "real-riscv-build-and-test",
+      "status": "external-validation-deferred",
+      "reason": "Static scope does not compile, link, execute project tests or claim they passed"
+    },
+    {
+      "id": "compatibility-report-projection",
+      "status": "classification-backed",
+      "reason": "Versioned code-owned projection maps Classification and Assessment into the existing schema 1.0 result"
+    },
+    {
+      "id": "family-absence-candidate",
+      "status": "structural-candidate",
+      "reason": "Family template derivation (family-absence-v1) projects missing-member candidates into the architecture-family extension namespace; lexical candidates never become findings"
+    },
+    {
+      "id": "family-absence-escalation",
+      "status": "graph-backed",
+      "reason": "Build-selection bindings (selected source member, no riscv/generic member) escalate a family_gap entity with complete proof into missing_riscv_family_member findings"
+    },
+    {
+      "id": "assembly-file-input",
+      "status": "structural-candidate",
+      "reason": "Opt-in asm language domain scans .s/.S/.asm line-lexically into inline_asm evidence; existing ASM detectors classify per source family with unknown-status structural candidates"
+    },
+    {
+      "id": "rust-cfg-branch-role",
+      "status": "knowledge-backed-candidate",
+      "reason": "Three-valued cfg evaluation (target_arch closed set, bare identifiers unknown) feeds preprocessor conditions; classification decides five-state impact"
+    },
+    {
+      "id": "rust-arch-intrinsics",
+      "status": "generated-fact-local",
+      "reason": "collected-v1 rust corpus (arm64 intrinsics 2141, riscv target 186, x86 vectorTypes 17) backs exact symbol/type matching via existing intrinsics detectors"
+    },
+    {
+      "id": "rust-asm-macro",
+      "status": "structural-candidate",
+      "reason": "asm!/global_asm!/naked_asm! string literal bodies flow through the shared line lexer into inline_asm evidence and the ASM detector chain"
+    },
+    {
+      "id": "go-build-tag-evaluation",
+      "status": "knowledge-backed-candidate",
+      "reason": "Three-valued //go:build expression evaluation (GOARCH closed set, non-arch tags unknown) feeds preprocessor conditions"
+    },
+    {
+      "id": "go-goarch-branch",
+      "status": "structural-candidate",
+      "reason": "runtime.GOARCH ==/!= comparisons in if/switch produce selection_condition evidence with supportsRiscv semantics"
+    },
+    {
+      "id": "go-cgo-block",
+      "status": "structural-candidate",
+      "reason": "cgo comment blocks (// and /* */ adjacent to import \"C\") flow line-by-line into include/inline_asm evidence and the C detector chain"
+    },
+    {
+      "id": "java-jni-native-library-load",
+      "status": "knowledge-backed-candidate",
+      "reason": "JNI load/loadLibrary calls across receiver forms (System/Native/getRuntime chain/collected Runtime var) feed call evidence; library-name arguments flow through architecture_candidate heuristics"
+    },
+    {
+      "id": "java-os-arch-compare",
+      "status": "structural-candidate",
+      "reason": "os.arch property comparisons produce selection_condition evidence with supportsRiscv semantics"
+    },
+    {
+      "id": "python-ctypes-cffi-load",
+      "status": "knowledge-backed-candidate",
+      "reason": "ctypes/cffi dynamic library loads (qualified/from-import/FFI instance forms, argument presence required) feed call evidence; library names flow through architecture_candidate heuristics"
+    },
+    {
+      "id": "python-cffi-embedded-c",
+      "status": "structural-candidate",
+      "reason": "cdef/set_source string arguments are scanned line-by-line as embedded C (include lines and inline_asm) into the C detector chain"
+    },
+    {
+      "id": "cython-ctypes-regex",
+      "status": "structural-candidate",
+      "reason": ".pyx files (no grammar package) fall back to line-regex ctypes detection with comment skipping"
+    },
+    {
+      "id": "goreleaser-goarch",
+      "status": "needs-build",
+      "reason": ".goreleaser.yml goarch blocks without riscv entries emit build_arch_constraint records through the build channel"
+    }
   ]
 }

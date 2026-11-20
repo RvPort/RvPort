@@ -10,7 +10,20 @@ from ..core import KnowledgeEntry, KnowledgeSnapshot, NormalizedFact
 from .definitions import DetectorDefinition
 
 
-_ARCHITECTURE_TOKEN = re.compile(r"(?i)(?<![A-Za-z0-9])(?:x86(?:_64)?|i[3-6]86|sse[0-9.]*|avx(?:2|512)?)(?![A-Za-z0-9])")
+# 各源架构族的启发式词元：注释线索/架构形标识符/枚举强词元判定。
+_ARCHITECTURE_TOKENS = {
+    "x86": re.compile(r"(?i)(?<![A-Za-z0-9])(?:x86(?:_64)?|i[3-6]86|sse[0-9.]*|avx(?:2|512)?)(?![A-Za-z0-9])"),
+    "arm64": re.compile(r"(?i)(?<![A-Za-z0-9])(?:aarch64|arm64|armv[4-9][a-z]?|neon|sve[2p1.]*|sme[2p1]?)(?![A-Za-z0-9])"),
+}
+# 枚举强词元（terminal 命中即认定架构形，无需知识库）
+_ENUM_STRONG_TERMINAL = {
+    "x86": re.compile(r"(?:x86(?:64)?|i[3-6]86|sse\d*|avx(?:2|512)?|aesni)"),
+    "arm64": re.compile(r"(?:aarch64|arm64(?:e)?|neon|sve2?|sme2?p1?|mte|bti)"),
+}
+_ENUM_STRONG_COMPONENT = {
+    "x86": re.compile(r"x86(?:64)?|i[3-6]86"),
+    "arm64": re.compile(r"aarch64|arm64"),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,12 +34,16 @@ class MatchResult:
 
 
 class KnowledgeIndex:
-    __slots__ = ("_by_kind",)
+    __slots__ = ("_by_kind", "_by_kind_family")
 
     def __init__(self, snapshot: KnowledgeSnapshot) -> None:
         grouped: dict[str, dict[str, list[KnowledgeEntry]]] = defaultdict(lambda: defaultdict(list))
+        grouped_family: dict[tuple[str, str], dict[str, tuple[KnowledgeEntry, ...]]] = defaultdict(dict)
         for entry in snapshot.entries:
             grouped[entry.fact_kind][entry.canonical_value].append(entry)
+            grouped_family[(entry.fact_kind, entry.architecture_family)][entry.canonical_value] = (
+                grouped_family[(entry.fact_kind, entry.architecture_family)].get(entry.canonical_value, ())
+            ) + (entry,)
         self._by_kind = MappingProxyType(
             {
                 kind: MappingProxyType(
@@ -38,31 +55,39 @@ class KnowledgeIndex:
                 for kind, values in sorted(grouped.items())
             }
         )
+        # 按族视图懒构建缓存（key = fact_kind + 架构族，value = 规范值 → 条目元组）
+        self._by_kind_family = grouped_family
 
     @property
     def by_kind(self) -> Mapping[str, Mapping[str, tuple[KnowledgeEntry, ...]]]:
         return self._by_kind
+
+    def by_kind_and_family(self, fact_kind: str, architecture_family: str) -> Mapping[str, tuple[KnowledgeEntry, ...]]:
+        """取某事实种类在指定架构族下的规范值 → 条目映射（无条目返回空映射）。"""
+        return MappingProxyType(self._by_kind_family.get((fact_kind, architecture_family), {}))
 
 
 def match_fact(
     definition: DetectorDefinition,
     fact: NormalizedFact,
     index: KnowledgeIndex,
+    architecture_family: str = "x86",
 ) -> MatchResult | None:
+    family = architecture_family if architecture_family in _ARCHITECTURE_TOKENS else "x86"
     if fact.kind != definition.input_kind:
         return None
     if definition.matcher == "structural":
         return MatchResult((), definition.status, f"structural:{fact.kind}") if fact.canonical_value else None
     if definition.matcher == "comment_hint":
-        return MatchResult((), "hint", "architecture-token-in-comment") if _ARCHITECTURE_TOKEN.search(fact.canonical_value) else None
+        return MatchResult((), "hint", "architecture-token-in-comment") if _ARCHITECTURE_TOKENS[family].search(fact.canonical_value) else None
     if definition.matcher == "architecture_candidate":
-        return MatchResult((), "candidate", "architecture-shaped-identifier") if _ARCHITECTURE_TOKEN.search(fact.canonical_value) else None
+        return MatchResult((), "candidate", "architecture-shaped-identifier") if _ARCHITECTURE_TOKENS[family].search(fact.canonical_value) else None
     if definition.matcher == "enum_architecture_candidate":
         components = _identifier_components(fact.canonical_value)
         terminal_components = _identifier_terminal_components(fact.canonical_value)
         matches: dict[str, KnowledgeEntry] = {}
         for knowledge_kind in definition.knowledge_kinds:
-            for value, entries in index.by_kind.get(knowledge_kind, {}).items():
+            for value, entries in index.by_kind_and_family(knowledge_kind, family).items():
                 if value.casefold() in terminal_components:
                     for entry in entries:
                         matches[entry.id] = entry
@@ -77,9 +102,9 @@ def match_fact(
                 for other in matched_values
             )
         }
-        strong = next((value for value in terminal_components if re.fullmatch(r"(?:x86(?:64)?|i[3-6]86|sse\d*|avx(?:2|512)?|aesni)", value)), None)
+        strong = next((value for value in terminal_components if _ENUM_STRONG_TERMINAL[family].fullmatch(value)), None)
         if strong is None:
-            strong = next((value for value in components if re.fullmatch(r"x86(?:64)?|i[3-6]86", value)), None)
+            strong = next((value for value in components if _ENUM_STRONG_COMPONENT[family].fullmatch(value)), None)
         if not matches and strong is None:
             return None
         basis = "enum-knowledge:" + ",".join(definition.knowledge_kinds) if matches else f"enum-family-token:{strong}"
@@ -87,7 +112,7 @@ def match_fact(
 
     matches: dict[str, KnowledgeEntry] = {}
     for knowledge_kind in definition.knowledge_kinds:
-        values = index.by_kind.get(knowledge_kind, {})
+        values = index.by_kind_and_family(knowledge_kind, family)
         if definition.matcher == "exact":
             candidates = values.get(fact.canonical_value, ())
         elif definition.matcher == "flag":

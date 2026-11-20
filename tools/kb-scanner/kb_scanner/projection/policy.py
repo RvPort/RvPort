@@ -94,7 +94,7 @@ class ProjectionPolicy:
     def fields(self, observation: Observation, classification: Classification) -> dict[str, object]:
         impact = classification.impact
         risk = present_risk(classification, observation)
-        gap = observation.kind in {"riscv_test_coverage_gap", "missing_riscv_selection_path"} or classification.metadata.get("portabilityGap") is True
+        gap = observation.kind in {"riscv_test_coverage_gap", "missing_riscv_selection_path", "missing_riscv_family_member"} or classification.metadata.get("portabilityGap") is True
         return {
             "severity": risk.severity,
             "finding_type": "hint" if impact == "hint" else "guarded" if impact == "guarded_inactive" else "portability_gap" if gap else "issue",
@@ -117,7 +117,7 @@ def _title(kind: str) -> str:
 
 
 def _source_kind(kind: str) -> str:
-    if kind.startswith("build_") or kind == "missing_riscv_selection_path":
+    if kind.startswith("build_") or kind in {"missing_riscv_selection_path", "missing_riscv_family_member"}:
         return "build"
     if "test" in kind:
         return "test"

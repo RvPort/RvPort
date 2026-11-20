@@ -82,9 +82,18 @@ public record RvPortProperties(
             Integer timeoutSeconds,
             Long maxOutputBytes,
             String language,
+            String sourceArch,
             String targetArch,
-            Integer contextLines
+            Integer contextLines,
+            Integer memoryLimitMib
     ) {
+        public KbScan {
+            sourceArch = Bitcode.defaultText(sourceArch, "x86");
+            // kb-scanner 进程级内存硬闸门（KB_SCANNER_MEMORY_LIMIT_MIB → RLIMIT_AS）。
+            // 缺省 2048：超限分配在扫描器内转 FATAL 诊断（pipeline.memory-budget-exceeded）
+            // 而非拖垮 worker 容器；0 表示不设限（仅调试用）。
+            memoryLimitMib = memoryLimitMib == null ? 2048 : Math.max(0, memoryLimitMib);
+        }
     }
 
     public record Bitcode(

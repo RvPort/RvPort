@@ -1,4 +1,10 @@
-"""Copy bounded macro call/branch data while the parser tree is still alive."""
+"""Copy bounded macro call/branch data while the parser tree is still alive.
+
+frontend 阶段的宏记录辅助模块：在 tree-sitter / libclang 的原生对象
+仍然存活期间，把宏调用参数 token、预处理分支区间等数据复制为纯标量
+记录。token 数量有硬上限（预算耗尽返回 unknown 而非截断），且从不
+推断"传入名字即执行"这类语义。
+"""
 import re
 
 from .vocabulary import make_evidence
@@ -10,6 +16,12 @@ _BRANCHES = {'preproc_if', 'preproc_ifdef', 'preproc_ifndef', 'preproc_elif', 'p
 
 
 def event_metadata(node, source, positions):
+    """为预处理节点生成附加元数据：分支区间（#if/#elif/#else 归组）与 pragma 标记。
+
+    preprocessorRegion 思路：#elif/#else 先沿 parent 链上溯找到条件组
+    根（首个 #if/#ifdef/#ifndef），再记录整组区间、分支体结束位置
+    （下一个 alternative 的起点）与行号，供后续按分支归并证据。
+    """
     result = {'sourceOrder': int(node.start_byte)}
     if node.type in _BRANCHES:
         root = node
@@ -32,7 +44,13 @@ def event_metadata(node, source, positions):
 
 
 def call_records(node, source, positions, call, *, token_limit=4096):
-    """Keep original argument tokens; never infer that passing a name executes it."""
+    """Keep original argument tokens; never infer that passing a name executes it.
+
+    用正则从调用参数原文切出 token（跳过注释/字符串外的空白），超过
+    token_limit 即整体放弃（unknown + macro-token-budget），不截断。
+    成功时交给 _copy_arguments 复制参数结构并附挂 macro_argument_token
+    证据。
+    """
     function = node.child_by_field_name('function')
     arguments = node.child_by_field_name('arguments')
     if function is None or arguments is None or function.type != 'identifier':
@@ -52,7 +70,12 @@ def call_records(node, source, positions, call, *, token_limit=4096):
 
 
 def clang_call_records(cursor, call, token_span, *, token_limit=4096):
-    """Copy native token fields inside the live translation unit, never retain Cursor."""
+    """Copy native token fields inside the live translation unit, never retain Cursor.
+
+    与 call_records 同构的 libclang 版本：直接取 TU 的原生 token，
+    校验形状（名字 + 括号包裹）后复用 _copy_arguments；任何游标数据
+    不可用都降级为 unknown，不影响基线事实。
+    """
     tokens, spans = [], []
     try:
         for index, token in enumerate(cursor.get_tokens()):
@@ -68,6 +91,11 @@ def clang_call_records(cursor, call, token_span, *, token_limit=4096):
 
 
 def _copy_arguments(tokens, call, span_for):
+    """把 token 序列按顶层逗号切分为参数，并为标识符 token 挂 macro_argument_token 证据。
+
+    括号深度计数决定逗号是否为参数分隔符；出现非 名字/数字/括号 的
+    token、深度失衡或空参数即整体 unsupported（unknown），不部分输出。
+    """
     args, current, depth, supported = [], [], 0, True
     for value, first, last in tokens:
         if value == b',' and depth == 0:

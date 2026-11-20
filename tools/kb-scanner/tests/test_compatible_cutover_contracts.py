@@ -36,7 +36,15 @@ class CompatibleCutoverContractTests(unittest.TestCase):
             payload = json.loads(content)
             self.assertEqual(expected["bytes"], len(content))
             self.assertEqual(expected["sha256"], hashlib.sha256(content).hexdigest())
-            self.assertEqual(expected["counts"], {name: len(payload[name]) for name in expected["counts"]})
+            # legacy 词表是顶层列表字段（计 len）；collected 语料是 facts 数组（按 factKind 计数）。
+            if "facts" in payload and isinstance(payload["facts"], list):
+                actual_counts = {}
+                for item in payload["facts"]:
+                    actual_counts[item["factKind"]] = actual_counts.get(item["factKind"], 0) + 1
+            else:
+                actual_counts = {name: len(payload[name]) for name in payload
+                                 if isinstance(payload.get(name), list)}
+            self.assertEqual(expected["counts"], {name: actual_counts[name] for name in expected["counts"]})
         yaml_files = tuple((RULES / "rules").rglob("*.yaml"))
         self.assertEqual(baseline["legacyYaml"]["files"], len(yaml_files))
         self.assertEqual(baseline["legacyYaml"]["generatedSetReferences"], sum(path.read_text().count("generatedSet:") for path in yaml_files))

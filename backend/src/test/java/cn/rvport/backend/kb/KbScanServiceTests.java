@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -152,7 +153,7 @@ class KbScanServiceTests {
         when(taskService.create(any())).thenReturn(task(taskId, projectId));
         when(kbScanRepository.createRun(any(), eq(taskId))).thenReturn(UUID.randomUUID());
 
-        TaskResponse response = service().create(projectId, new KbScanRequest(null, null, null, null, null), actorId, false, new MockHttpServletRequest());
+        TaskResponse response = service().create(projectId, new KbScanRequest(null, null, null, null, null, null), actorId, false, new MockHttpServletRequest());
 
         assertThat(response.id()).isEqualTo(taskId);
         verify(projectAccessService).requireProjectAccess(projectId, actorId, false);
@@ -184,10 +185,34 @@ class KbScanServiceTests {
         ArgumentCaptor<KbScanInput> input = ArgumentCaptor.forClass(KbScanInput.class);
         verify(kbScanRepository).createRun(input.capture(), eq(taskId));
         assertThat(input.getValue().language()).isEqualTo("c,cpp");
+        assertThat(input.getValue().sourceArch()).isEqualTo("x86");
         assertThat(input.getValue().targetArch()).isEqualTo("riscv64");
         assertThat(input.getValue().ruleVersion()).isNull();
         assertThat(input.getValue().scanScope()).containsEntry("mode", "ALL");
         assertThat(input.getValue().excludePaths()).containsExactly(".git", "build");
+    }
+
+    @Test
+    void normalizesProjectSourceArchAliasesIntoScannerFamilies() throws Exception {
+        UUID projectId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        UUID sourceRevisionId = UUID.randomUUID();
+        UUID taskId = UUID.randomUUID();
+        Path source = Files.createDirectories(tempDir.resolve("alias-source"));
+        when(sourceRepository.findActive(projectId))
+                .thenReturn(Optional.of(sourceRevision(projectId, sourceRevisionId, source)));
+        when(taskService.create(any())).thenReturn(task(taskId, projectId));
+        when(kbScanRepository.createRun(any(), eq(taskId))).thenReturn(UUID.randomUUID());
+
+        // 项目侧别名（x86_64/aarch64）与未知值都应归一化为扫描器的源架构族。
+        service().create(projectId, new KbScanRequest(null, null, null, "aarch64", null, null), actorId, false, new MockHttpServletRequest());
+        service().create(projectId, new KbScanRequest(null, null, null, "x86_64", null, null), actorId, false, new MockHttpServletRequest());
+        service().create(projectId, new KbScanRequest(null, null, null, "sparc", null, null), actorId, false, new MockHttpServletRequest());
+
+        ArgumentCaptor<KbScanInput> input = ArgumentCaptor.forClass(KbScanInput.class);
+        verify(kbScanRepository, times(3)).createRun(input.capture(), eq(taskId));
+        assertThat(input.getAllValues()).extracting(KbScanInput::sourceArch)
+                .containsExactly("arm64", "x86", "x86");
     }
 
     @Test
@@ -205,6 +230,7 @@ class KbScanServiceTests {
                 sourceRevisionId,
                 "riscv-porting@2026-07",
                 "c",
+                null,
                 new KbScanScope("PATHS", List.of("src")),
                 List.of(".git", "third_party")
         ), actorId, false, new MockHttpServletRequest());
@@ -222,7 +248,7 @@ class KbScanServiceTests {
         UUID actorId = UUID.randomUUID();
         when(sourceRepository.findActive(projectId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service().create(projectId, new KbScanRequest(null, null, null, null, null), actorId, false, new MockHttpServletRequest()))
+        assertThatThrownBy(() -> service().create(projectId, new KbScanRequest(null, null, null, null, null, null), actorId, false, new MockHttpServletRequest()))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("项目没有可用的 active source revision")
                 .extracting("status")
@@ -236,14 +262,14 @@ class KbScanServiceTests {
         UUID actorId = UUID.randomUUID();
         when(sourceRepository.findById(sourceRevisionId)).thenReturn(Optional.of(sourceRevision(UUID.randomUUID(), sourceRevisionId, tempDir.resolve("missing"))));
 
-        assertThatThrownBy(() -> service().create(projectId, new KbScanRequest(sourceRevisionId, null, null, null, null), actorId, false, new MockHttpServletRequest()))
+        assertThatThrownBy(() -> service().create(projectId, new KbScanRequest(sourceRevisionId, null, null, null, null, null), actorId, false, new MockHttpServletRequest()))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("源码版本不存在")
                 .extracting("status")
                 .isEqualTo(HttpStatus.NOT_FOUND);
 
         when(sourceRepository.findById(sourceRevisionId)).thenReturn(Optional.of(sourceRevision(projectId, sourceRevisionId, tempDir.resolve("missing"))));
-        assertThatThrownBy(() -> service().create(projectId, new KbScanRequest(sourceRevisionId, null, null, null, null), actorId, false, new MockHttpServletRequest()))
+        assertThatThrownBy(() -> service().create(projectId, new KbScanRequest(sourceRevisionId, null, null, null, null, null), actorId, false, new MockHttpServletRequest()))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("源码工作副本不存在")
                 .extracting("status")
@@ -676,7 +702,7 @@ class KbScanServiceTests {
 
     private KbScanService service() {
         return service(new RvPortProperties(null, new RvPortProperties.KbScan(null, null, null,
-                tempDir.resolve("runtime/kb-scans").toString(), 1800, null, "c,cpp", "riscv64", 20), new RvPortProperties.Worker(false)));
+                tempDir.resolve("runtime/kb-scans").toString(), 1800, null, "c,cpp", "x86", "riscv64", 20, null), new RvPortProperties.Worker(false)));
     }
 
     private KbScanService service(RvPortProperties properties) {

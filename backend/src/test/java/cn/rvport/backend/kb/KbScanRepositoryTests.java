@@ -85,7 +85,7 @@ class KbScanRepositoryTests {
                     .enqueueRecord(run(TaskStatus.RUNNING, null, null));
 
             UUID created = repository.createRun(new KbScanInput(PROJECT_ID, RUN_ID, REVISION_ID,
-                    " v2 ", "c", "riscv64", Map.of("mode", "ALL"), List.of(), KbContextFixtures.CONTEXT), TASK_ID);
+                    " v2 ", "c", "x86", "riscv64", Map.of("mode", "ALL"), List.of(), KbContextFixtures.CONTEXT), TASK_ID);
             assertThat(created).isEqualTo(RUN_ID);
             assertThat(repository.findById(RUN_ID).orElseThrow().scope()).containsEntry("mode", "ALL");
             assertThat(repository.findByTaskId(TASK_ID).orElseThrow().summary()).isEmpty();

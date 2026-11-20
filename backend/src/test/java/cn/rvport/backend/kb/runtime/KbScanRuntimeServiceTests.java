@@ -710,7 +710,7 @@ class KbScanRuntimeServiceTests {
                 new RvPortProperties(
                         null,
                         new RvPortProperties.KbScan("python", scannerRoot.toString(), "rulesets/riscv-porting",
-                                tempDir.resolve("runtime/kb-scans").toString(), timeout, 10_485_760L, "c,cpp", "riscv64", 20),
+                                tempDir.resolve("runtime/kb-scans").toString(), timeout, 10_485_760L, "c,cpp", "x86", "riscv64", 20, null),
                         new RvPortProperties.Worker(false)
                 ),
                 new ObjectMapper(),
@@ -754,7 +754,7 @@ class KbScanRuntimeServiceTests {
     }
 
     private KbScanInput input(UUID projectId, UUID sourceRevisionId) {
-        return new KbScanInput(projectId, null, sourceRevisionId, null, "c,cpp", "riscv64", Map.of("mode", "ALL"), List.of(".git"));
+        return new KbScanInput(projectId, null, sourceRevisionId, null, "c,cpp", "x86", "riscv64", Map.of("mode", "ALL"), List.of(".git"));
     }
 
     private KbScanView run(UUID scanId, UUID projectId, UUID taskId, UUID sourceRevisionId) {

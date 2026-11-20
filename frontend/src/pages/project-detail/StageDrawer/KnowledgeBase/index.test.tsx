@@ -557,7 +557,7 @@ describe('Knowledge base stage drawer', () => {
     await waitFor(() =>
       expect(createProjectKnowledgeBaseScan).toHaveBeenCalledWith(
         'project-1',
-        expect.objectContaining({ language: 'C/C++', scope: './' })
+        expect.objectContaining({ language: ['C/C++'], sourceArch: 'x86', scope: './' })
       )
     )
   })

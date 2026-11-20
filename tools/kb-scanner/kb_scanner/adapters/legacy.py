@@ -1,3 +1,10 @@
+"""冻结的旧版扫描路径，仅作为测试 oracle 保留（FROZEN，勿改）。
+
+本模块封装 kb-scanner 重构前的 解析→规则→报告 单体路径，供测试比对
+新旧实现的一致性；生产扫描路径不加载它（含 PyYAML 依赖）。
+除注释外不得改动任何逻辑——它是回归比对的基准。
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -222,6 +229,7 @@ class LegacyPipelineRunner:
 
 
 def create_legacy_application() -> ScanApplication:
+    """组装旧版扫描应用（上下文工厂 + 旧版运行器），供测试 oracle 使用。"""
     return ScanApplication(ApplicationProfile(context_factory=LegacyContextFactory(), runner=LegacyPipelineRunner()))
 
 

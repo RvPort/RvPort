@@ -1,0 +1,1235 @@
+{
+  "facts": [
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_32e",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_64e",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_a",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_abi_rve",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_arch_test",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_atomic",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_c",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_cmodel_large",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_cmodel_medany",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_cmodel_medlow",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_cmodel_pic",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_compressed",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_d",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_div",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_e",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_f",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_fdiv",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_flen",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_float_abi_double",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_float_abi_quad",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_float_abi_single",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_float_abi_soft",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_fsqrt",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_h",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_i",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_m",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_misaligned_avoid",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_misaligned_fast",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_misaligned_slow",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_mul",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_muldiv",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_shcounterenw",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_shgatpa",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_shtvala",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_shvsatpa",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_shvstvala",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_shvstvecd",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_smaia",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_smcdeleg",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_smcsrind",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_smepmp",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_smmpm",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_smnpm",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_smstateen",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ssaia",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ssccfg",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ssccptr",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_sscofpmf",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_sscounterenw",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_sscsrind",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ssnpm",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_sspm",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ssqosid",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ssstateen",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ssstrict",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_sstc",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_sstvala",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_sstvecd",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ssu64xl",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_supm",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_svade",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_svadu",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_svbare",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_svinval",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_svnapot",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_svpbmt",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_th_v_intrinsic",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_v",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_v_elen",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_v_elen_fp",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_v_fixed_vlen",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_v_intrinsic",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_v_min_vlen",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_vector",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xcvalu",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xcvbi",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xcvbitmanip",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xcvelw",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xcvmac",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xcvmem",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xcvsimd",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xlen",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xsfcease",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xsfqmaccdod",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xsfvcp",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xsfvfnrclipxfqf",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xsfvfwmaccqqq",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xsfvqmaccqoq",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xsifivecdiscarddlone",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xsifivecflushdlone",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xtheadba",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xtheadbb",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xtheadbs",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xtheadcmo",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xtheadcondmov",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xtheadfmemidx",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xtheadmac",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xtheadmemidx",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xtheadmempair",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xtheadsync",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xtheadvdot",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_xventanacondops",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_za128rs",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_za64rs",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zaamo",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zabha",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zacas",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zalasr",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zalrsc",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zama16b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zawrs",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zba",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zbb",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zbc",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zbkb",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zbkc",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zbkx",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zbs",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zca",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zcb",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zcd",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zce",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zcf",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zcmop",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zcmp",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zcmt",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zdinx",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zfa",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zfbfmin",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zfh",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zfhmin",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zfinx",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zhinx",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zhinxmin",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zic64b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zicbom",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zicbop",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zicboz",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ziccamoa",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ziccif",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zicclsm",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ziccrse",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zicfilp",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zicfiss",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zicntr",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zicond",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zicsr",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zifencei",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zihintntl",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zihintpause",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zihpm",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zimop",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zk",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zkn",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zknd",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zkne",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zknh",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zkr",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zks",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zksed",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zksh",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zkt",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zmmul",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_ztso",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvbb",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvbc",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zve32f",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zve32x",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zve64d",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zve64f",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zve64x",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvfbfmin",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvfbfwma",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvfh",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvfhmin",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvkb",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvkg",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvkn",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvknc",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvkned",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvkng",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvknha",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvknhb",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvks",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvksc",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvksed",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvksg",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvksh",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvkt",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl1024b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl128b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl16384b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl2048b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl256b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl32768b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl32b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl4096b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl512b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl64b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl65536b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "__riscv_zvl8192b",
+      "factKind": "platformMacros",
+      "semanticScope": "riscv-only"
+    }
+  ],
+  "schemaVersion": "1.0",
+  "source": {
+    "collectedAt": "2026-11-12",
+    "inputFiles": [
+      "collected/riscv/riscv.macro"
+    ],
+    "inputSha256": [
+      "96b139e150a6d7d4bf6cf8184b56c39313630ef48daf5791f51da419e908fc18"
+    ],
+    "license": "RISC-V C-API specification macros, Apache-2.0, collected via rvport-skills/riscv-scan",
+    "officialUrl": "https://github.com/riscv-non-isa/riscv-c-api-doc",
+    "sourceId": "collected-riscv-entries"
+  }
+}
