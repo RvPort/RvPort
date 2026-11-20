@@ -2,10 +2,14 @@
 
 ## Context
 
-本设计的项目路径均相对于仓库根目录，唯一 OpenSpec 根是 `backend`，基线分支 dev。上游依据：`docs/AI迁移能力整合方案.md`（2026-10-29 v0.1）的一期最小路径，及其后两次实测修订（2026-11-19）：
+本设计的项目路径均相对于仓库根目录，唯一 OpenSpec 根是 `backend`，基线分支 dev。上游依据：`docs/AI迁移能力整合方案.md`（2026-10-29 v0.1）的一期最小路径，及其后三次实测修订（2026-11-19/20）：
 
-1. runtime 选型实测：内网端点（wxai 系）仅支持 chat completions、`/v1/responses` 404；新版 codex 仅支持 Responses 协议。opencode 按 `OpenCodeAgentRuntimeAdapter` 生产形态（workspace 内 `opencode.json` + `run --auto --dir <ws> --model rvport-openai-compatible/<model>` + `OPENCODE_CONFIG` env）实测通过：无头执行、`.opencode/agent/*.md` 自定义 agent 加载（规则仅存在于 md 且判定正确）、task 工具派生 subagent、workspace 写文件、最终回复单行 `DONE`。
-2. 摸底勘误：实际表名为 `findings`（非方案文档的 kb_findings）；`kb/ai` 包与 `KB_AI_EXTENSION` 已被 2026-11-18 change 退役删除；当前 agent workspace 范本是 `report/review/ReportAiReviewRuntime`（只物化清单文件、hash 完整性校验、`AiReviewValidator` 结果校验），不是已删除的 KbAiExtensionAgentRuntime。
+1. runtime 选型实测：内网端点（wxai 系）仅支持 chat completions、`/v1/responses` 404；新版 codex 仅支持 Responses 协议。opencode 按 `OpenCodeAgentRuntimeAdapter` 生产形态实测通过：无头执行、`.opencode/agent/*.md` 自定义 agent 加载、task 工具派生 subagent、workspace 写文件、单行 `DONE`。
+2. 摸底勘误：实际表名为 `findings`（非方案文档的 kb_findings）；`kb/ai` 包与 `KB_AI_EXTENSION` 已被 2026-11-18 change 退役删除；当前 agent workspace 范本是 `report/review/ReportAiReviewRuntime`。
+3. **pi 探针实测（2026-11-20，第 0 步）**：`@earendil-works/pi-coding-agent`（rvport-web 镜像同款；npm 另有 `@mariozechner/pi-coding-agent` 0.73.0，bin 同名 `pi`，探针用后者验证）原生支持 `--print` 无头与 `--skill <path>`；实现 **Agent Skills 标准（agentskills.io）**，文档明确可直接加载 Claude Code 技能目录——riscv-migrate 的 SKILL.md 即此标准。20 行 provider extension 注册 wxai（`api: "openai-completions"`）即接通内网模型；探针 workspace 中"规则只存在于 SKILL.md"的判定 100% 正确，输出单行 DONE。
+4. **rvport-web 调研（2026-11-20，第 1 步）**：上游 `zte-riscv/rvport-web` 的 Agent mode 即本 change 的目标形态——执行器镜像 `codemig-agent-base`（Dockerfile.template：qemu-user + 双架构交叉工具链 + node + pi + `pi install npm:pi-subagents pi-mcp-adapter` + riscv_doc_mcp）、宿主 `/app` bind mount、`docker run --rm --network host` 一次性容器、技能"总是贴皮"（assets 的 SKILL.md 运行时 cp 到 `/root/.pi/agent/skills/` 覆盖镜像内版本——**改 SKILL.md 不用重建镜像**，与我们的热更新需求同构）、uid/gid chown 处理宿主文件权限、`.skills/` 与 `.prompt.txt` 从迁移产物中排除。其 migrate/uttest/asmrepair 三技能带 `tools:` frontmatter（含 riscv-doc-mcp）与中语言守则模板。
+
+**架构定案（用户决策 2026-11-20）**：一期实现的 worker 内子进程形态保留为已验证的基线；本 change 后续演进为**独立执行器容器**形态——技能+pi+QEMU+工具链独立镜像、技能 volume 热更新（git 管理）、补丁接受工作流。演进遵循下方 D8。
 
 ## Goals / Non-Goals
 
@@ -13,14 +17,14 @@
 
 - findings → `input/scan_result.json` 投影：跨 run 稳定条目身份、结构化过滤与 solver_type 映射。
 - `KB_MIGRATION` 任务全链路：创建资格、worker 执行、产物入库与归档候选、失败语义。
-- agent 执行隔离：workspace 只含投影涉及文件、输入 hash 校验、技能以 classpath 资源注入、结果全落 `output/`。
+- agent 执行隔离：workspace 只含投影涉及文件、输入 hash 校验、技能注入、结果全落 `output/`。
 - Docker 单测 90/90 覆盖与本地 Compose 冒烟。
+- 演进目标（D8）：独立执行器容器 + pi 原生技能搬运 + 技能热更新 + 补丁接受工作流。
 
 **Non-Goals:**
 
-- 不新增 AgentType（复用 OPENCODE）；不更新任何 CLI 版本。
+- 本 change 不实现 D8 的执行器容器与热更新（独立演进 change 承接）；本 change 交付其数据合同与可复用骨架。
 - 不修改 findings 状态或建立 marking 回填表（二期）；不做远程真机验证与板机凭据（二期）。
-- 不修改前端、扫描器、根 compose；技能完整改编与镜像资产（QEMU、交叉工具链）属配套 change。
 - 不做 dry-run、多验证目标产物展开、missing_class 条目投影。
 
 ## Decisions
@@ -124,3 +128,16 @@ agent_runtimes 表每 agent_type 唯一行且 CHECK 收紧，新增类型需种�
 - `GET /api/projects/{projectId}/kb-migrations`：分页列表。
 - `GET /api/kb-migrations/{runId}`：详情（状态、条目计数、产物摘要、任务引用）。
 - 产物下载复用现有 stored artifacts 下载链；项目归属校验照 `KbScanController` 模式。
+
+### D8 独立执行器演进（用户决策 2026-11-20，后续 change 承接）
+
+一期 worker 内子进程形态是已验证基线（冒烟打通至 agent 执行层）；产品需求（技能热更新、独立容器、对标 rvport-web Agent mode）要求演进为执行器容器架构。要点与依据：
+
+1. **执行器镜像**：`pi（npm 钉版）+ provider extension（wxai, openai-completions）+ qemu-user-static + RISC-V 交叉工具链 + 可选 riscv-doc-mcp`。配方参照 rvport-web `server/assets/ai-agent/Dockerfile.template`（已解决 fastmcp 版本上界、pi-subagents/mcp-adapter 安装、apt 源模板化等坑）。
+2. **技能原生搬运**：pi 实现 Agent Skills 标准（探针验证 `--skill <path>` 无头加载 Claude Code 形态 SKILL.md），`rvport-skills/riscv-migrate` 整目录挂载即用；不需要改写为 opencode agent md。入口适配（input/output 约定 + 单行 DONE）作为技能仓库内的薄平台适配文件维护，不动原文件。
+3. **技能热更新**：技能以 git 管理的 volume 挂载（非 classpath、非镜像层）。更新按钮 = `git fetch` + rev-list/diff 对比 + 展示差异 + `git pull`。参照 rvport-web 的"总是贴皮"模式（运行时 cp 覆盖，改技能不重建镜像）。
+4. **容器调用**：worker 侧 `docker run --rm` 一次性容器（宿主 workspace bind mount 到 /app、`--network host`、uid/gid chown、产物排除 `.skills/` 与 prompt 文件），参照 rvport-web `_assemble_docker_run_cmd`。取消 = kill 容器；孤儿容器按容器名前缀清理。
+5. **补丁接受工作流**（新能力，独立立项）：`.diff` 产物展示 → 用户接受 → apply 到 working copy → 生成新 source_revision → 供后续构建验证。数据合同复用本 change 的 scannerFindingId 双轨与产物体系。
+6. **并发模型**：任务-容器一一对应；专属队列 + 迁移专属 worker；实际并发上限由宿主容量决定。本 change 的 TaskRetryPolicy 不可重试码、publish 纪律、产物入库链全部复用。
+
+探针与调研产物：`/tmp/pi-probe/`（wxai provider extension + 探针技能）、`/tmp/rvport-web-ref/`（上游参考实现 clone）。
