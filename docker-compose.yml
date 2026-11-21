@@ -291,7 +291,9 @@ services:
       # 共享的目录以便以相同路径 bind 进执行器；技能卷只读挂给执行器，宿主侧 git 管理。
       RVPORT_AI_MIGRATION_EXECUTION_MODE: ${RVPORT_AI_MIGRATION_EXECUTION_MODE:-container}
       RVPORT_AI_EXECUTOR_IMAGE: ${RVPORT_AI_EXECUTOR_IMAGE:-rvport-ai-executor:local}
-      RVPORT_AI_SKILLS_VOLUME: ${RVPORT_AI_SKILLS_VOLUME:-rvport-ai-skills}
+      # 执行器容器由 docker daemon 直接解析卷名（不带 compose 项目前缀），
+      # 因此这里必须传全限定卷名（与下方 volumes 声明的实际名称一致）。
+      RVPORT_AI_SKILLS_VOLUME: ${RVPORT_AI_SKILLS_VOLUME_NAME:-${COMPOSE_PROJECT_NAME:-rvport}_rvport-ai-skills}
       RVPORT_AI_SKILLS_REPO_URL: ${RVPORT_AI_SKILLS_REPO_URL:-https://github.com/zte-riscv/rvport-skills.git}
       RVPORT_AI_SKILLS_BRANCH: ${RVPORT_AI_SKILLS_BRANCH:-master}
       RVPORT_AI_SKILLS_ROOT: ${RVPORT_AI_SKILLS_ROOT:-/var/lib/rvport/ai-skills}
