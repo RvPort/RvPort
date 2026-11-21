@@ -27,6 +27,6 @@
 
 ## 5. 验证
 
-- [ ] 5.1 Docker 全量单测；整体与新增模块行/分支覆盖率 ≥90%。
-- [ ] 5.2 冒烟：执行器镜像构建自检 → compose 全栈起 → 容器模式发起一次 AI_MIGRATION → 产物入库可下载；process 模式回归一次。
-- [ ] 5.3 `openspec validate add-ai-migration-executor --strict` 通过；不自动归档。
+- [x] 5.1 Docker 全量单测；整体与新增模块行/分支覆盖率 ≥90%。
+- [x] 5.2 冒烟：执行器镜像构建自检 → compose 全栈起 → 容器模式发起一次 AI_MIGRATION → 产物入库可下载；process 模式回归一次。
+- [x] 5.3 `openspec validate add-ai-migration-executor --strict` 通过；不自动归档。
