@@ -28,7 +28,13 @@ public class ExecutorContainerService {
     private final ExecutorContainerProperties properties;
     private final DockerCli cli;
 
-    public ExecutorContainerService(ExecutorContainerProperties properties) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public ExecutorContainerService(AiMigrationExecutorProperties executorProperties) {
+        this(new ExecutorContainerProperties(executorProperties.image(), executorProperties.skillsVolume(),
+                executorProperties.dockerTimeout()), new ProcessDockerCli());
+    }
+
+    ExecutorContainerService(ExecutorContainerProperties properties) {
         this(properties, new ProcessDockerCli());
     }
 

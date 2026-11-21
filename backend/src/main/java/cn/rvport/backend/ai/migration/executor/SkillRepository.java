@@ -28,7 +28,13 @@ public class SkillRepository {
     private final String branch;
     private final GitCli git;
 
-    public SkillRepository(SkillRepositoryProperties properties) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public SkillRepository(AiMigrationExecutorProperties executorProperties) {
+        this(new SkillRepositoryProperties(Path.of(executorProperties.skillsRoot()),
+                executorProperties.skillRepoUrl(), executorProperties.skillBranch()), new ProcessGitCli());
+    }
+
+    SkillRepository(SkillRepositoryProperties properties) {
         this(properties, new ProcessGitCli());
     }
 
