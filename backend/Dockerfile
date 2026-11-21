@@ -148,6 +148,7 @@ RUN --mount=type=cache,target=/root/.npm \
         ca-certificates \
         curl \
         xz-utils \
+        docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl --fail --show-error --location --max-time 60 \
