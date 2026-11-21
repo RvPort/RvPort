@@ -48,6 +48,8 @@ class AiMigrationAgentRuntimeContainerTests {
     final ModelProfileService models = mock(ModelProfileService.class);
     final AgentRuntimeAdapterRegistry registry = mock(AgentRuntimeAdapterRegistry.class);
     final ExecutorContainerService containers = mock(ExecutorContainerService.class);
+    final cn.rvport.backend.ai.migration.executor.SkillRepository skillRepository =
+            mock(cn.rvport.backend.ai.migration.executor.SkillRepository.class);
     final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
     final ModelExecutionSelection selection = new ModelExecutionSelection(actor, profileId, runtimeId);
     final TaskExecutionContext context = mock(TaskExecutionContext.class);
@@ -76,7 +78,7 @@ class AiMigrationAgentRuntimeContainerTests {
 
     private AiMigrationAgentRuntime service(String mode) {
         var props = AiMigrationExecutorProperties.forMode(mode, workspaceRoot.toString(), "/host/ws");
-        return new AiMigrationAgentRuntime(models, registry, json, props, containers);
+        return new AiMigrationAgentRuntime(models, registry, json, props, containers, skillRepository);
     }
 
     private AiMigrationProjector.Projection projection() {
@@ -120,6 +122,7 @@ class AiMigrationAgentRuntimeContainerTests {
 
         assertThat(executed.result().doneCount()).isEqualTo(1);
         verifyNoInteractions(registry);
+        verify(skillRepository).ensureCloned();
         assertThat(captured.get()).doesNotExist();
     }
 
@@ -146,6 +149,14 @@ class AiMigrationAgentRuntimeContainerTests {
     }
 
     @Test
+    void 技能克隆失败映射为明确错误() {
+        org.mockito.Mockito.doThrow(new IllegalStateException("GIT_FAILED(128): no route"))
+                .when(skillRepository).ensureCloned();
+        assertThatThrownBy(() -> service("container").run(projection(), sourceRoot, selection, context))
+                .hasMessageContaining("AI_MIGRATION_SKILL_CLONE_FAILED");
+    }
+
+    @Test
     void 非法模式拒绝() {
         assertThatThrownBy(() -> service("weird").run(projection(), sourceRoot, selection, context))
                 .hasMessage("AI_MIGRATION_EXECUTOR_MODE_INVALID");
@@ -155,7 +166,7 @@ class AiMigrationAgentRuntimeContainerTests {
     void 宿主路径换算规则() throws Exception {
         var props = AiMigrationExecutorProperties.forMode("container", workspaceRoot.toString(), null);
         // 未配置宿主根 → 沿用 worker 路径（worker 直接跑宿主的场景）
-        var same = new AiMigrationAgentRuntime(models, registry, json, props, containers);
+        var same = new AiMigrationAgentRuntime(models, registry, json, props, containers, skillRepository);
         Files.createDirectories(sourceRoot.resolve("src"));
         Files.writeString(sourceRoot.resolve("src/a.c"), "x");
         when(containers.execute(eq(taskId), any(), any(), any(), any())).thenAnswer(invocation -> {
@@ -174,7 +185,7 @@ class AiMigrationAgentRuntimeContainerTests {
         Files.createDirectories(sourceRoot.resolve("src"));
         Files.writeString(sourceRoot.resolve("src/a.c"), "x");
         var props = AiMigrationExecutorProperties.forMode("container", workspaceRoot.toString(), null);
-        var noContainer = new AiMigrationAgentRuntime(models, registry, json, props, null);
+        var noContainer = new AiMigrationAgentRuntime(models, registry, json, props, null, null);
         assertThatThrownBy(() -> noContainer.run(projection(), sourceRoot, selection, context))
                 .hasMessage("AI_MIGRATION_EXECUTOR_UNAVAILABLE");
     }

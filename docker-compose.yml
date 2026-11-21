@@ -297,6 +297,9 @@ services:
       RVPORT_AI_SKILLS_ROOT: ${RVPORT_AI_SKILLS_ROOT:-/var/lib/rvport/ai-skills}
       RVPORT_AI_WORKSPACE_ROOT: /var/lib/rvport/ai-workspaces
       RVPORT_AI_WORKSPACE_HOST_ROOT: ${RVPORT_AI_WORKSPACE_HOST_DIR:-/var/lib/rvport/ai-workspaces}
+      # worker 内 docker CLI 可能比宿主 daemon 新（镜像 apt 源滚动 vs daemon 停留在旧版），
+      # 钉住 API 版本协商上限，避免 "client version too new" 拒绝执行。
+      DOCKER_API_VERSION: ${RVPORT_DOCKER_API_VERSION:-1.41}
       RVPORT_LIQUIBASE_ENABLED: false
     volumes:
       - rvport-backend-runtime:/app/backend/runtime

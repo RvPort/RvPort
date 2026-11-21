@@ -48,23 +48,26 @@ public class AiMigrationAgentRuntime {
     private final ObjectMapper mapper;
     private final cn.rvport.backend.ai.migration.executor.AiMigrationExecutorProperties executorProperties;
     private final cn.rvport.backend.ai.migration.executor.ExecutorContainerService executorContainers;
+    private final cn.rvport.backend.ai.migration.executor.SkillRepository skillRepository;
 
     /** 旧三参构造：固定子进程模式（一期回退路径与既有测试）。 */
     public AiMigrationAgentRuntime(ModelProfileService models, AgentRuntimeAdapterRegistry adapters, ObjectMapper mapper) {
         this(models, adapters, mapper,
                 cn.rvport.backend.ai.migration.executor.AiMigrationExecutorProperties.forMode("process", null, null),
-                null);
+                null, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public AiMigrationAgentRuntime(ModelProfileService models, AgentRuntimeAdapterRegistry adapters, ObjectMapper mapper,
             cn.rvport.backend.ai.migration.executor.AiMigrationExecutorProperties executorProperties,
-            cn.rvport.backend.ai.migration.executor.ExecutorContainerService executorContainers) {
+            cn.rvport.backend.ai.migration.executor.ExecutorContainerService executorContainers,
+            cn.rvport.backend.ai.migration.executor.SkillRepository skillRepository) {
         this.models = models;
         this.adapters = adapters;
         this.mapper = mapper;
         this.executorProperties = executorProperties;
         this.executorContainers = executorContainers;
+        this.skillRepository = skillRepository;
     }
 
     public AgentModelRuntimeConfig resolveExecution(ModelExecutionSelection selection, UUID actor, UUID project) {
@@ -180,6 +183,14 @@ public class AiMigrationAgentRuntime {
             throws IOException, InterruptedException {
         if (executorContainers == null) {
             throw new IOException("AI_MIGRATION_EXECUTOR_UNAVAILABLE");
+        }
+        // 技能卷首次使用前克隆（幂等）；失败按技能不可用失败。
+        if (skillRepository != null) {
+            try {
+                skillRepository.ensureCloned();
+            } catch (RuntimeException ex) {
+                throw new IOException("AI_MIGRATION_SKILL_CLONE_FAILED: " + ex.getMessage());
+            }
         }
         Path promptFile = workspace.resolve(".prompt.txt");
         Files.writeString(promptFile, containerPrompt(), StandardCharsets.UTF_8);
