@@ -22,6 +22,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @EnableConfigurationProperties({
         RvPortProperties.class,
+        cn.rvport.backend.ai.migration.executor.AiMigrationExecutorProperties.class,
         CredentialCryptoProperties.class,
         RedisCacheProperties.class,
         TaskQueueProperties.class,

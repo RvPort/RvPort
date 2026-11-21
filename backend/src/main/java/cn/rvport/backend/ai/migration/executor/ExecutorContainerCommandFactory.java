@@ -27,6 +27,21 @@ public final class ExecutorContainerCommandFactory {
             String skillsVolume,
             Map<String, String> environment,
             Map<String, String> proxyVariables) {
+        return runCommand(image, containerName, workspace, workspace, skillsVolume, environment, proxyVariables);
+    }
+
+    /**
+     * @param workspace       worker 容器内的 workspace 路径（用于命名/日志）
+     * @param hostWorkspace   docker daemon 可见的宿主路径（bind mount 左值）；worker 直接跑在宿主时与 workspace 相同
+     */
+    public static List<String> runCommand(
+            String image,
+            String containerName,
+            Path workspace,
+            Path hostWorkspace,
+            String skillsVolume,
+            Map<String, String> environment,
+            Map<String, String> proxyVariables) {
         List<String> command = new ArrayList<>();
         command.add("docker");
         command.add("run");
@@ -36,7 +51,7 @@ public final class ExecutorContainerCommandFactory {
         command.add("--name");
         command.add(containerName);
         command.add("-v");
-        command.add(workspace.toAbsolutePath().normalize() + ":" + WORKSPACE_MOUNT_TARGET);
+        command.add(hostWorkspace.toAbsolutePath().normalize() + ":" + WORKSPACE_MOUNT_TARGET);
         if (skillsVolume != null && !skillsVolume.isBlank()) {
             command.add("-v");
             command.add(skillsVolume + ":" + SKILL_MOUNT_TARGET + ":ro");

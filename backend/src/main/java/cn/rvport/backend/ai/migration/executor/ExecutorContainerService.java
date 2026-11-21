@@ -43,12 +43,22 @@ public class ExecutorContainerService {
             Path workspace,
             Map<String, String> environment,
             CancellationToken cancellation) throws IOException, InterruptedException {
+        return execute(taskId, workspace, workspace, environment, cancellation);
+    }
+
+    /** 同上，hostWorkspace 为 docker daemon 可见的宿主路径（worker 自身运行在容器内时必传）。 */
+    public ExecutorContainerResult execute(
+            UUID taskId,
+            Path workspace,
+            Path hostWorkspace,
+            Map<String, String> environment,
+            CancellationToken cancellation) throws IOException, InterruptedException {
         String containerName = ExecutorContainerCommandFactory.containerName(taskId);
         // 重试场景的孤儿容器：--rm 容器异常残留（如 daemon 重启窗口）时先移除。
         cli.runQuiet(ExecutorContainerCommandFactory.removeCommand(containerName));
 
         List<String> command = ExecutorContainerCommandFactory.runCommand(
-                properties.image(), containerName, workspace, properties.skillsVolume(), environment, Map.of());
+                properties.image(), containerName, workspace, hostWorkspace, properties.skillsVolume(), environment, Map.of());
         log.info("executor container starting name={} image={}", containerName, properties.image());
 
         DockerCli.ProcessHandle process = cli.start(command);

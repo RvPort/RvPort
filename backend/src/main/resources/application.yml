@@ -138,6 +138,19 @@ rvport:
     language: ${RVPORT_KB_SCAN_LANGUAGE:c,cpp}
     target-arch: ${RVPORT_KB_SCAN_TARGET_ARCH:riscv64}
     context-lines: ${RVPORT_KB_SCAN_CONTEXT_LINES:20}
+  ai-migration:
+    executor:
+      # container：一次性执行器容器（pi + QEMU + 工具链，默认）；process：worker 子进程（opencode）回退
+      execution-mode: ${RVPORT_AI_MIGRATION_EXECUTION_MODE:container}
+      image: ${RVPORT_AI_EXECUTOR_IMAGE:rvport-ai-executor:local}
+      skills-volume: ${RVPORT_AI_SKILLS_VOLUME:rvport-ai-skills}
+      docker-timeout: ${RVPORT_AI_EXECUTOR_DOCKER_TIMEOUT:2h}
+      max-concurrent: ${RVPORT_AI_EXECUTOR_MAX_CONCURRENT:1}
+      skill-repo-url: ${RVPORT_AI_SKILLS_REPO_URL:https://github.com/zte-riscv/rvport-skills.git}
+      skill-branch: ${RVPORT_AI_SKILLS_BRANCH:main}
+      skills-root: ${RVPORT_AI_SKILLS_ROOT:/var/lib/rvport/ai-skills}
+      workspace-root: ${RVPORT_AI_WORKSPACE_ROOT:/var/lib/rvport/ai-workspaces}
+      workspace-host-root: ${RVPORT_AI_WORKSPACE_HOST_ROOT:/var/lib/rvport/ai-workspaces}
   worker:
     enabled: ${RVPORT_WORKER_ENABLED:false}
     instance-id: ${RVPORT_WORKER_INSTANCE_ID:}

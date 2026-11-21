@@ -287,9 +287,22 @@ services:
       RVPORT_WORKER_CLEANUP_LOST_TIMEOUT_SECONDS: ${RVPORT_WORKER_CLEANUP_LOST_TIMEOUT_SECONDS:-300}
       RVPORT_WORKER_CLEANUP_RETENTION_HOURS: ${RVPORT_WORKER_CLEANUP_RETENTION_HOURS:-24}
       RVPORT_WORKER_CLEANUP_BATCH_SIZE: ${RVPORT_WORKER_CLEANUP_BATCH_SIZE:-100}
+      # AI 迁移执行器：worker 经 docker.sock 起一次性执行器容器；workspace 落在与宿主
+      # 共享的目录以便以相同路径 bind 进执行器；技能卷只读挂给执行器，宿主侧 git 管理。
+      RVPORT_AI_MIGRATION_EXECUTION_MODE: ${RVPORT_AI_MIGRATION_EXECUTION_MODE:-container}
+      RVPORT_AI_EXECUTOR_IMAGE: ${RVPORT_AI_EXECUTOR_IMAGE:-rvport-ai-executor:local}
+      RVPORT_AI_SKILLS_VOLUME: ${RVPORT_AI_SKILLS_VOLUME:-rvport-ai-skills}
+      RVPORT_AI_SKILLS_REPO_URL: ${RVPORT_AI_SKILLS_REPO_URL:-https://github.com/zte-riscv/rvport-skills.git}
+      RVPORT_AI_SKILLS_BRANCH: ${RVPORT_AI_SKILLS_BRANCH:-main}
+      RVPORT_AI_SKILLS_ROOT: ${RVPORT_AI_SKILLS_ROOT:-/var/lib/rvport/ai-skills}
+      RVPORT_AI_WORKSPACE_ROOT: /var/lib/rvport/ai-workspaces
+      RVPORT_AI_WORKSPACE_HOST_ROOT: ${RVPORT_AI_WORKSPACE_HOST_DIR:-/var/lib/rvport/ai-workspaces}
       RVPORT_LIQUIBASE_ENABLED: false
     volumes:
       - rvport-backend-runtime:/app/backend/runtime
+      - /var/run/docker.sock:/var/run/docker.sock
+      - rvport-ai-skills:/var/lib/rvport/ai-skills
+      - ${RVPORT_AI_WORKSPACE_HOST_DIR:-/var/lib/rvport/ai-workspaces}:/var/lib/rvport/ai-workspaces
     networks:
       - rvport-infra
 
@@ -319,3 +332,5 @@ volumes:
     name: ${RVPORT_MINIO_DATA_VOLUME:-${COMPOSE_PROJECT_NAME:-rvport}_rvport-minio-data}
   rvport-backend-runtime:
     name: ${RVPORT_BACKEND_RUNTIME_VOLUME:-${COMPOSE_PROJECT_NAME:-rvport}_rvport-backend-runtime}
+  rvport-ai-skills:
+    name: ${RVPORT_AI_SKILLS_VOLUME_NAME:-${COMPOSE_PROJECT_NAME:-rvport}_rvport-ai-skills}

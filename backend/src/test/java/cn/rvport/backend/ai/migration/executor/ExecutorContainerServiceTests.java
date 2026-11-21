@@ -272,6 +272,12 @@ class ExecutorContainerServiceTests {
     }
 
     @Test
+    void 生产构造器使用进程cli() {
+        var service = new ExecutorContainerService(new ExecutorContainerProperties(null, null, null));
+        assertThat(service).isNotNull();
+    }
+
+    @Test
     void 生产cli的quiet容错与重定向() throws Exception {
         var cli = new ExecutorContainerService.ProcessDockerCli();
         // 不存在的 docker 命令也不抛（容错契约）

@@ -20,10 +20,10 @@
 
 ## 4. 执行通道切换
 
-- [ ] 4.1 `RvPortProperties.AiMigration.Executor` 配置节 + application.yml 默认值 + compose 变量透传。
-- [ ] 4.2 `AiMigrationAgentRuntime` 模式分派：container 路径（prompt 合同复用、经 ExecutorContainerService）与 process 回退路径并存。
-- [ ] 4.3 compose：backend-worker 挂 docker.sock 与技能 volume。
-- [ ] 4.4 单测：分派逻辑、容器路径契约（mock 服务）、process 路径回归不破。
+- [x] 4.1 `AiMigrationExecutorProperties`（独立 `@ConfigurationProperties`，`rvport.ai-migration.executor.*`）+ application.yml 默认值 + compose 变量透传。
+- [x] 4.2 `AiMigrationAgentRuntime` 模式分派：container 路径（prompt 合同复用、经 ExecutorContainerService）与 process 回退路径并存。
+- [x] 4.3 compose：backend-worker 挂 docker.sock 与技能 volume。
+- [x] 4.4 单测：分派逻辑、容器路径契约（mock 服务）、process 路径回归不破。
 
 ## 5. 验证
 

@@ -29,6 +29,12 @@ class SkillAdminServiceTests {
     }
 
     @Test
+    void 技能清单委托仓储() {
+        when(repository.listSkills()).thenReturn(List.of("riscv-migrate", "riscv-verify"));
+        assertThat(service.skills()).containsExactly("riscv-migrate", "riscv-verify");
+    }
+
+    @Test
     void 更新记审计并返回结果() {
         when(repository.update()).thenReturn(new SkillRepository.SkillUpdateResult(
                 "before1", "after1", 3, 5, List.of(" a.md | 1 +")));

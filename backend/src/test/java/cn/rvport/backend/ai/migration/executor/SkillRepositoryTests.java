@@ -307,6 +307,22 @@ class SkillRepositoryTests {
     }
 
     @Test
+    void 生产构造器使用进程git() {
+        var repository = new SkillRepository(new SkillRepositoryProperties(temp.resolve("prod"), null, null));
+        assertThat(repository).isNotNull();
+    }
+
+    @Test
+    void 父目录无法创建时克隆包装为SKILL_CLONE_FAILED() throws IOException {
+        // 父路径是普通文件 → createDirectories 抛 IOException → SKILL_CLONE_FAILED 包装
+        Path blocker = temp.resolve("blocker");
+        Files.writeString(blocker, "x");
+        Path root = blocker.resolve("nested").resolve("ai-skills");
+        assertThatThrownBy(() -> repository(root, new StubGit()).ensureCloned())
+                .hasMessageContaining("SKILL_CLONE_FAILED");
+    }
+
+    @Test
     void 非目录路径技能列表吞异常为空() throws IOException {
         Path notDir = temp.resolve("file-not-dir");
         Files.writeString(notDir, "x");
