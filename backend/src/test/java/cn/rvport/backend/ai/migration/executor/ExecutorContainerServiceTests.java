@@ -219,6 +219,59 @@ class ExecutorContainerServiceTests {
     }
 
     @Test
+    void null输出组合与超时先行killer落空路径() throws Exception {
+        // stdout=null → clip 的 null 分支；超时先 kill（CAS true），killer 后到 CAS false
+        StubCli cli = new StubCli() {
+            @Override
+            public ProcessHandle start(List<String> command) {
+                commands.add(command);
+                return new ProcessHandle() {
+                    @Override
+                    public boolean waitFor(Duration timeout, StringBuilder stdout, StringBuilder stderr)
+                            throws InterruptedException {
+                        Thread.sleep(timeout.toMillis() + 300);
+                        return false;
+                    }
+                    @Override
+                    public int exitValue() { return -1; }
+                };
+            }
+        };
+        // 取消令牌在超时之后才放行（await 阻塞 500ms > timeout 200ms）
+        ExecutorContainerService.CancellationToken late = () -> Thread.sleep(600);
+        var service = new ExecutorContainerService(
+                new ExecutorContainerProperties(null, null, Duration.ofMillis(200)), cli);
+        var result = service.execute(TASK, Path.of("/tmp/ws"), java.util.Map.of(), late);
+        assertThat(result.timedOut()).isTrue();
+        long killCount = cli.commands.stream()
+                .filter(c -> c.size() == 3 && "kill".equals(c.get(1))).count();
+        assertThat(killCount).isEqualTo(1);
+    }
+
+    @Test
+    void waitFor抛中断时收尾killer线程() throws Exception {
+        StubCli cli = new StubCli();
+        CountDownLatch entered = new CountDownLatch(1);
+        cli.neverFinish = true;
+        ExecutorContainerService.CancellationToken cancel = () -> entered.await();
+        var service = new ExecutorContainerService(
+                new ExecutorContainerProperties(null, null, Duration.ofMinutes(5)), cli);
+        Thread execution = new Thread(() -> {
+            try {
+                service.execute(TASK, Path.of("/tmp/ws"), Map.of(), cancel);
+            } catch (Exception ignored) {
+            }
+        });
+        execution.setDaemon(true);
+        execution.start();
+        entered.await(java.util.concurrent.TimeUnit.SECONDS.toMillis(5), java.util.concurrent.TimeUnit.MILLISECONDS);
+        // 中断 execution 线程 → waitFor 抛 InterruptedException → finally 中断 killer
+        execution.interrupt();
+        execution.join(5_000);
+        org.assertj.core.api.Assertions.assertThat(execution.isAlive()).isFalse();
+    }
+
+    @Test
     void 生产cli的quiet容错与重定向() throws Exception {
         var cli = new ExecutorContainerService.ProcessDockerCli();
         // 不存在的 docker 命令也不抛（容错契约）

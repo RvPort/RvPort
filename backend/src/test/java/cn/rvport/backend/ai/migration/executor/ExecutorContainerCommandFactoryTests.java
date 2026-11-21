@@ -84,6 +84,14 @@ class ExecutorContainerCommandFactoryTests {
     }
 
     @Test
+    void null技能卷与空白卷两种省略路径() {
+        assertThat(ExecutorContainerCommandFactory.runCommand("i", "c", java.nio.file.Path.of("/w"), null, java.util.Map.of(), null))
+                .noneMatch(e -> e.contains("/root/.pi/agent/skills"));
+        assertThat(ExecutorContainerCommandFactory.runCommand("i", "c", java.nio.file.Path.of("/w"), "\t", java.util.Map.of(), null))
+                .noneMatch(e -> e.contains("/root/.pi/agent/skills"));
+    }
+
+    @Test
     void null值环境变量与代理变量分支() {
         Map<String, String> env = new LinkedHashMap<>();
         env.put("EMPTY_VAL", null);

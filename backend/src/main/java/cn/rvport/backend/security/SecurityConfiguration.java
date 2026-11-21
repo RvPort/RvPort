@@ -43,7 +43,8 @@ public class SecurityConfiguration {
                                 "/api/auth/password-resets/confirm").permitAll()
                         .requestMatchers("/api/admin/users", "/api/admin/users/**",
                                 "/api/admin/configs", "/api/admin/configs/**",
-                                "/api/admin/workers", "/api/admin/workers/**").hasAuthority("SUPER_ADMIN")
+                                "/api/admin/workers", "/api/admin/workers/**",
+                                "/api/admin/ai-migration", "/api/admin/ai-migration/**").hasAuthority("SUPER_ADMIN")
                         .anyRequest().authenticated())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())

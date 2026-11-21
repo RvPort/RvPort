@@ -46,7 +46,8 @@ COPY backend/executor/wxai-provider.mjs /root/.pi/agent/extensions/wxai-provider
 
 # 入口适配脚本
 COPY backend/executor/entrypoint.sh /opt/rvport/entrypoint.sh
-RUN chmod +x /opt/rvport/entrypoint.sh
+RUN chmod +x /opt/rvport/entrypoint.sh \
+    && git config --global --add safe.directory '*'
 
 ENV PATH="/usr/local/bin:${PATH}"
 

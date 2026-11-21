@@ -14,9 +14,9 @@
 
 ## 3. 技能 volume 与管理面
 
-- [ ] 3.1 `SkillRepository`：volume 路径解析、空 volume 初始化 clone、`currentRevision()`、`update()`（fetch/rev-list/diff --stat 解析）。
-- [ ] 3.2 管理 API：GET `/api/admin/ai-migration/skills`、POST `/api/admin/ai-migration/skills:update`（管理员权限、审计日志）。
-- [ ] 3.3 单测：git 输出 fixture 解析、初始化幂等、API 鉴权与响应形态。
+- [x] 3.1 `SkillRepository`：volume 路径解析、空 volume 初始化 clone、`currentRevision()`、`update()`（fetch/rev-list/diff --stat 解析）。
+- [x] 3.2 管理 API：GET `/api/admin/ai-migration/skills`、POST `/api/admin/ai-migration/skills:update`（管理员权限、审计日志）。
+- [x] 3.3 单测：git 输出 fixture 解析、初始化幂等、API 鉴权与响应形态。
 
 ## 4. 执行通道切换
 
