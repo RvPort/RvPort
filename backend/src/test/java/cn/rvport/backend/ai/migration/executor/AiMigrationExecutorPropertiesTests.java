@@ -16,7 +16,7 @@ class AiMigrationExecutorPropertiesTests {
         assertThat(props.dockerTimeout()).isEqualTo(Duration.ofHours(2));
         assertThat(props.maxConcurrent()).isEqualTo(1);
         assertThat(props.skillRepoUrl()).contains("rvport-skills");
-        assertThat(props.skillBranch()).isEqualTo("main");
+        assertThat(props.skillBranch()).isEqualTo("master");
         assertThat(props.skillsRoot()).isEqualTo("/var/lib/rvport/ai-skills");
         assertThat(props.workspaceRoot()).isEqualTo("/var/lib/rvport/ai-workspaces");
         // 未配置宿主根 → 与 workspaceRoot 相同
@@ -34,7 +34,7 @@ class AiMigrationExecutorPropertiesTests {
         assertThat(props.dockerTimeout()).isEqualTo(Duration.ofHours(2));
         assertThat(props.maxConcurrent()).isEqualTo(1);
         assertThat(props.skillRepoUrl()).contains("rvport-skills");
-        assertThat(props.skillBranch()).isEqualTo("main");
+        assertThat(props.skillBranch()).isEqualTo("master");
         assertThat(props.skillsRoot()).isEqualTo("/var/lib/rvport/ai-skills");
         assertThat(props.workspaceRoot()).isEqualTo("/var/lib/rvport/ai-workspaces");
     }

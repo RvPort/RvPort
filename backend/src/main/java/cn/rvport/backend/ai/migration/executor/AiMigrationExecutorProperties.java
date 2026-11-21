@@ -33,7 +33,7 @@ public record AiMigrationExecutorProperties(
         skillRepoUrl = skillRepoUrl == null || skillRepoUrl.isBlank()
                 ? "https://github.com/zte-riscv/rvport-skills.git"
                 : skillRepoUrl;
-        skillBranch = skillBranch == null || skillBranch.isBlank() ? "main" : skillBranch;
+        skillBranch = skillBranch == null || skillBranch.isBlank() ? "master" : skillBranch;
         skillsRoot = skillsRoot == null || skillsRoot.isBlank()
                 ? "/var/lib/rvport/ai-skills"
                 : skillsRoot;

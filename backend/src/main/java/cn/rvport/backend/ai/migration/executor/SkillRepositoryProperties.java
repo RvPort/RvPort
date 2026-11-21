@@ -13,6 +13,6 @@ public record SkillRepositoryProperties(
         remoteUrl = remoteUrl == null || remoteUrl.isBlank()
                 ? "https://github.com/zte-riscv/rvport-skills.git"
                 : remoteUrl;
-        branch = branch == null || branch.isBlank() ? "main" : branch;
+        branch = branch == null || branch.isBlank() ? "master" : branch;
     }
 }

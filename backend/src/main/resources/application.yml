@@ -147,7 +147,7 @@ rvport:
       docker-timeout: ${RVPORT_AI_EXECUTOR_DOCKER_TIMEOUT:2h}
       max-concurrent: ${RVPORT_AI_EXECUTOR_MAX_CONCURRENT:1}
       skill-repo-url: ${RVPORT_AI_SKILLS_REPO_URL:https://github.com/zte-riscv/rvport-skills.git}
-      skill-branch: ${RVPORT_AI_SKILLS_BRANCH:main}
+      skill-branch: ${RVPORT_AI_SKILLS_BRANCH:master}
       skills-root: ${RVPORT_AI_SKILLS_ROOT:/var/lib/rvport/ai-skills}
       workspace-root: ${RVPORT_AI_WORKSPACE_ROOT:/var/lib/rvport/ai-workspaces}
       workspace-host-root: ${RVPORT_AI_WORKSPACE_HOST_ROOT:/var/lib/rvport/ai-workspaces}

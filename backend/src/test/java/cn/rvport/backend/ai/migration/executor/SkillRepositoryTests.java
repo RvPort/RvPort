@@ -131,7 +131,7 @@ class SkillRepositoryTests {
         var defaults = new SkillRepositoryProperties(null, null, " ");
         assertThat(defaults.skillsRoot()).isEqualTo(java.nio.file.Path.of("/var/lib/rvport/ai-skills"));
         assertThat(defaults.remoteUrl()).contains("rvport-skills");
-        assertThat(defaults.branch()).isEqualTo("main");
+        assertThat(defaults.branch()).isEqualTo("master");
 
         var explicit = new SkillRepositoryProperties(java.nio.file.Path.of("/x"), "http://r", "dev");
         assertThat(explicit.skillsRoot()).isEqualTo(java.nio.file.Path.of("/x"));
@@ -255,7 +255,7 @@ class SkillRepositoryTests {
     void 属性null与空白组合全兜底() {
         var allNull = new SkillRepositoryProperties(null, null, null);
         assertThat(allNull.remoteUrl()).isEqualTo("https://github.com/zte-riscv/rvport-skills.git");
-        assertThat(allNull.branch()).isEqualTo("main");
+        assertThat(allNull.branch()).isEqualTo("master");
         var blankUrl = new SkillRepositoryProperties(null, "   ", null);
         assertThat(blankUrl.remoteUrl()).contains("rvport-skills");
     }
