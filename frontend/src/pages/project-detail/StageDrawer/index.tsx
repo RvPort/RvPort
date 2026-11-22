@@ -16,6 +16,7 @@ type StageDrawerComponent =
   ComponentType<StageDrawerProps> | LazyExoticComponent<ComponentType<StageDrawerProps>>
 
 const stageDrawerById: Record<string, StageDrawerComponent> = {
+  'ai-migration': lazy(() => import('./AiMigration')),
   assets: lazy(() => import('./Assets')),
   archive: lazy(() => import('./Archive')),
   build: lazy(() => import('./Build')),

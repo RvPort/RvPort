@@ -36,6 +36,7 @@ public class ProjectWorkflowStatusService {
     public static final String ENV = "env";
     public static final String ASSETS = "assets";
     public static final String KB = "kb";
+    public static final String AI_MIGRATION = "ai-migration";
     public static final String X86_BUILD = "x86-build";
     public static final String DEPENDENCY = "rv-dependency-analysis";
     public static final String FLOATING_POINT = "floating-point-analysis";
@@ -50,6 +51,7 @@ public class ProjectWorkflowStatusService {
 
     private final TaskRepository taskRepository;
     private final KbScanRepository kbScanRepository;
+    private final cn.rvport.backend.ai.migration.AiMigrationRepository aiMigrationRepository;
     private final BuildValidationRepository buildValidationRepository;
     private final DependencyAnalysisRepository dependencyAnalysisRepository;
     private final ReportRepository reportRepository;
@@ -73,10 +75,12 @@ public class ProjectWorkflowStatusService {
             AutomatedTestRepository automatedTestRepository,
             OptimizationCycleRepository optimizationCycleRepository,
             ProjectArchiveRepository archiveRepository,
-            SpecializedAnalysisRepository specializedAnalysisRepository
+            SpecializedAnalysisRepository specializedAnalysisRepository,
+            cn.rvport.backend.ai.migration.AiMigrationRepository aiMigrationRepository
     ) {
         this.taskRepository = taskRepository;
         this.kbScanRepository = kbScanRepository;
+        this.aiMigrationRepository = aiMigrationRepository;
         this.buildValidationRepository = buildValidationRepository;
         this.dependencyAnalysisRepository = dependencyAnalysisRepository;
         this.reportRepository = reportRepository;
@@ -97,7 +101,7 @@ public class ProjectWorkflowStatusService {
             ProjectArchiveRepository archiveRepository
     ) {
         this(taskRepository, kbScanRepository, buildValidationRepository, dependencyAnalysisRepository,
-                reportRepository, automatedTestRepository, optimizationCycleRepository, archiveRepository, null);
+                reportRepository, automatedTestRepository, optimizationCycleRepository, archiveRepository, null, null);
     }
 
     public WorkflowResponse aggregate(
@@ -112,6 +116,7 @@ public class ProjectWorkflowStatusService {
         stages.add(assets(projectId, activeSource));
         stages.add(x86Build(projectId, runtime, context));
         stages.add(kb(projectId, context));
+        stages.add(aiMigration(projectId, context));
         stages.add(dependency(projectId, context));
         stages.add(specialized(projectId, context, SpecializedAnalyzerType.FLOATING_POINT, FLOATING_POINT));
         stages.add(specialized(projectId, context, SpecializedAnalyzerType.MEMORY_ORDER, MEMORY_ORDER));
@@ -175,6 +180,19 @@ public class ProjectWorkflowStatusService {
                 .map(run -> fromStatus(KB, run.status(), "KB_SCAN"))
                 .orElseGet(() -> pending(KB, kbScanRepository.findLatestHistoricalRun(projectId).isPresent()
                         ? "KB_SCAN_STALE" : "KB_SCAN_MISSING"));
+    }
+
+    private WorkflowStageResponse aiMigration(UUID projectId, ProjectContextSnapshot context) {
+        if (context.sourceRevisionId() == null) {
+            return pending(AI_MIGRATION, "ACTIVE_SOURCE_MISSING");
+        }
+        var latest = aiMigrationRepository.listRuns(projectId, 0, 1);
+        if (latest.isEmpty()) {
+            boolean scanReady = scanContextService.currentRun(projectId, context.sourceRevisionId()).isPresent();
+            return pending(AI_MIGRATION, scanReady ? "AI_MIGRATION_MISSING" : "KB_SCAN_MISSING");
+        }
+        var run = latest.get(0);
+        return fromStatus(AI_MIGRATION, TaskStatus.valueOf(run.status()), "AI_MIGRATION");
     }
 
     private WorkflowStageResponse x86Build(

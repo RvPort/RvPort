@@ -85,6 +85,7 @@ export const PROJECT_PANEL_IDS = [
   'x86-build',
   'rv-dependency-analysis',
   'kb',
+  'ai-migration',
   'memory-order-analysis',
   'floating-point-analysis',
   'report',

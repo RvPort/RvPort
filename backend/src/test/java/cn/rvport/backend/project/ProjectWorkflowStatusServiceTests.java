@@ -144,7 +144,7 @@ class ProjectWorkflowStatusServiceTests {
         var response = service().aggregate(projectId, null, runtime, new ProjectContextSnapshot(null, 1L));
 
         assertThat(response.stages()).extracting(WorkflowStageResponse::id).containsExactly(
-                "project", "env", "assets", "x86-build", "kb", "rv-dependency-analysis",
+                "project", "env", "assets", "x86-build", "kb", "ai-migration", "rv-dependency-analysis",
                 "floating-point-analysis", "memory-order-analysis",
                 "report", "manual", "build", "test", "optimize", "archive");
         assertThat(response.stages().getFirst().status()).isEqualTo(WorkflowStageStatus.DONE);
@@ -384,6 +384,8 @@ class ProjectWorkflowStatusServiceTests {
     }
 
     private final cn.rvport.backend.report.review.CurrentFixListResolver fixLists=org.mockito.Mockito.mock(cn.rvport.backend.report.review.CurrentFixListResolver.class);
+    private final cn.rvport.backend.ai.migration.AiMigrationRepository aiMigrationRepository =
+            org.mockito.Mockito.mock(cn.rvport.backend.ai.migration.AiMigrationRepository.class);
     private ProjectWorkflowStatusService service() {
         var service = new ProjectWorkflowStatusService(
                 taskRepository,
@@ -395,6 +397,10 @@ class ProjectWorkflowStatusServiceTests {
                 optimizationCycleRepository,
                 archiveRepository);
         ReflectionTestUtils.setField(service,"fixLists",fixLists);
+        ReflectionTestUtils.setField(service, "aiMigrationRepository", aiMigrationRepository);
+        org.mockito.Mockito.lenient().when(aiMigrationRepository.listRuns(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt())).thenReturn(java.util.List.of());
         org.mockito.Mockito.lenient().when(fixLists.current(org.mockito.ArgumentMatchers.any())).thenReturn(
                 new cn.rvport.backend.report.review.CurrentFixListResolver.Current(false,null,null,null,0,"REPORT_NOT_GENERATED"));
         ReflectionTestUtils.setField(service, "scanContextService", scanContextService);

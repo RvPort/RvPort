@@ -120,8 +120,16 @@ export const workflowStages: WorkflowStageDefinition[] = [
     position: { x: 760, y: 285 }
   },
   {
-    id: 'memory-order-analysis',
+    id: 'ai-migration',
     order: 8,
+    title: 'AI 迁移',
+    status: 'pending',
+    prerequisiteIds: ['kb'],
+    position: { x: 760, y: 675 }
+  },
+  {
+    id: 'memory-order-analysis',
+    order: 9,
     title: '强弱内存序分析',
     status: 'pending',
     prerequisiteIds: ['x86-build'],
@@ -129,7 +137,7 @@ export const workflowStages: WorkflowStageDefinition[] = [
   },
   {
     id: 'floating-point-analysis',
-    order: 9,
+    order: 10,
     title: '浮点精度扫描',
     status: 'pending',
     prerequisiteIds: ['x86-build'],
@@ -137,7 +145,7 @@ export const workflowStages: WorkflowStageDefinition[] = [
   },
   {
     id: 'report',
-    order: 10,
+    order: 11,
     title: '评估报告',
     status: 'running',
     prerequisiteIds: ['kb', 'rv-dependency-analysis'],
@@ -145,7 +153,7 @@ export const workflowStages: WorkflowStageDefinition[] = [
   },
   {
     id: 'manual',
-    order: 11,
+    order: 12,
     title: '人工修复',
     status: 'pending',
     prerequisiteIds: ['report'],
@@ -153,7 +161,7 @@ export const workflowStages: WorkflowStageDefinition[] = [
   },
   {
     id: 'build',
-    order: 12,
+    order: 13,
     title: '构建验证',
     status: 'pending',
     prerequisiteIds: ['report'],
@@ -161,7 +169,7 @@ export const workflowStages: WorkflowStageDefinition[] = [
   },
   {
     id: 'test',
-    order: 13,
+    order: 14,
     title: '自动化测试',
     status: 'pending',
     prerequisiteIds: ['build'],
@@ -169,7 +177,7 @@ export const workflowStages: WorkflowStageDefinition[] = [
   },
   {
     id: 'optimize',
-    order: 14,
+    order: 15,
     title: '优化闭环',
     status: 'pending',
     prerequisiteIds: ['test'],
@@ -177,7 +185,7 @@ export const workflowStages: WorkflowStageDefinition[] = [
   },
   {
     id: 'archive',
-    order: 15,
+    order: 16,
     title: '归档',
     status: 'pending',
     prerequisiteIds: ['optimize'],
@@ -209,6 +217,7 @@ export const workflowGroups: WorkflowGroupDefinition[] = [
       'x86-build',
       'rv-dependency-analysis',
       'kb',
+      'ai-migration',
       'memory-order-analysis',
       'floating-point-analysis'
     ]
@@ -235,6 +244,7 @@ export const workflowEdges: WorkflowEdgeDefinition[] = [
   { id: 'env-x86-build', source: 'env', target: 'x86-build' },
   { id: 'assets-x86-build', source: 'assets', target: 'x86-build' },
   { id: 'x86-build-kb', source: 'x86-build', target: 'kb' },
+  { id: 'kb-ai-migration', source: 'kb', target: 'ai-migration' },
   { id: 'kb-report', source: 'kb', target: 'report-inputs' },
   { id: 'x86-build-rv-dependency-analysis', source: 'x86-build', target: 'rv-dependency-analysis' },
   {
