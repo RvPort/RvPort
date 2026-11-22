@@ -12,6 +12,11 @@ services:
         condition: service_healthy
     environment:
       API_UPSTREAM: http://backend:8080
+      # busybox wget 读到代理变量即报错（Invalid argument），健康检查会误报 unhealthy；置空。
+      http_proxy: ""
+      https_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
     ports:
       - "${FRONTEND_PORT:-8081}:80"
     networks:
