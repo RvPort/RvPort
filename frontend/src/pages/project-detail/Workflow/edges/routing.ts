@@ -54,8 +54,17 @@ export function getFeedbackRoute(
   const left = Math.min(sourceX, targetX)
   const right = Math.max(sourceX, targetX)
   // 实测端点可能有小数偏差；按边 ID 排除自身，避免把自己的竖线误判为交叉线。
+  // 同列的其它回流线（如并列的两种修复方式）与本线并行而非横穿，起点在亚像素级别
+  // 重合时同样不算交叉，否则偏差会让标签跳到两条线重合的竖线上。
+  const sameColumnTolerance = 1
   const crossings = feedbackSources
-    .filter((edge) => edge.id !== id && edge.x > left && edge.x < right)
+    .filter(
+      (edge) =>
+        edge.id !== id &&
+        Math.abs(edge.x - sourceX) > sameColumnTolerance &&
+        edge.x > left &&
+        edge.x < right
+    )
     .map((edge) => edge.x)
   // 标签放在靠近起点的无交叉区间，而非整条横线的中点。
   const labelX =

@@ -120,16 +120,8 @@ export const workflowStages: WorkflowStageDefinition[] = [
     position: { x: 760, y: 285 }
   },
   {
-    id: 'ai-migration',
-    order: 8,
-    title: 'AI 迁移',
-    status: 'pending',
-    prerequisiteIds: ['kb'],
-    position: { x: 760, y: 675 }
-  },
-  {
     id: 'memory-order-analysis',
-    order: 9,
+    order: 8,
     title: '强弱内存序分析',
     status: 'pending',
     prerequisiteIds: ['x86-build'],
@@ -137,7 +129,7 @@ export const workflowStages: WorkflowStageDefinition[] = [
   },
   {
     id: 'floating-point-analysis',
-    order: 10,
+    order: 9,
     title: '浮点精度扫描',
     status: 'pending',
     prerequisiteIds: ['x86-build'],
@@ -145,11 +137,20 @@ export const workflowStages: WorkflowStageDefinition[] = [
   },
   {
     id: 'report',
-    order: 11,
+    order: 10,
     title: '评估报告',
     status: 'running',
     prerequisiteIds: ['kb', 'rv-dependency-analysis'],
     position: { x: 1080, y: 350 }
+  },
+  // AI 迁移与人工修复并列：都是看完评估报告后处理代码的方式，前者由迁移代理改写并产出补丁。
+  {
+    id: 'ai-migration',
+    order: 11,
+    title: 'AI 迁移',
+    status: 'pending',
+    prerequisiteIds: ['report'],
+    position: { x: 1080, y: 520 }
   },
   {
     id: 'manual',
@@ -157,7 +158,7 @@ export const workflowStages: WorkflowStageDefinition[] = [
     title: '人工修复',
     status: 'pending',
     prerequisiteIds: ['report'],
-    position: { x: 1080, y: 520 }
+    position: { x: 1080, y: 650 }
   },
   {
     id: 'build',
@@ -217,7 +218,6 @@ export const workflowGroups: WorkflowGroupDefinition[] = [
       'x86-build',
       'rv-dependency-analysis',
       'kb',
-      'ai-migration',
       'memory-order-analysis',
       'floating-point-analysis'
     ]
@@ -226,7 +226,7 @@ export const workflowGroups: WorkflowGroupDefinition[] = [
     id: 'assessment',
     title: '评估与处理',
     tone: 'assessment',
-    stageIds: ['report', 'manual'],
+    stageIds: ['report', 'ai-migration', 'manual'],
     padding: { right: 48 }
   },
   {
@@ -244,7 +244,6 @@ export const workflowEdges: WorkflowEdgeDefinition[] = [
   { id: 'env-x86-build', source: 'env', target: 'x86-build' },
   { id: 'assets-x86-build', source: 'assets', target: 'x86-build' },
   { id: 'x86-build-kb', source: 'x86-build', target: 'kb' },
-  { id: 'kb-ai-migration', source: 'kb', target: 'ai-migration' },
   { id: 'kb-report', source: 'kb', target: 'report-inputs' },
   { id: 'x86-build-rv-dependency-analysis', source: 'x86-build', target: 'rv-dependency-analysis' },
   {
@@ -261,6 +260,13 @@ export const workflowEdges: WorkflowEdgeDefinition[] = [
   // Example results are not required inputs of the real assessment report.
   { id: 'report-inputs-report', source: 'report-inputs', target: 'report' },
   {
+    id: 'report-ai-migration',
+    source: 'report',
+    target: 'ai-migration',
+    sourceHandle: 'branch-source',
+    targetHandle: 'branch-target'
+  },
+  {
     id: 'report-manual',
     source: 'report',
     target: 'manual',
@@ -268,6 +274,13 @@ export const workflowEdges: WorkflowEdgeDefinition[] = [
     targetHandle: 'branch-target'
   },
   { id: 'report-build', source: 'report', target: 'build' },
+  {
+    id: 'ai-migration-assets',
+    source: 'ai-migration',
+    target: 'assets',
+    feedback: true,
+    label: '应用补丁后更新源码'
+  },
   {
     id: 'manual-assets',
     source: 'manual',

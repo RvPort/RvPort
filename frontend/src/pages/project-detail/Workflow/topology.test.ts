@@ -15,6 +15,7 @@ describe('current MVP workflow topology', () => {
       'memory-order-analysis',
       'floating-point-analysis',
       'report',
+      'ai-migration',
       'manual',
       'build',
       'test',
@@ -33,7 +34,7 @@ describe('current MVP workflow topology', () => {
           'floating-point-analysis'
         ]
       },
-      { id: 'assessment', stageIds: ['report', 'manual'] },
+      { id: 'assessment', stageIds: ['report', 'ai-migration', 'manual'] },
       { id: 'optimization-test', stageIds: ['build', 'test', 'optimize', 'archive'] }
     ])
     expect(workflowEdges.map((edge) => edge.id)).toEqual([
@@ -48,8 +49,10 @@ describe('current MVP workflow topology', () => {
       'x86-build-memory-order-analysis',
       'x86-build-floating-point-analysis',
       'report-inputs-report',
+      'report-ai-migration',
       'report-manual',
       'report-build',
+      'ai-migration-assets',
       'manual-assets',
       'build-test',
       'optimize-archive',
@@ -89,6 +92,31 @@ describe('current MVP workflow topology', () => {
     expect(byId.get('build')?.title).toBe('构建验证')
     expect(byId.get('build')?.position.x).toBeLessThan(2000)
     expect(byId.get('manual')?.position.x).toBe(byId.get('report')?.position.x)
+    // AI 迁移与人工修复并列：同在评估报告下方的一列，都只依赖报告，都回流到源码管理。
+    expect(byId.get('ai-migration')).toMatchObject({
+      prerequisiteIds: ['report'],
+      position: { x: byId.get('report')?.position.x }
+    })
+    expect(byId.get('ai-migration')?.order).toBeLessThan(byId.get('manual')?.order ?? 0)
+    expect(byId.get('manual')?.position.y).toBe(
+      (byId.get('ai-migration')?.position.y ?? 0) +
+        (byId.get('kb')?.position.y ?? 0) -
+        (byId.get('rv-dependency-analysis')?.position.y ?? 0)
+    )
+    expect(workflowEdges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'report',
+          sourceHandle: 'branch-source',
+          target: 'ai-migration',
+          targetHandle: 'branch-target'
+        }),
+        expect.objectContaining({ source: 'ai-migration', target: 'assets', feedback: true })
+      ])
+    )
+    expect(workflowEdges).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ source: 'kb', target: 'ai-migration' })])
+    )
     expect(byId.get('optimize')?.position.x).toBe((byId.get('test')?.position.x ?? 0) + 240)
     expect(byId.get('archive')?.position.x).toBe((byId.get('optimize')?.position.x ?? 0) + 240)
     expect(byId.get('optimize')?.position.y).toBe(byId.get('test')?.position.y)
