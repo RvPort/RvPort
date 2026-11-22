@@ -140,4 +140,3 @@ agent_runtimes 表每 agent_type 唯一行且 CHECK 收紧，新增类型需种�
 5. **补丁接受工作流**（新能力，独立立项）：`.diff` 产物展示 → 用户接受 → apply 到 working copy → 生成新 source_revision → 供后续构建验证。数据合同复用本 change 的 scannerFindingId 双轨与产物体系。
 6. **并发模型**：任务-容器一一对应；专属队列 + 迁移专属 worker；实际并发上限由宿主容量决定。本 change 的 TaskRetryPolicy 不可重试码、publish 纪律、产物入库链全部复用。
 
-探针与调研产物：`/tmp/pi-probe/`（wxai provider extension + 探针技能）、`/tmp/rvport-web-ref/`（上游参考实现 clone）。
