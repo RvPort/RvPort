@@ -12,13 +12,16 @@
 
 - `generated/*.json` 是工具链结构定义的确定性输出。
 - `curated/x86-migration-semantics.json` 只含 accepted 条目；`curated/source-references.json` 保存闭合的权威引用。
+- `collected/arm64/*` 保存冻结的 ARM64 语料原件（Arm Architecture Reference Manual 人工提取）；`generated/arm64-collected-entries.json` 是其确定性转换产物，在 manifest 中以 `collected-v1` 类型登记——手册语料无精确 git revision，溯源采用语料原件 SHA-256 + 官方手册 URL + 采集日期。
+- `collected/riscv/riscv.macro` 保存冻结的 RISC-V **目标侧**平台宏原件（203 项，经 rvport-skills/riscv-scan 语料自 RISC-V C-API 规范收集）；`generated/riscv-collected-entries.json` 是其确定性转换产物，以 `collected-v1` 登记，族为 `riscv`、语义范围为 `riscv-only`。目标族条目与源族语义相反：命中表示已有 RISC-V 分支（已移植），而非迁移障碍；只被分支角色分析里显式 `family="riscv"` 查询消费，不进入 `source_arch` 取值集与检测器注册表。
+- `collected/rust/*` 保存冻结的 Rust 架构函数/结构体语料（来自 rvport-skills/riscv-scan，自 Rust std::arch 模块提取）。`tools/collect_rust_entries.py` 按单源单族拆为三个 collected-v1 源：arm64 intrinsics/vectorTypes（纯增量——C 语料无 arm64 intrinsics）、riscv 目标族 intrinsics（命中表示已使用 RV intrinsic）、x86 vectorTypes。x86 的 Rust 函数名有意跳过：与既有 C intrinsics 词表重叠 99.4%。
 - `audit/candidate-decisions.json` 保存 generated/accepted/rejected/deferred 决策和理由，但 Provider 不加载它。`audit/candidate-inventory.json` 明确是非权威候选清单。
 
 知识 JSON 不携带 regex、operator、matcher、severity、blocking、reason、suggestion、message 或 readiness。如何匹配仍由 Python `DetectorDefinition` 管理；最终影响仍由后续分类阶段管理。
 
 ## Manifest 与兼容
 
-生产 manifest 已显式升级为 v2，可声明 `legacy-generated`、`generated-v2`、`curated-v1` 三类来源。Provider 仍严格接受原 v1 generated-only manifest，v1 继续拒绝 `curatedSets`。回滚时可用 `tests/fixtures/knowledge-production/v1-manifest.json` 替换生产 manifest，只加载两份旧事实。
+生产 manifest 已显式升级为 v2，可声明 `legacy-generated`、`generated-v2`、`curated-v1`、`collected-v1` 四类来源。Provider 仍严格接受原 v1 generated-only manifest，v1 继续拒绝 `curatedSets`。回滚时可用 `tests/fixtures/knowledge-production/v1-manifest.json` 替换生产 manifest，只加载两份旧事实。
 
 当前两份冻结文件的摘要如下。GCC 来源路径已脱敏为 `vendor/gcc/gcc/config/i386`，事实内容不变；历史报告摘要保留原版本，不回写。
 
@@ -39,6 +42,14 @@
 <a id="doc-knowledge-refresh-guide"></a>
 
 ## 刷新流程
+
+### RISC-V 目标侧语料
+
+riscv 宏语料由 `tools/collect_riscv_entries.py` 转换（同样的确定性保证）：读取 `collected/riscv/riscv.macro`，写出 `generated/riscv-collected-entries.json`：
+
+- `riscv.macro` → `platformMacros`（完整 `__riscv*` 标识符；截断前缀丢弃）
+
+再生成与 manifest 摘要更新流程同 arm64。契约测试钉死计数（203）、语料摘要与再生成逐字节一致。
 
 ## 前提
 

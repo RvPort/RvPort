@@ -130,5 +130,55 @@ assert 'yaml' not in sys.modules
         self.assertIn("MISSING", output.getvalue())
 
 
+    def test_cli_version_and_memory_budget_branches(self) -> None:
+        """CLI 分支补充：version 子命令、内存闸门 disabled/unapplied 注记。"""
+        import contextlib
+        import io
+
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            exit_code = cli.main(["version"])
+        self.assertEqual(0, exit_code)
+        self.assertTrue(output.getvalue().strip())
+
+        # 闸门关闭（MIB=0）：run_scan 附加 memory-budget-disabled 警告不改退出码。
+        import os
+        from types import SimpleNamespace
+        import unittest.mock as mock
+
+        original = os.environ.pop("KB_SCANNER_MEMORY_LIMIT_MIB", None)
+        try:
+            os.environ["KB_SCANNER_MEMORY_LIMIT_MIB"] = "0"
+            fake_result = PipelineResult(success=True, exit_code=0, status=CompletionStatus.COMPLETE)
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / "in"
+                out = Path(temporary) / "out"
+                root.mkdir()
+                (root / "a.c").write_text("int a;\n", encoding="utf-8")
+                with mock.patch.object(cli, "create_default_application") as factory:
+                    factory.return_value.run.return_value = fake_result
+                    code = cli.run_scan(SimpleNamespace(
+                        input=str(root), rules=str(RULES_ROOT) if "RULES_ROOT" in dir() else "rules",
+                        output=str(out), format="json", language="c,cpp",
+                        source_arch="x86", target_arch="riscv64", schema_version="2.0",
+                        compile_commands=None, exclude=".git,build", exclude_path=[],
+                        context_infer="off", locale="zh-CN", include_inactive_branches=False,
+                        no_comment_hints=False))
+        finally:
+            if original is not None:
+                os.environ["KB_SCANNER_MEMORY_LIMIT_MIB"] = original
+            else:
+                os.environ.pop("KB_SCANNER_MEMORY_LIMIT_MIB", None)
+        self.assertEqual(0, code)
+
+    def test_scan_context_rejects_invalid_schema_and_arch(self) -> None:
+        """context/request 校验双分支：非法 schema_version 与非法 source_arch 各自抛错。"""
+        from kb_scanner.core import ScanRequest
+
+        with self.assertRaises(ValueError):
+            ScanRequest(".", ".", ".", schema_version="3.0")
+        with self.assertRaises(ValueError):
+            ScanRequest(".", ".", ".", source_arch="sparc")
+
+
 if __name__ == "__main__":
     unittest.main()

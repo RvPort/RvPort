@@ -68,6 +68,15 @@ public class SourceDeployRepository {
         return createPending(id, projectId, taskId, sourceRevisionId, environmentId, 0L, remotePath, force);
     }
 
+    public Optional<SourceDeployRunView> findByTaskId(UUID taskId) {
+        return dsl.selectFrom(SOURCE_DEPLOY_RUNS)
+                .where(SOURCE_DEPLOY_RUNS.TASK_ID.eq(taskId))
+                .orderBy(SOURCE_DEPLOY_RUNS.CREATED_AT.desc(), SOURCE_DEPLOY_RUNS.ID.desc())
+                .limit(1)
+                .fetchOptional()
+                .map(SourceDeployRunView::from);
+    }
+
     public Optional<SourceDeployRunView> findById(UUID id) {
         return dsl.selectFrom(SOURCE_DEPLOY_RUNS)
                 .where(SOURCE_DEPLOY_RUNS.ID.eq(id))

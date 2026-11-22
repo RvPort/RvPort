@@ -67,13 +67,15 @@ describe('knowledge base AI extension API contract', () => {
 
 it('maps a scoped C scan and removes blank exclusion entries without changing path meaning', async () => {
   await createProjectKnowledgeBaseScan('project', {
-    language: 'c',
+    language: ['c'],
+    sourceArch: 'x86',
     scope: ' src/core ',
     excludedDirectoryNames: ' build, ,vendor ',
     excludedPaths: '\n third_party/x86 \n\n generated/config \n'
   })
   expect(request.post).toHaveBeenCalledExactlyOnceWith('/projects/project/kb-scans', {
     language: 'c',
+    sourceArch: 'x86',
     scanScope: { mode: 'PATHS', paths: ['src/core'] },
     excludePaths: ['build', 'vendor', 'third_party/x86', 'generated/config']
   })

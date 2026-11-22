@@ -4,7 +4,10 @@ from dataclasses import dataclass
 
 DEPENDENCIES = frozenset({"x86_header_reference", "x86_intrinsic_reference", "x86_builtin_reference",
     "x86_vector_type_reference", "x86_compiler_flag", "x86_cpu_platform_api", "x86_assembly_instruction",
-    "x86_register_reference", "x86_target_feature", "build_selected_x86_dependency", "build_selection_unknown"})
+    "x86_register_reference", "x86_target_feature", "build_selected_x86_dependency", "build_selection_unknown",
+    "arm64_header_reference", "arm64_intrinsic_reference", "arm64_builtin_reference",
+    "arm64_vector_type_reference", "arm64_compiler_flag", "arm64_cpu_platform_api",
+    "arm64_assembly_instruction", "arm64_register_reference", "arm64_target_feature"})
 
 
 def confirmed_dependency(observation):

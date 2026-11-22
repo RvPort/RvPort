@@ -1,0 +1,1135 @@
+{
+  "facts": [
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "add16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "add8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "aes32dsi",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "aes32dsmi",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "aes32esi",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "aes32esmi",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "aes64ds",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "aes64dsm",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "aes64es",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "aes64esm",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "aes64im",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "aes64ks1i",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "aes64ks2",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "clmul",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "clmulh",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "clmulr",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "clrs16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "clrs32",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "clrs8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "clz16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "clz32",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "clz8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "cmpeq16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "cmpeq8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "cras16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "crsa16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "fence_i",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "frrm",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hfence_gvma",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hfence_gvma_all",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hfence_gvma_gaddr",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hfence_gvma_vmid",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hfence_vvma",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hfence_vvma_all",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hfence_vvma_asid",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hfence_vvma_vaddr",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hinval_gvma",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hinval_gvma_all",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hinval_gvma_gaddr",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hinval_gvma_vmid",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hinval_vvma",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hinval_vvma_all",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hinval_vvma_asid",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hinval_vvma_vaddr",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hlv_b",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hlv_bu",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hlv_d",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hlv_h",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hlv_hu",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hlv_w",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hlv_wu",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hlvx_hu",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hlvx_wu",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hsv_b",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hsv_d",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hsv_h",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "hsv_w",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kabs16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kabs8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kadd16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kadd8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kaddh",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kcras16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kcrsa16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ksll16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ksll8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kslra16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kslra16u",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kslra8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kslra8u",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kstas16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "kstsa16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ksub16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ksub8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ksubh",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "nop",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "orc_b",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "pause",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "pbsad",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "pbsada",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "pkbt16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "pktb16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "radd16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "radd8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "rcras16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "rcrsa16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "rstas16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "rstsa16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "rsub16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "rsub8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "scmple16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "scmple8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "scmplt16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "scmplt8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sfence_inval_ir",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sfence_vma",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sfence_vma_all",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sfence_vma_asid",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sfence_vma_vaddr",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sfence_w_inval",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha256sig0",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha256sig1",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha256sum0",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha256sum1",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha512sig0",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha512sig0h",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha512sig0l",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha512sig1",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha512sig1h",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha512sig1l",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha512sum0",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha512sum0r",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha512sum1",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sha512sum1r",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sinval_vma",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sinval_vma_all",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sinval_vma_asid",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sinval_vma_vaddr",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sll16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sll8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sm3p0",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sm3p1",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sm4ed",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sm4ks",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "smaqa",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "smaqasu",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "smax16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "smax8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "smin16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "smin8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sra16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sra16u",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sra8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sra8u",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "srl16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "srl16u",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "srl8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "srl8u",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "stas16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "stsa16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sub16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sub8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sunpkd810",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sunpkd820",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sunpkd830",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sunpkd831",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "sunpkd832",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "swap16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "swap8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ucmple16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ucmple8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ucmplt16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ucmplt8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ukadd16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ukadd8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ukaddh",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ukcras16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ukcrsa16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ukstas16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ukstsa16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "uksub16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "uksub8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "uksubh",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "umaqa",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "umax16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "umax8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "umin16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "umin8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "unzip",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "uradd16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "uradd8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "urcras16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "urcrsa16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "urstas16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "urstsa16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ursub16",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "ursub8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "wfi",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "xperm4",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "xperm8",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "zip",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "zunpkd810",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "zunpkd820",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "zunpkd830",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "zunpkd831",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    },
+    {
+      "architectureFamily": "riscv",
+      "canonicalValue": "zunpkd832",
+      "factKind": "intrinsics",
+      "semanticScope": "riscv-only"
+    }
+  ],
+  "schemaVersion": "1.0",
+  "source": {
+    "collectedAt": "2026-11-13",
+    "inputFiles": [
+      "collected/rust/arch-functions.json",
+      "collected/rust/arch-structs.json"
+    ],
+    "inputSha256": [
+      "7838018318ad9b7c81041af5c3bd35a64e9d55d4a1e4888aa547b50aaa7f8eea",
+      "06ec9843517ba5e47c4015056df5971df00d9561e47bbf3ceda3440526002a84"
+    ],
+    "license": "rvport-skills riscv-scan corpus, Apache-2.0, extracted from Rust std::arch modules",
+    "officialUrl": "https://github.com/zte-riscv/rvport-skills/tree/master/riscv-scan",
+    "sourceId": "collected-rust-riscv-entries"
+  }
+}

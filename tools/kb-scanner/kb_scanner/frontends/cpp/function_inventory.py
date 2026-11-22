@@ -1,4 +1,10 @@
-"""Bounded syntax inventory. Native nodes never escape this call."""
+"""Bounded syntax inventory. Native nodes never escape this call.
+
+frontend 阶段 tree-sitter 基线的函数清单模块：仅当源码含 target/
+cpu_dispatch 等多版本属性时，扫描函数声明并生成 function_declaration
+证据，同时把已有的 declaration_attribute 证据关联到所属函数。所有
+记录均为标量，native Node 不逃逸出本调用。
+"""
 from dataclasses import replace
 import re
 
@@ -10,6 +16,7 @@ _BOUNDARIES = {"function_definition", "lambda_expression", "class_specifier", "s
 
 
 def walk(root):
+    """先序遍历语法树（栈实现，子节点倒序入栈以保持源码顺序）。"""
     stack = [root]
     while stack:
         node = stack.pop()
@@ -18,7 +25,11 @@ def walk(root):
 
 
 def _nested_bodies(body):
-    """Keep outermost exclusions only; do not rescan their descendants."""
+    """Keep outermost exclusions only; do not rescan their descendants.
+
+    找出函数体内最外层的嵌套函数/类/模板体区间：命中 _BOUNDARIES 即
+    记录其区间且不再下钻，避免嵌套声明被重复计入外层函数体。
+    """
     stack = list(body.children)
     result = []
     while stack:
@@ -36,6 +47,14 @@ def _coordinates(positions, interval):
 
 
 def inventory(root, source, positions, subject, producer, language, evidence, errors=(), limit=50000):
+    """扫描函数声明并生成 function_declaration 证据，同时为多版本属性回填归属。
+
+    思路：源码若无 target 类属性正则命中则直接原样返回；否则遍历所有
+    function_definition/declaration/field_declaration，提取签名（命名
+    空间::名(参数类型)）、链接规格、多版本属性区间，超预算或语法不支持
+    时 bindingStatus 置 unknown。最后给已有 declaration_attribute 证据
+    附加 functionInventory 元数据（additive-only，不改原 ID/值）。
+    """
     if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
         raise ValueError("function inventory limit must be nonnegative")
     if not _ATTRIBUTE.search(source):
@@ -57,6 +76,7 @@ def inventory(root, source, positions, subject, producer, language, evidence, er
         raw = lambda n: source[n.start_byte:n.end_byte].decode("utf-8", errors="replace")
         body = node.child_by_field_name("body")
         attrs = []
+        # 深度优先搜出声明头（不含函数体/参数表）中的多版本属性节点区间。
         stack = list(reversed(node.children))
         while stack:
             child = stack.pop()
@@ -70,6 +90,7 @@ def inventory(root, source, positions, subject, producer, language, evidence, er
                 continue
             stack.extend(reversed(child.children))
         scope, unsupported, conditional = [], name.type != "identifier", False
+        # 沿父链收集命名空间作用域、链接规格（extern "C"）、是否处于预处理分支内。
         parent = node.parent
         linkage = "C" if language == "c" else "C++"
         while parent is not None:
@@ -106,6 +127,7 @@ def inventory(root, source, positions, subject, producer, language, evidence, er
         internal = bool(re.search(rb"\bstatic\b", source[node.start_byte:head_end]))
         signature = "::".join((*reversed(scope), raw(name))) + "(" + ",".join(parameter_types) + ")"
         nested = _nested_bodies(body) if body is not None else ()
+        # 解析错误区间与声明区间相交即视为受损，绑定状态降为 unknown。
         damaged = any(a <= node.end_byte and b >= node.start_byte for a, b, *_ in errors)
         records.append({"name": raw(name), "signature": signature, "returnType": return_type,
                         "linkage": linkage, "internal": internal, "attributes": attrs,
@@ -115,6 +137,7 @@ def inventory(root, source, positions, subject, producer, language, evidence, er
                         "nestedBytes": nested, "conditional": conditional,
                         "bindingStatus": "unknown" if unsupported or damaged else "complete"})
     relevant = {(r["signature"], r["linkage"], r["internal"]) for r in records if r["attributes"]}
+    # 只为"带多版本属性的签名"生成新证据；同签名多份声明视为同一函数的重复出现。
     additions, owners = [], {}
     for record in records:
         if (record["signature"], record["linkage"], record["internal"]) not in relevant:

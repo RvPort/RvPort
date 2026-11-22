@@ -1,3 +1,10 @@
+"""规则包（bundle）描述符的加载与严格校验。
+
+一个规则包是一个目录：scanner-manifest.json 声明规则包标识、知识清单
+（含 SHA-256 校验）与投影策略版本。本模块在加载时做防篡改与防路径逃逸
+校验，产出的 identity 是整个包内容的 SHA-256 指纹（稳定ID来源之一）。
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -13,6 +20,12 @@ class BundleError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class BundleDescriptor:
+    """规则包描述符：frozen 不可变，加载时一次性校验并填充。
+
+    identity 字段是对 scanner-manifest.json 规范化 JSON 的 SHA-256，
+    用于唯一标识一个规则包的精确内容版本。
+    """
+
     root: Path
     rule_pack_id: str
     rule_pack_version: str
@@ -24,6 +37,13 @@ class BundleDescriptor:
 
 
 def load_bundle_descriptor(root: Path, manifest_name: str = "scanner-manifest.json") -> BundleDescriptor:
+    """加载并严格校验规则包描述符，任何不一致都抛 BundleError。
+
+    校验链：manifest 必须位于包根内 → 顶层/子对象字段必须严格相等
+    （不允许多余或缺失字段）→ 知识清单路径必须是包内相对 .json 文件 →
+    其内容 SHA-256 必须与 manifest 声明一致 → 投影策略版本必须是正整数。
+    通过后基于规范化 manifest JSON 计算 identity（SHA-256）。
+    """
     bundle_root = root.resolve()
     if not bundle_root.is_dir():
         raise BundleError("bundle root is not a directory")
@@ -76,18 +96,21 @@ def load_bundle_descriptor(root: Path, manifest_name: str = "scanner-manifest.js
 
 
 def _strict_object(value: Any, keys: set[str], label: str) -> dict[str, Any]:
+    """校验 value 是 dict 且字段集合与 keys 严格相等（多余/缺失都拒绝）。"""
     if not isinstance(value, dict) or set(value) != keys:
         raise BundleError(f"{label} must contain exactly: {', '.join(sorted(keys))}")
     return value
 
 
 def _nonempty(value: Any, label: str) -> str:
+    """校验 value 是非空白字符串并返回 strip 后的值。"""
     if not isinstance(value, str) or not value.strip():
         raise BundleError(f"{label} must be a non-empty string")
     return value.strip()
 
 
 def _digest(value: Any, label: str) -> str:
+    """校验 value 是 64 位小写十六进制 SHA-256 摘要。"""
     digest = _nonempty(value, label)
     if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
         raise BundleError(f"{label} must be a lowercase SHA-256 digest")

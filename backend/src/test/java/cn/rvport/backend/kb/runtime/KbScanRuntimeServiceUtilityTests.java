@@ -258,6 +258,7 @@ class KbScanRuntimeServiceUtilityTests {
         KbScanRuntimeService defaults = service(null);
         assertThat((String) invoke(defaults, "pythonCommand")).isEqualTo("python");
         assertThat((String) invoke(defaults, "defaultLanguage")).isEqualTo("c,cpp");
+        assertThat((String) invoke(defaults, "defaultSourceArch")).isEqualTo("x86");
         assertThat((String) invoke(defaults, "defaultTargetArch")).isEqualTo("riscv64");
         assertThat((int) invoke(defaults, "timeoutSeconds")).isEqualTo(1800);
         assertThat((long) invoke(defaults, "maxOutputBytes")).isEqualTo(10_485_760L);
@@ -266,25 +267,36 @@ class KbScanRuntimeServiceUtilityTests {
         Path output = Files.createDirectories(tempDir.resolve("scanner-output"));
         RvPortProperties.KbScan configured = new RvPortProperties.KbScan(
                 "python3 -I", scanner.toString(), tempDir.resolve("rules").toString(),
-                output.toString(), 45, 2048L, "c", "arm64", 12);
+                output.toString(), 45, 2048L, "c", "arm64", "arm64", 12, 4096);
         KbScanRuntimeService service = service(configured);
         assertThat((String) invoke(service, "pythonCommand")).isEqualTo("python3 -I");
         assertThat((String) invoke(service, "defaultLanguage")).isEqualTo("c");
+        assertThat((String) invoke(service, "defaultSourceArch")).isEqualTo("arm64");
         assertThat((String) invoke(service, "defaultTargetArch")).isEqualTo("arm64");
         assertThat((int) invoke(service, "timeoutSeconds")).isEqualTo(45);
         assertThat((long) invoke(service, "maxOutputBytes")).isEqualTo(2048L);
+        assertThat((int) invoke(service, "memoryLimitMib")).isEqualTo(4096);
         assertThat((Path) invoke(service, "scannerRoot")).isEqualTo(scanner);
         assertThat((Path) invoke(service, "outputRoot")).isEqualTo(output);
         assertThat((Path) invoke(service, "rulesetPath")).isEqualTo(tempDir.resolve("rules").normalize());
 
         RvPortProperties.KbScan blanks = new RvPortProperties.KbScan(
-                " ", scanner.toString(), " ", output.toString(), null, null, " ", " ", null);
+                " ", scanner.toString(), " ", output.toString(), null, null, " ", " ", " ", null, null);
         KbScanRuntimeService blankService = service(blanks);
         assertThat((String) invoke(blankService, "pythonCommand")).isEqualTo("python");
         assertThat((String) invoke(blankService, "defaultLanguage")).isEqualTo("c,cpp");
+        assertThat((String) invoke(blankService, "defaultSourceArch")).isEqualTo("x86");
         assertThat((String) invoke(blankService, "defaultTargetArch")).isEqualTo("riscv64");
         assertThat((int) invoke(blankService, "timeoutSeconds")).isEqualTo(1800);
         assertThat((long) invoke(blankService, "maxOutputBytes")).isEqualTo(10_485_760L);
+        assertThat((int) invoke(blankService, "memoryLimitMib")).isEqualTo(2048);
+    }
+
+    @Test
+    void normalizesSourceArchAliasesToScannerFamilies() {
+        // record 紧凑构造器只补默认值，不做别名归一（归一发生在 KbScanService.create）。
+        assertThat(new RvPortProperties.KbScan(null, null, null, null, null, null, null, "arm64", null, null, null).sourceArch()).isEqualTo("arm64");
+        assertThat(new RvPortProperties.KbScan(null, null, null, null, null, null, null, null, null, null, null).sourceArch()).isEqualTo("x86");
     }
 
     @Test
@@ -332,8 +344,8 @@ class KbScanRuntimeServiceUtilityTests {
 
         for (KbScanInput input : java.util.Arrays.asList(
                 null,
-                new KbScanInput(null, null, UUID.randomUUID(), null, null, null, null, null),
-                new KbScanInput(UUID.randomUUID(), null, UUID.randomUUID(), null, null, null, null, null))) {
+                new KbScanInput(null, null, UUID.randomUUID(), null, null, null, null, null, null, null),
+                new KbScanInput(UUID.randomUUID(), null, UUID.randomUUID(), null, null, null, null, null, null, null))) {
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> invoke(service, "validate", input, context))
                     .isInstanceOf(cn.rvport.backend.task.TaskExecutionException.class);
         }

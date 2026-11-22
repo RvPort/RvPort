@@ -109,6 +109,21 @@ class AnalysisTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             BuildProofBudgets(max_paths=0)
 
+    def test_detector_emits_missing_family_member_observation(self) -> None:
+        """D2 升格条目：issue=missing_riscv_family_member 的关系产同名观察（graph 段与主路径段）。"""
+        source = next(item for item in self.frontend.entities if item.name == "Makefile")
+        evidence = Evidence(stable_id("fam-evidence"), "build_branch", source.id, "x86_64", "unit", "unit", "high")
+        fact = NormalizedFact(stable_id("fam-fact"), "build_branch", source.id, "x86_64", "s", (evidence.id,))
+        snapshot = NormalizedSnapshot((source,), (evidence,), (fact,))
+        # graph 关系段：kind=selects 指向 gap、evidence 引用实存。
+        gap = Entity(stable_id("fam-gap"), "family_gap", "Makefile:missing-riscv-family-member", properties={"issue": "missing_riscv_family_member"})
+        graph_relation = Relation(stable_id("fam-relation"), "selects", source.id, gap.id, (evidence.id,), "high", "selected",
+                                  {"issue": "missing_riscv_family_member", "itemKind": "build_branch", "value": "x86_64"})
+        analysis = AnalysisSnapshot((graph_relation,), (source, gap), ())
+        detected = BuildSelectionDetector().detect(self.context, snapshot, analysis, flag_knowledge())
+        kinds = {item.kind for item in detected.value.observations}
+        self.assertIn("missing_riscv_family_member", kinds)
+
     def test_analyzer_and_detector_reject_invalid_references(self) -> None:
         entity = self.frontend.entities[0]
         bad_fact = NormalizedFact(stable_id("bad-fact"), "build_target", stable_id("missing"), "x", "s", (stable_id("e"),))

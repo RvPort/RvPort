@@ -135,6 +135,12 @@ services:
       minio:
         condition: service_healthy
     environment:
+      http_proxy: ""
+      https_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      no_proxy: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
+      NO_PROXY: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
       RVPORT_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-rvport}
       RVPORT_DB_USER: ${POSTGRES_USER:-rvport}
       RVPORT_DB_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
@@ -167,6 +173,7 @@ services:
       RVPORT_KB_SCAN_RULESET_PATH: rulesets/riscv-porting
       RVPORT_KB_SCAN_OUTPUT_DIR: /app/backend/runtime/kb-scans
       RVPORT_KB_SCAN_TIMEOUT_SECONDS: ${RVPORT_KB_SCAN_TIMEOUT_SECONDS:-1800}
+      RVPORT_KB_SCAN_MEMORY_LIMIT_MIB: ${RVPORT_KB_SCAN_MEMORY_LIMIT_MIB:-2048}
       RVPORT_KB_SCAN_MAX_OUTPUT_BYTES: ${RVPORT_KB_SCAN_MAX_OUTPUT_BYTES:-104857600}
       RVPORT_SPECIALIZED_ANALYSIS_ENABLED: ${RVPORT_SPECIALIZED_ANALYSIS_ENABLED:-true}
       RVPORT_SPECIALIZED_ANALYSIS_WORK_DIR: /app/backend/runtime/specialized-analysis
@@ -186,12 +193,6 @@ services:
       RVPORT_AGENT_OPENCODE_EXECUTABLE: ${RVPORT_AGENT_OPENCODE_EXECUTABLE:-opencode}
       RVPORT_APP_MODE: api
       RVPORT_WORKER_ENABLED: "false"
-      # JVM/AWS SDK 会读取代理环境变量，导致内网服务名（minio 等）被代理劫持；
-      # 后端所有外联均为内网直连（wxai 等在 no_proxy 语义内），显式清空代理。
-      http_proxy: ""
-      https_proxy: ""
-      HTTP_PROXY: ""
-      HTTPS_PROXY: ""
       RVPORT_WORKER_CLEANUP_ENABLED: ${RVPORT_WORKER_CLEANUP_ENABLED:-true}
       RVPORT_WORKER_CLEANUP_INTERVAL_MS: ${RVPORT_WORKER_CLEANUP_INTERVAL_MS:-300000}
       RVPORT_WORKER_CLEANUP_LOST_TIMEOUT_SECONDS: ${RVPORT_WORKER_CLEANUP_LOST_TIMEOUT_SECONDS:-300}
@@ -214,6 +215,10 @@ services:
   backend-worker:
     image: ${BACKEND_IMAGE:-rvport-backend:local}
     restart: unless-stopped
+    # JVM + kb-scanner Python 子进程的容器总量护栏：扫描失控时 OOM 杀本容器
+    # （而非拖垮宿主机/邻居容器）；配合 KB_SCANNER_MEMORY_LIMIT_MIB 让
+    # Python 子进程通常先于容器限额触发自身的 RLIMIT 闸门。
+    mem_limit: ${BACKEND_WORKER_MEM_LIMIT:-4g}
     depends_on:
       postgres:
         condition: service_healthy
@@ -226,6 +231,12 @@ services:
       backend:
         condition: service_healthy
     environment:
+      http_proxy: ""
+      https_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      no_proxy: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
+      NO_PROXY: "minio,backend,postgres,redis,rabbitmq,localhost,127.0.0.1"
       RVPORT_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-rvport}
       RVPORT_DB_USER: ${POSTGRES_USER:-rvport}
       RVPORT_DB_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
@@ -258,6 +269,7 @@ services:
       RVPORT_KB_SCAN_RULESET_PATH: rulesets/riscv-porting
       RVPORT_KB_SCAN_OUTPUT_DIR: /app/backend/runtime/kb-scans
       RVPORT_KB_SCAN_TIMEOUT_SECONDS: ${RVPORT_KB_SCAN_TIMEOUT_SECONDS:-1800}
+      RVPORT_KB_SCAN_MEMORY_LIMIT_MIB: ${RVPORT_KB_SCAN_MEMORY_LIMIT_MIB:-2048}
       RVPORT_KB_SCAN_MAX_OUTPUT_BYTES: ${RVPORT_KB_SCAN_MAX_OUTPUT_BYTES:-104857600}
       RVPORT_SPECIALIZED_ANALYSIS_ENABLED: ${RVPORT_SPECIALIZED_ANALYSIS_ENABLED:-true}
       RVPORT_SPECIALIZED_ANALYSIS_WORK_DIR: /app/backend/runtime/specialized-analysis
@@ -277,11 +289,6 @@ services:
       RVPORT_AGENT_OPENCODE_EXECUTABLE: ${RVPORT_AGENT_OPENCODE_EXECUTABLE:-opencode}
       RVPORT_APP_MODE: worker
       RVPORT_WORKER_ENABLED: "true"
-      # 同 backend：清空代理，避免 S3/内部调用被代理劫持。
-      http_proxy: ""
-      https_proxy: ""
-      HTTP_PROXY: ""
-      HTTPS_PROXY: ""
       RVPORT_WORKER_INSTANCE_ID: ${RVPORT_WORKER_INSTANCE_ID:-}
       RVPORT_WORKER_CONCURRENCY_LIMIT: ${RVPORT_WORKER_CONCURRENCY_LIMIT:-1}
       RVPORT_WORKER_MAX_CONCURRENCY_LIMIT: ${RVPORT_WORKER_MAX_CONCURRENCY_LIMIT:-8}

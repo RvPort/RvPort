@@ -1,4 +1,11 @@
-"""将已完成的局部闭包转为非执行用途证明，未知闭包只保留审计摘要。"""
+"""把已完成的局部闭包物化为非执行用途证明；未知闭包只保留审计摘要。
+
+materialize() 把 session.resolve 的结果转成实体/关系：usage_scope_coverage
+（一次闭包覆盖范围）+ usage_record（每条语法记录）+ usage_scope_member /
+usage_dependency 关系。只有整条链没有任何原因码时才额外产出 semantic_role
+实体、has_semantic_role 关系与 ProofPath（非执行用途证明）；任何未知都只留
+审计摘要（status=unknown），绝不输出半成品证明。
+"""
 from ...core import Entity, Relation, ProofPath, SourceLocation, SourceSpan, stable_id
 from ...core.metadata import freeze_shared_metadata
 
@@ -8,6 +15,12 @@ NON_EXECUTING = "non_executing_usage"
 
 
 def materialize(root, resolution, session, scope_facts):
+    """物化一个根的用途结果；返回 (实体, 关系, 证明, 审计摘要) 四元组。
+
+    副作用：通过 session 的共享缓存（record_ids/materialized_entities/
+    materialized_relations/materialized_queries）跨根复用同一份实体与关系，
+    相同闭包不重复物化。摘要经 freeze_shared_metadata 冻结共享。
+    """
     entities, relations, proofs = {}, {}, []
     record_ids, scope_ids, supporting, use_ids, source_ids = set(), [], set(), set(), set(root.matched_evidence_ids)
     reasons = set(resolution["reasonCodes"])
@@ -17,6 +30,7 @@ def materialize(root, resolution, session, scope_facts):
         reasons.add("usage-known-execution-conflict")
 
     def record_id(scope_id, key):
+        # 记录稳定ID = stable_id("usage_record", 1, 作用域, 配置, 记录键)；会话内缓存。
         identity = scope_id, root.configuration, key
         if identity not in session.record_ids:
             session.record_ids[identity] = stable_id("usage_record", 1, *identity)
@@ -27,6 +41,7 @@ def materialize(root, resolution, session, scope_facts):
     for scope_id, result in resolution["queries"]:
         fact = scope_facts[scope_id]
         source_ids.update(fact.evidence_ids)
+        # 查询级缓存键：作用域+配置+记录/边/使用集合+状态+截断标志，命中则整体复用。
         cache_key = (scope_id, root.configuration, result["recordKeys"], result["links"],
                      result["useKeys"], result["status"], result["truncated"])
         if cache_key in session.materialized_queries:
@@ -49,10 +64,12 @@ def materialize(root, resolution, session, scope_facts):
         declarations = {index.rows[key].get("binding", {}).get("declaration") for key in keys}
         expected = {key for declaration in declarations for key in index.uses.get(declaration, ())}
         if not expected.issubset(keys):
+            # 闭包漏掉了某个声明的使用：不完整，记码。
             local_reasons.add("usage-uses-not-closed")
         expected_ids = tuple(sorted(record_id(scope_id, key) for key in expected))
         coverage_id = stable_id("usage_scope_coverage", 1, scope_id, root.configuration, ids)
         scope_ids.append(coverage_id)
+        # 覆盖实体：一次闭包的范围 + 期望使用数（供审计对照实际解析数）。
         if coverage_id not in session.materialized_entities:
             session.materialized_entities[coverage_id] = Entity(coverage_id, "usage_scope_coverage", "局部使用范围",
                 location=source.location, properties={"configuration": root.configuration,
@@ -61,6 +78,7 @@ def materialize(root, resolution, session, scope_facts):
                     "expectedUseRecordIds": expected_ids, "expectedUseCount": len(expected_ids)})
         local_entities[coverage_id] = session.materialized_entities[coverage_id]
         for key in keys:
+            # 每条记录一个 usage_record 实体 + 一条 member 关系（非执行语义角色）。
             row = index.rows[key]
             rid = record_id(scope_id, key)
             if rid not in session.materialized_entities:
@@ -81,6 +99,7 @@ def materialize(root, resolution, session, scope_facts):
             membership = member.id
             local_relations[membership] = member
         for left, right in result["links"]:
+            # 闭包外的链接端点：图不完整，记 usage-links-not-closed 后跳过该边。
             if left not in keys or right not in keys:
                 local_reasons.add("usage-links-not-closed")
                 continue
@@ -107,11 +126,15 @@ def materialize(root, resolution, session, scope_facts):
                                                    ids, local_uses, frozenset(local_reasons))
     if (not root_bindings or len(root_bindings) != len(root.matched_evidence_ids)
             or not record_ids or not use_ids or not root.configuration_complete):
+        # 根绑定不齐 / 无记录 / 无使用 / 配置未确认：证明不完整。
         reasons.add("usage-proof-incomplete")
     if any(binding["recordId"] not in record_ids for binding in root_bindings):
+        # 根指向的记录不在本次闭包内：悬挂绑定。
         reasons.add("usage-root-record-missing")
     if len(record_ids) > session.query_budget.nodes or len(supporting) > session.query_budget.edges:
+        # 物化规模本身也要过预算复核。
         reasons.add("usage-proof-budget")
+        # 审计摘要：期望/解析/冲突/逃逸计数 + 预算 + 截断标志 + 原因码。
     summary = {"version": 1, "factId": root.fact_id, "subjectId": root.subject_id,
         "configuration": root.configuration, "matchedEvidenceIds": root.matched_evidence_ids,
         "rootBindings": root_bindings, "scopeCoverageIds": tuple(sorted(scope_ids)),
@@ -131,6 +154,8 @@ def materialize(root, resolution, session, scope_facts):
     # role 边和审计目录引用同一份已校验摘要，不重复深复制大闭包 ID 集合。
     summary = freeze_shared_metadata(summary)
     if not reasons:
+        # 零原因码才发证明：semantic_role 实体 + has_semantic_role 关系 + ProofPath
+        # （reason="closed-local-non-execution-usage"，len(record_ids) 为证据规模）。
         role_id = stable_id("usage_role", 1, root.fact_id, root.configuration, root.matched_evidence_ids)
         entities[role_id] = Entity(role_id, "semantic_role", "non_execution_data")
         role_relation_id = stable_id("usage_role_relation", 1, root.subject_id, role_id)

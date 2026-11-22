@@ -21,7 +21,7 @@ class KbScanHandlerTests {
         KbScanRuntimeService runtimeService = Mockito.mock(KbScanRuntimeService.class);
         TaskExecutionContext context = Mockito.mock(TaskExecutionContext.class);
         KbScanInput input = new KbScanInput(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                "rules", "c,cpp", "riscv64", Map.of("mode", "ALL"), List.of(".git"));
+                "rules", "c,cpp", "x86", "riscv64", Map.of("mode", "ALL"), List.of(".git"));
         when(context.input(KbScanInput.class)).thenReturn(input);
         KbScanHandler handler = new KbScanHandler(runtimeService);
 
@@ -35,7 +35,7 @@ class KbScanHandlerTests {
         KbScanRuntimeService runtimeService = Mockito.mock(KbScanRuntimeService.class);
         TaskExecutionContext context = Mockito.mock(TaskExecutionContext.class);
         KbScanInput input = new KbScanInput(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                "rules", "c", "riscv64", Map.of(), List.of());
+                "rules", "c", "arm64", "riscv64", Map.of(), List.of());
         when(context.input(KbScanInput.class)).thenReturn(input);
         RuntimeException failure = new RuntimeException("scan failed");
         org.mockito.Mockito.doThrow(failure).when(runtimeService).scan(input, context);

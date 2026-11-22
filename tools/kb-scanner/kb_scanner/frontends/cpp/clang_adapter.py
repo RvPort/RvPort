@@ -1,3 +1,11 @@
+"""libclang 富化适配器：在 tree-sitter 基线之上补充精确语义证据。
+
+frontend 阶段的第二解析通道：按编译数据库逐 TU 调用 libclang，
+产出宏定义/展开、枚举声明与成员引用、函数语义、调用 token 等
+高置信度证据（parse_mode=clang_enrichment）。libclang 不可用或
+单 TU 解析失败只降级为 PARTIAL，绝不阻断 tree-sitter 基线；
+所有 Cursor/Token 原生对象都在本模块内复制为标量后丢弃。
+"""
 from __future__ import annotations
 
 import re
@@ -31,9 +39,17 @@ _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class ClangCppAdapter:
+    """libclang 适配器：单个 enrich() 调用富化一个编译单元。
+
+    不变量：产出证据的 subject 必须是 entities_by_path 中已注册的实体；
+    证据按 ID 去重；TU 在返回前显式 del 释放原生资源。
+    cindex 惰性加载（可注入 loader，便于测试与无 clang 环境）。
+    """
+
     __slots__ = ("_cindex_loader",)
 
     def __init__(self, cindex_loader=None) -> None:
+        """cindex_loader 返回 clang.cindex 模块；缺省为惰性 import。"""
         self._cindex_loader = cindex_loader or _load_cindex
 
     def enrich(
@@ -44,6 +60,14 @@ class ClangCppAdapter:
         entities_by_path: dict[str, Entity],
         function_targets=None,
     ) -> StageResult[tuple[Evidence, ...]]:
+        """解析单个 TU 并产出富化证据。
+
+        流程：过滤编译参数 → libclang 解析（PARSER_DETAILED_PROCESSING_RECORD
+        以获得宏信息）→ 收集 clang 诊断（路径脱敏）→ 深度优先遍历游标，
+        按类别转译为证据（函数语义/枚举/宏定义附件/调用 token/assert
+        profile）→ 按 ID 去重后返回。解析异常只降级 PARTIAL。
+        function_targets 为基线函数名锚点，仅在精确命中时补语义。
+        """
         argument_result = normalize_clang_arguments(unit, workspace.root)
         context_id = compilation_context_id(unit, workspace.root)
         diagnostics = argument_result.diagnostics
@@ -90,6 +114,7 @@ class ClangCppAdapter:
             )
 
         evidence = []
+        # USR → 证据的两张索引表，用于把枚举成员声明/引用绑回所属枚举声明。
         enum_declarations: dict[str, Evidence] = {}
         enum_members: dict[str, Evidence] = {}
         for cursor in _walk_cursor(translation_unit.cursor):
@@ -125,6 +150,7 @@ class ClangCppAdapter:
                           **capture_assert(cursor, context_id, has_error)},
             )
             if kind in {'call_expression', 'macro_expansion'}:
+                # 调用/宏展开：原样复制 token 并生成 macro_argument_token 附件证据。
                 call_data, call_tokens = clang_call_records(cursor, item, lambda token:_token_span(relative_path, token))
                 item = replace(item, metadata={**item.metadata, 'macroCall':call_data})
                 evidence.extend(call_tokens)
@@ -169,12 +195,14 @@ class ClangCppAdapter:
 
 
 def _load_cindex():
+    """惰性导入 clang.cindex：无 clang 环境时只在真正 enrich 才失败。"""
     from clang import cindex
 
     return cindex
 
 
 def _walk_cursor(root):
+    """先序遍历游标树（栈实现，子节点倒序入栈保持源码顺序）。"""
     stack = [root]
     while stack:
         cursor = stack.pop()
@@ -183,6 +211,11 @@ def _walk_cursor(root):
 
 
 def _cursor_kind(cursor) -> str | None:
+    """把 clang 游标种类映射到 CPP_EVIDENCE_KINDS 中的 kind；不感兴趣的返回 None。
+
+    DECL_REF_EXPR 特判：仅当其引用目标是枚举常量时才映为
+    enum_member_reference，其余引用不产出。
+    """
     name = cursor if isinstance(cursor, str) else cursor.kind.name
     direct = {
         "MACRO_DEFINITION": "macro_definition",
@@ -205,6 +238,7 @@ def _cursor_kind(cursor) -> str | None:
 
 
 def _cursor_usr(cursor) -> str:
+    """取游标 USR（统一符号表示）；不可用时返回空串而非抛错。"""
     try:
         return str(cursor.get_usr() or "")
     except (AttributeError, RuntimeError):
@@ -218,6 +252,11 @@ def _enum_cursor_metadata(
     members: dict[str, Evidence],
     parse_has_error: bool,
 ) -> dict[str, object]:
+    """枚举类游标的附加元数据：成员声明/引用通过 USR 绑回所属枚举声明。
+
+    绑定状态规则：解析有错 → partial；能通过 USR 找到目标证据 →
+    complete（成员声明）或 partial；目标缺失时引用侧给出空 ID 列表。
+    """
     if kind not in {"enum_declaration", "enum_member_declaration", "enum_member_reference"}:
         return {}
     binding = "partial" if parse_has_error else "complete"
@@ -253,6 +292,7 @@ def _enum_cursor_metadata(
 
 
 def _cursor_span(relative_path: str, cursor) -> SourceSpan | None:
+    """把游标 extent 换算为 SourceSpan；行列无效或跨度非法时返回 None。"""
     extent = cursor.extent
     if extent.start.line < 1 or extent.end.line < 1:
         return None
@@ -265,6 +305,7 @@ def _cursor_span(relative_path: str, cursor) -> SourceSpan | None:
 
 
 def _cursor_value(cursor, kind: str, workspace_root: Path) -> str:
+    """取证据值（spelling/displayname 兜底）；include 的绝对路径改写为项目相对路径。"""
     value = cursor.spelling or cursor.displayname or cursor.kind.name
     if kind == "include":
         candidate = Path(value)
@@ -285,6 +326,13 @@ def _macro_attachments(
     entry_index: int,
     parse_has_error: bool,
 ) -> tuple[tuple[Evidence, ...], tuple[str, ...]]:
+    """展开宏定义游标：产出 macro_parameter 与 macro_replacement_token 附件证据。
+
+    思路：函数式宏先按括号配对定位参数表与替换体起点；再对替换体逐
+    token 判定角色（参数引用/调用候选/数字/字符串/操作符）。出现 ##、
+    #、...、__VA_ARGS__ 等不支持语义时记入 unsupported 集合并降低
+    置信度，同时由调用方发 WARNING——绝不假装能展开这些宏。
+    """
     try:
         tokens = tuple(cursor.get_tokens())
     except (AttributeError, RuntimeError):
@@ -313,6 +361,7 @@ def _macro_attachments(
             return (), ("unparseable-parameters",)
         body_index = close_index + 1
     parameter_names = {spellings[index] for index in parameter_indexes if spellings[index] != "..."}
+    # 扫描替换体与参数表中的不支持语义：## 粘贴、# 字符串化、可变参数。
     for spelling in (*spellings[body_index:], *(spellings[index] for index in parameter_indexes)):
         if spelling in {"##", "#"}:
             unsupported.add("token-pasting" if spelling == "##" else "stringification")
@@ -370,6 +419,7 @@ def _macro_attachments(
 
 
 def _touching(left, right) -> bool:
+    """两 token 是否紧邻（左终点的行列 == 右起点的行列），用于识别函数式宏。"""
     return (
         left.extent.end.line,
         left.extent.end.column,
@@ -380,6 +430,7 @@ def _touching(left, right) -> bool:
 
 
 def _token_span(relative_path: str, token) -> SourceSpan:
+    """把 clang token 的 extent 换算为 SourceSpan。"""
     return SourceSpan(
         SourceLocation(relative_path, token.extent.start.line, token.extent.start.column),
         SourceLocation(relative_path, token.extent.end.line, token.extent.end.column),
@@ -387,6 +438,7 @@ def _token_span(relative_path: str, token) -> SourceSpan:
 
 
 def _clang_macro_token_role(spelling: str, next_spelling: str | None, parameter_names: set[str]) -> str:
+    """判定宏替换 token 的角色：参数引用 / 调用候选（后跟 '('）/ 标识符 / 数字 / 字符串 / 操作符。"""
     if spelling in parameter_names:
         return "parameter_reference"
     if _IDENTIFIER.fullmatch(spelling):
@@ -399,6 +451,7 @@ def _clang_macro_token_role(spelling: str, next_spelling: str | None, parameter_
 
 
 def _clang_location(location, workspace_root: Path) -> SourceLocation | None:
+    """把 clang 诊断位置换算为 SourceLocation；工作区外或行列无效返回 None。"""
     if location is None or location.file is None or location.line < 1:
         return None
     path = Path(str(location.file)).resolve()
@@ -408,6 +461,7 @@ def _clang_location(location, workspace_root: Path) -> SourceLocation | None:
 
 
 def _diagnostic_severity(value: int, cindex) -> DiagnosticSeverity:
+    """把 clang 诊断严重级别映射为扫描器的 DiagnosticSeverity。"""
     if value >= cindex.Diagnostic.Fatal:
         return DiagnosticSeverity.FATAL
     if value >= cindex.Diagnostic.Error:
@@ -418,4 +472,5 @@ def _diagnostic_severity(value: int, cindex) -> DiagnosticSeverity:
 
 
 def _redact_project_path(message: str, workspace_root: Path) -> str:
+    """诊断消息脱敏：项目根绝对路径替换为 $PROJECT，避免泄漏本机路径。"""
     return message.replace(str(workspace_root), "$PROJECT").replace(workspace_root.as_posix(), "$PROJECT")

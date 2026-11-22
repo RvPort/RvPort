@@ -1,0 +1,121 @@
+{
+  "facts": [
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "CpuidResult",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m128",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m128bh",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m128d",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m128h",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m128i",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m256",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m256bh",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m256d",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m256h",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m256i",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m512",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m512bh",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m512d",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m512h",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "__m512i",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    },
+    {
+      "architectureFamily": "x86",
+      "canonicalValue": "bf16",
+      "factKind": "vectorTypes",
+      "semanticScope": "x86-only"
+    }
+  ],
+  "schemaVersion": "1.0",
+  "source": {
+    "collectedAt": "2026-11-13",
+    "inputFiles": [
+      "collected/rust/arch-functions.json",
+      "collected/rust/arch-structs.json"
+    ],
+    "inputSha256": [
+      "7838018318ad9b7c81041af5c3bd35a64e9d55d4a1e4888aa547b50aaa7f8eea",
+      "06ec9843517ba5e47c4015056df5971df00d9561e47bbf3ceda3440526002a84"
+    ],
+    "license": "rvport-skills riscv-scan corpus, Apache-2.0, extracted from Rust std::arch modules",
+    "officialUrl": "https://github.com/zte-riscv/rvport-skills/tree/master/riscv-scan",
+    "sourceId": "collected-rust-x86-entries"
+  }
+}

@@ -85,6 +85,15 @@ public class SourceDeployExecutor {
     }
 
     public SourceDeployRunView ensureDeployed(SourceDeployExecutionRequest request, TaskExecutionContext context) {
+        // 同一任务重试时 task_id 唯一键会与上次（含 FAILED）的 deploy run 冲突——先按任务查回并复用，
+        // 重新部署到同一 remote_path 是幂等操作。
+        if (!request.force()) {
+            var byTask = sourceDeployRepository.findByTaskId(request.taskId());
+            if (byTask.isPresent() && byTask.get().status() != TaskStatus.SUCCEEDED) {
+                context.log(TaskLogType.TOOL, "复用本任务既有部署记录（重试）：" + byTask.get().id());
+                return deployRun(byTask.get(), request, context);
+            }
+        }
         if (request.sourceDeploymentId() != null && !request.force()) {
             SourceDeployRunView run = sourceDeployRepository.findById(request.sourceDeploymentId())
                     .orElseThrow(() -> new TaskExecutionException(TaskErrorCode.RESOURCE_NOT_FOUND, "源码部署记录不存在", null));

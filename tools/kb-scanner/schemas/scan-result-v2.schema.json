@@ -4,21 +4,42 @@
   "title": "RvPort KB Scanner Result v2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "scan", "project", "summary", "findings", "diagnostics"],
+  "required": [
+    "schemaVersion",
+    "scan",
+    "project",
+    "summary",
+    "findings",
+    "diagnostics"
+  ],
   "properties": {
-    "schemaVersion": {"const": "2.0"},
-    "scan": {"$ref": "#/$defs/scan"},
-    "project": {"$ref": "#/$defs/project"},
-    "summary": {"$ref": "#/$defs/summary"},
+    "schemaVersion": {
+      "const": "2.0"
+    },
+    "scan": {
+      "$ref": "#/$defs/scan"
+    },
+    "project": {
+      "$ref": "#/$defs/project"
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
     "findings": {
       "type": "array",
-      "items": {"$ref": "#/$defs/finding"}
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
     },
     "diagnostics": {
       "type": "array",
-      "items": {"$ref": "#/$defs/diagnostic"}
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
     },
-    "extensions": {"$ref": "#/$defs/extensions"}
+    "extensions": {
+      "$ref": "#/$defs/extensions"
+    }
   },
   "$defs": {
     "id": {
@@ -27,13 +48,30 @@
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
     },
     "completionStatus": {
-      "enum": ["complete", "partial", "ambiguous", "inactive", "unknown"]
+      "enum": [
+        "complete",
+        "partial",
+        "ambiguous",
+        "inactive",
+        "unknown"
+      ]
     },
     "selectionStatus": {
-      "enum": ["selected", "inactive", "not_selected", "unknown"]
+      "enum": [
+        "selected",
+        "inactive",
+        "not_selected",
+        "unknown"
+      ]
     },
     "severity": {
-      "enum": ["info", "low", "medium", "high", "critical"]
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
     },
     "reasonCode": {
       "enum": [
@@ -52,7 +90,9 @@
     },
     "reasonCodes": {
       "type": "array",
-      "items": {"$ref": "#/$defs/reasonCode"},
+      "items": {
+        "$ref": "#/$defs/reasonCode"
+      },
       "uniqueItems": true
     },
     "extensions": {
@@ -60,70 +100,168 @@
       "propertyNames": {
         "pattern": "^org\\.rvport\\.kb-scanner\\.[a-z0-9]+(?:[.-][a-z0-9]+)*$"
       },
-      "additionalProperties": {"type": "object"}
+      "additionalProperties": {
+        "type": "object"
+      }
     },
     "tool": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "version"],
+      "required": [
+        "name",
+        "version"
+      ],
       "properties": {
-        "name": {"const": "kb-scanner"},
-        "version": {"type": "string", "minLength": 1}
+        "name": {
+          "const": "kb-scanner"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "scope": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["domain", "targetArchitecture", "staticAnalysisOnly", "compiled", "linked", "testsExecuted"],
+      "required": [
+        "domain",
+        "targetArchitecture",
+        "staticAnalysisOnly",
+        "compiled",
+        "linked",
+        "testsExecuted"
+      ],
       "properties": {
-        "domain": {"const": "c-cpp-x86-to-riscv"},
-        "targetArchitecture": {"enum": ["riscv32", "riscv64"]},
-        "staticAnalysisOnly": {"const": true},
-        "compiled": {"const": false},
-        "linked": {"const": false},
-        "testsExecuted": {"const": false}
+        "domain": {
+          "enum": [
+            "c-cpp-x86-to-riscv",
+            "c-cpp-arm64-to-riscv",
+            "rust-x86-to-riscv",
+            "rust-arm64-to-riscv",
+            "go-x86-to-riscv",
+            "go-arm64-to-riscv",
+            "java-x86-to-riscv",
+            "java-arm64-to-riscv",
+            "python-x86-to-riscv",
+            "python-arm64-to-riscv"
+          ]
+        },
+        "targetArchitecture": {
+          "enum": [
+            "riscv32",
+            "riscv64"
+          ]
+        },
+        "staticAnalysisOnly": {
+          "const": true
+        },
+        "compiled": {
+          "const": false
+        },
+        "linked": {
+          "const": false
+        },
+        "testsExecuted": {
+          "const": false
+        }
       }
     },
     "knowledgeSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "kind", "sha256"],
+      "required": [
+        "id",
+        "kind",
+        "sha256"
+      ],
       "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "kind": {"enum": ["compiler-derived", "curated"]},
-        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "compiler-derived",
+            "curated",
+            "collected"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
       }
     },
     "scan": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "tool", "scope", "artifactNames", "knowledgeSources"],
+      "required": [
+        "id",
+        "tool",
+        "scope",
+        "artifactNames",
+        "knowledgeSources"
+      ],
       "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "tool": {"$ref": "#/$defs/tool"},
-        "scope": {"$ref": "#/$defs/scope"},
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "tool": {
+          "$ref": "#/$defs/tool"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
         "artifactNames": {
-          "const": ["scan-result.json", "scan-report.html", "scan.log"]
+          "const": [
+            "scan-result.json",
+            "scan-report.html",
+            "scan.log"
+          ]
         },
         "knowledgeSources": {
           "type": "array",
-          "items": {"$ref": "#/$defs/knowledgeSource"},
+          "items": {
+            "$ref": "#/$defs/knowledgeSource"
+          },
           "uniqueItems": true
         },
-        "extensions": {"$ref": "#/$defs/extensions"}
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
       }
     },
     "project": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "filesAnalyzed", "status", "reasonCodes"],
+      "required": [
+        "id",
+        "name",
+        "filesAnalyzed",
+        "status",
+        "reasonCodes"
+      ],
       "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "name": {"type": "string", "minLength": 1},
-        "filesAnalyzed": {"type": "integer", "minimum": 0},
-        "status": {"$ref": "#/$defs/completionStatus"},
-        "reasonCodes": {"$ref": "#/$defs/reasonCodes"},
-        "extensions": {"$ref": "#/$defs/extensions"}
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "filesAnalyzed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "$ref": "#/$defs/completionStatus"
+        },
+        "reasonCodes": {
+          "$ref": "#/$defs/reasonCodes"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
       }
     },
     "summary": {
@@ -145,107 +283,262 @@
         "reasonCodes"
       ],
       "properties": {
-        "files": {"type": "integer", "minimum": 0},
-        "findings": {"type": "integer", "minimum": 0},
-        "issues": {"type": "integer", "minimum": 0},
-        "hints": {"type": "integer", "minimum": 0},
-        "blocking": {"type": "integer", "minimum": 0},
-        "portabilityGaps": {"type": ["integer", "null"], "minimum": 0},
-        "inactiveOrGuarded": {"type": "integer", "minimum": 0},
-        "referenceSources": {"type": "integer", "minimum": 0},
-        "references": {"type": "integer", "minimum": 0},
-        "countUnit": {"const": "finding"},
-        "readiness": {"enum": ["x86_only", "provisional", "unknown", "ready"]},
-        "status": {"$ref": "#/$defs/completionStatus"},
-        "reasonCodes": {"$ref": "#/$defs/reasonCodes"},
-        "extensions": {"$ref": "#/$defs/extensions"}
+        "files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "findings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "issues": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hints": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blocking": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "portabilityGaps": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "inactiveOrGuarded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "referenceSources": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "references": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "countUnit": {
+          "const": "finding"
+        },
+        "readiness": {
+          "enum": [
+            "x86_only",
+            "arm64_only",
+            "provisional",
+            "unknown",
+            "ready"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/completionStatus"
+        },
+        "reasonCodes": {
+          "$ref": "#/$defs/reasonCodes"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
       }
     },
     "position": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["line", "column"],
+      "required": [
+        "line",
+        "column"
+      ],
       "properties": {
-        "line": {"type": "integer", "minimum": 1},
-        "column": {"type": "integer", "minimum": 1}
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "span": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["start", "end"],
+      "required": [
+        "start",
+        "end"
+      ],
       "properties": {
-        "start": {"$ref": "#/$defs/position"},
-        "end": {"$ref": "#/$defs/position"}
+        "start": {
+          "$ref": "#/$defs/position"
+        },
+        "end": {
+          "$ref": "#/$defs/position"
+        }
       }
     },
     "contextLine": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["line", "text"],
+      "required": [
+        "line",
+        "text"
+      ],
       "properties": {
-        "line": {"type": "integer", "minimum": 1},
-        "text": {"type": "string"}
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text": {
+          "type": "string"
+        }
       }
     },
     "highlight": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["line", "startColumn", "endColumn"],
+      "required": [
+        "line",
+        "startColumn",
+        "endColumn"
+      ],
       "properties": {
-        "line": {"type": "integer", "minimum": 1},
-        "startColumn": {"type": "integer", "minimum": 1},
-        "endColumn": {"type": "integer", "minimum": 2}
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "startColumn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endColumn": {
+          "type": "integer",
+          "minimum": 2
+        }
       }
     },
     "contextBudget": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["beforeLines", "afterLines", "maxLines", "maxCharacters", "truncated"],
+      "required": [
+        "beforeLines",
+        "afterLines",
+        "maxLines",
+        "maxCharacters",
+        "truncated"
+      ],
       "properties": {
-        "beforeLines": {"type": "integer", "minimum": 0},
-        "afterLines": {"type": "integer", "minimum": 0},
-        "maxLines": {"type": "integer", "minimum": 1, "maximum": 256},
-        "maxCharacters": {"type": "integer", "minimum": 1, "maximum": 65536},
-        "truncated": {"type": "boolean"}
+        "beforeLines": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "afterLines": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxLines": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "maxCharacters": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "truncated": {
+          "type": "boolean"
+        }
       }
     },
     "sourceContext": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "reasonCodes", "lines", "highlights", "budget"],
+      "required": [
+        "status",
+        "reasonCodes",
+        "lines",
+        "highlights",
+        "budget"
+      ],
       "properties": {
-        "status": {"enum": ["complete", "partial", "unavailable"]},
-        "reasonCodes": {"$ref": "#/$defs/reasonCodes"},
+        "status": {
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable"
+          ]
+        },
+        "reasonCodes": {
+          "$ref": "#/$defs/reasonCodes"
+        },
         "lines": {
           "type": "array",
           "maxItems": 256,
-          "items": {"$ref": "#/$defs/contextLine"}
+          "items": {
+            "$ref": "#/$defs/contextLine"
+          }
         },
         "highlights": {
           "type": "array",
-          "items": {"$ref": "#/$defs/highlight"}
+          "items": {
+            "$ref": "#/$defs/highlight"
+          }
         },
-        "budget": {"$ref": "#/$defs/contextBudget"}
+        "budget": {
+          "$ref": "#/$defs/contextBudget"
+        }
       },
       "allOf": [
         {
-          "if": {"properties": {"status": {"const": "complete"}}, "required": ["status"]},
+          "if": {
+            "properties": {
+              "status": {
+                "const": "complete"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
           "then": {
             "properties": {
-              "lines": {"minItems": 1},
-              "highlights": {"minItems": 1},
-              "reasonCodes": {"maxItems": 0}
+              "lines": {
+                "minItems": 1
+              },
+              "highlights": {
+                "minItems": 1
+              },
+              "reasonCodes": {
+                "maxItems": 0
+              }
             }
           }
         },
         {
-          "if": {"properties": {"status": {"const": "unavailable"}}, "required": ["status"]},
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unavailable"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
           "then": {
             "properties": {
-              "lines": {"maxItems": 0},
-              "highlights": {"maxItems": 0},
-              "reasonCodes": {"minItems": 1}
+              "lines": {
+                "maxItems": 0
+              },
+              "highlights": {
+                "maxItems": 0
+              },
+              "reasonCodes": {
+                "minItems": 1
+              }
             }
           }
         }
@@ -254,104 +547,263 @@
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["file", "span", "context"],
+      "required": [
+        "file",
+        "span",
+        "context"
+      ],
       "properties": {
         "file": {
           "type": "string",
           "minLength": 1,
           "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
         },
-        "span": {"$ref": "#/$defs/span"},
-        "context": {"$ref": "#/$defs/sourceContext"}
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "context": {
+          "$ref": "#/$defs/sourceContext"
+        }
       }
     },
     "typedRef": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "id", "producer"],
+      "required": [
+        "kind",
+        "id",
+        "producer"
+      ],
       "properties": {
         "kind": {
-          "enum": ["entity", "evidence", "knowledge", "observation", "relation", "proofPath", "classification", "assessment"]
+          "enum": [
+            "entity",
+            "evidence",
+            "knowledge",
+            "observation",
+            "relation",
+            "proofPath",
+            "classification",
+            "assessment"
+          ]
         },
-        "id": {"$ref": "#/$defs/id"},
-        "producer": {"type": "string", "minLength": 1}
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "producer": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "fact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "matchedText", "primaryLocation", "provenance"],
+      "required": [
+        "kind",
+        "matchedText",
+        "primaryLocation",
+        "provenance"
+      ],
       "properties": {
         "kind": {
-          "enum": ["architecture_probe", "build_argument", "compiler_flag", "header_include", "intrinsic_call", "macro_invocation", "macro_replacement", "test_asset", "vector_type"]
+          "enum": [
+            "architecture_probe",
+            "build_argument",
+            "compiler_flag",
+            "header_include",
+            "intrinsic_call",
+            "macro_invocation",
+            "macro_replacement",
+            "test_asset",
+            "vector_type"
+          ]
         },
-        "symbol": {"type": ["string", "null"]},
-        "matchedText": {"type": "string", "minLength": 1},
-        "primaryLocation": {"$ref": "#/$defs/source"},
+        "symbol": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matchedText": {
+          "type": "string",
+          "minLength": 1
+        },
+        "primaryLocation": {
+          "$ref": "#/$defs/source"
+        },
         "provenance": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/typedRef"},
+          "items": {
+            "$ref": "#/$defs/typedRef"
+          },
           "uniqueItems": true
         },
-        "extensions": {"$ref": "#/$defs/extensions"}
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
       }
     },
     "conclusion": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["title", "severity", "confidence", "findingType", "actionable", "blocking", "archReachability", "status", "reason", "suggestion"],
+      "required": [
+        "title",
+        "severity",
+        "confidence",
+        "findingType",
+        "actionable",
+        "blocking",
+        "archReachability",
+        "status",
+        "reason",
+        "suggestion"
+      ],
       "properties": {
-        "title": {"type": "string", "minLength": 1},
-        "severity": {"$ref": "#/$defs/severity"},
-        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        "findingType": {"type": "string", "minLength": 1},
-        "actionable": {"type": "boolean"},
-        "blocking": {"type": "boolean"},
-        "archReachability": {"enum": ["selected", "inactive", "not_selected", "unknown"]},
-        "status": {"$ref": "#/$defs/completionStatus"},
-        "reason": {"type": "string", "minLength": 1},
-        "suggestion": {"type": "string", "minLength": 1},
-        "suggestion_en": {"type": "string", "minLength": 1, "pattern": "\\S"},
-        "extensions": {"$ref": "#/$defs/extensions"}
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "findingType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "actionable": {
+          "type": "boolean"
+        },
+        "blocking": {
+          "type": "boolean"
+        },
+        "archReachability": {
+          "enum": [
+            "selected",
+            "inactive",
+            "not_selected",
+            "unknown"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/completionStatus"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "suggestion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "suggestion_en": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
       }
     },
     "occurrence": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "kind", "location", "selectionStatus", "status", "reasonCodes", "provenance"],
+      "required": [
+        "id",
+        "kind",
+        "location",
+        "selectionStatus",
+        "status",
+        "reasonCodes",
+        "provenance"
+      ],
       "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "kind": {"type": "string", "minLength": 1},
-        "location": {"$ref": "#/$defs/source"},
-        "configuration": {"type": ["string", "null"]},
-        "selectionStatus": {"$ref": "#/$defs/selectionStatus"},
-        "status": {"$ref": "#/$defs/completionStatus"},
-        "reasonCodes": {"$ref": "#/$defs/reasonCodes"},
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "location": {
+          "$ref": "#/$defs/source"
+        },
+        "configuration": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selectionStatus": {
+          "$ref": "#/$defs/selectionStatus"
+        },
+        "status": {
+          "$ref": "#/$defs/completionStatus"
+        },
+        "reasonCodes": {
+          "$ref": "#/$defs/reasonCodes"
+        },
         "provenance": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/typedRef"},
+          "items": {
+            "$ref": "#/$defs/typedRef"
+          },
           "uniqueItems": true
         },
-        "extensions": {"$ref": "#/$defs/extensions"}
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
       }
     },
     "knowledgeProjection": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["entryId", "category", "symbol", "producer", "sourceId", "sourceSha256", "provenance"],
+      "required": [
+        "entryId",
+        "category",
+        "symbol",
+        "producer",
+        "sourceId",
+        "sourceSha256",
+        "provenance"
+      ],
       "properties": {
-        "entryId": {"$ref": "#/$defs/id"},
-        "category": {"type": "string", "minLength": 1},
-        "symbol": {"type": "string", "minLength": 1},
-        "producer": {"type": "string", "minLength": 1},
-        "sourceId": {"$ref": "#/$defs/id"},
-        "sourceSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "entryId": {
+          "$ref": "#/$defs/id"
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "producer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceId": {
+          "$ref": "#/$defs/id"
+        },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
         "provenance": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/typedRef"},
+          "items": {
+            "$ref": "#/$defs/typedRef"
+          },
           "uniqueItems": true
         }
       }
@@ -359,69 +811,206 @@
     "step": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "kind", "title", "status", "reason", "reasonCodes", "provenance"],
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "status",
+        "reason",
+        "reasonCodes",
+        "provenance"
+      ],
       "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "kind": {
-          "enum": ["build_selector", "target_selection", "source_selection", "source_evidence", "macro_invocation", "macro_definition", "macro_replacement", "intrinsic_call", "vector_type", "compiler_flag", "test_asset", "knowledge_match", "classification", "assessment"]
+        "id": {
+          "$ref": "#/$defs/id"
         },
-        "title": {"type": "string", "minLength": 1},
-        "status": {"$ref": "#/$defs/completionStatus"},
-        "reason": {"type": "string", "minLength": 1},
-        "reasonCodes": {"$ref": "#/$defs/reasonCodes"},
-        "symbol": {"type": ["string", "null"]},
-        "configuration": {"type": ["string", "null"]},
-        "selectionStatus": {"$ref": "#/$defs/selectionStatus"},
-        "source": {"$ref": "#/$defs/source"},
-        "knowledge": {"$ref": "#/$defs/knowledgeProjection"},
+        "kind": {
+          "enum": [
+            "build_selector",
+            "target_selection",
+            "source_selection",
+            "source_evidence",
+            "macro_invocation",
+            "macro_definition",
+            "macro_replacement",
+            "intrinsic_call",
+            "vector_type",
+            "compiler_flag",
+            "test_asset",
+            "knowledge_match",
+            "classification",
+            "assessment"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "$ref": "#/$defs/completionStatus"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reasonCodes": {
+          "$ref": "#/$defs/reasonCodes"
+        },
+        "symbol": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "configuration": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selectionStatus": {
+          "$ref": "#/$defs/selectionStatus"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "knowledge": {
+          "$ref": "#/$defs/knowledgeProjection"
+        },
         "provenance": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/typedRef"},
+          "items": {
+            "$ref": "#/$defs/typedRef"
+          },
           "uniqueItems": true
         },
-        "extensions": {"$ref": "#/$defs/extensions"}
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
       },
       "allOf": [
         {
           "if": {
             "properties": {
               "kind": {
-                "enum": ["build_selector", "target_selection", "source_selection", "source_evidence", "macro_invocation", "macro_definition", "macro_replacement", "intrinsic_call", "vector_type", "compiler_flag", "test_asset"]
+                "enum": [
+                  "build_selector",
+                  "target_selection",
+                  "source_selection",
+                  "source_evidence",
+                  "macro_invocation",
+                  "macro_definition",
+                  "macro_replacement",
+                  "intrinsic_call",
+                  "vector_type",
+                  "compiler_flag",
+                  "test_asset"
+                ]
               }
             },
-            "required": ["kind"]
+            "required": [
+              "kind"
+            ]
           },
-          "then": {"required": ["source"]}
+          "then": {
+            "required": [
+              "source"
+            ]
+          }
         },
         {
           "if": {
-            "properties": {"kind": {"enum": ["knowledge_match", "classification", "assessment"]}},
-            "required": ["kind"]
+            "properties": {
+              "kind": {
+                "enum": [
+                  "knowledge_match",
+                  "classification",
+                  "assessment"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
           },
-          "then": {"not": {"required": ["source"]}}
+          "then": {
+            "not": {
+              "required": [
+                "source"
+              ]
+            }
+          }
         },
         {
-          "if": {"properties": {"kind": {"const": "knowledge_match"}}, "required": ["kind"]},
-          "then": {"required": ["knowledge"]}
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "knowledge_match"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "knowledge"
+            ]
+          }
         }
       ]
     },
     "edge": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "fromStepId", "toStepId", "kind", "status", "reasonCodes", "provenance"],
+      "required": [
+        "id",
+        "fromStepId",
+        "toStepId",
+        "kind",
+        "status",
+        "reasonCodes",
+        "provenance"
+      ],
       "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "fromStepId": {"$ref": "#/$defs/id"},
-        "toStepId": {"$ref": "#/$defs/id"},
-        "kind": {"enum": ["selects", "contains", "includes", "invokes_macro", "defines", "expands_to", "calls", "matches_knowledge", "classified_as", "impacts_assessment", "alternative_to", "guarded_by"]},
-        "status": {"$ref": "#/$defs/completionStatus"},
-        "reasonCodes": {"$ref": "#/$defs/reasonCodes"},
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "fromStepId": {
+          "$ref": "#/$defs/id"
+        },
+        "toStepId": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "selects",
+            "contains",
+            "includes",
+            "invokes_macro",
+            "defines",
+            "expands_to",
+            "calls",
+            "matches_knowledge",
+            "classified_as",
+            "impacts_assessment",
+            "alternative_to",
+            "guarded_by"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/completionStatus"
+        },
+        "reasonCodes": {
+          "$ref": "#/$defs/reasonCodes"
+        },
         "provenance": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/typedRef"},
+          "items": {
+            "$ref": "#/$defs/typedRef"
+          },
           "uniqueItems": true
         }
       }
@@ -429,123 +1018,299 @@
     "break": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "status", "reasonCode", "stage", "candidateStepIds"],
+      "required": [
+        "id",
+        "status",
+        "reasonCode",
+        "stage",
+        "candidateStepIds"
+      ],
       "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "status": {"enum": ["partial", "ambiguous", "unknown"]},
-        "reasonCode": {"$ref": "#/$defs/reasonCode"},
-        "stage": {"type": "string", "minLength": 1},
-        "fromStepId": {"$ref": "#/$defs/id"},
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "status": {
+          "enum": [
+            "partial",
+            "ambiguous",
+            "unknown"
+          ]
+        },
+        "reasonCode": {
+          "$ref": "#/$defs/reasonCode"
+        },
+        "stage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fromStepId": {
+          "$ref": "#/$defs/id"
+        },
         "candidateStepIds": {
           "type": "array",
-          "items": {"$ref": "#/$defs/id"},
+          "items": {
+            "$ref": "#/$defs/id"
+          },
           "uniqueItems": true
         },
-        "expectedKind": {"type": "string", "minLength": 1},
-        "missingId": {"$ref": "#/$defs/id"}
+        "expectedKind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "missingId": {
+          "$ref": "#/$defs/id"
+        }
       }
     },
     "chainBudget": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["maxDepth", "maxVisited", "maxPaths", "visited", "paths", "truncated"],
+      "required": [
+        "maxDepth",
+        "maxVisited",
+        "maxPaths",
+        "visited",
+        "paths",
+        "truncated"
+      ],
       "properties": {
-        "maxDepth": {"type": "integer", "minimum": 1},
-        "maxVisited": {"type": "integer", "minimum": 1},
-        "maxPaths": {"type": "integer", "minimum": 1},
-        "visited": {"type": "integer", "minimum": 0},
-        "paths": {"type": "integer", "minimum": 0},
-        "truncated": {"type": "boolean"}
+        "maxDepth": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxVisited": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxPaths": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "visited": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "paths": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        }
       }
     },
     "evidenceChain": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "reasonCodes", "rootStepId", "primaryPath", "steps", "edges", "breaks", "impactStepIds", "budget"],
+      "required": [
+        "status",
+        "reasonCodes",
+        "rootStepId",
+        "primaryPath",
+        "steps",
+        "edges",
+        "breaks",
+        "impactStepIds",
+        "budget"
+      ],
       "properties": {
-        "status": {"$ref": "#/$defs/completionStatus"},
-        "reasonCodes": {"$ref": "#/$defs/reasonCodes"},
-        "rootStepId": {"$ref": "#/$defs/id"},
+        "status": {
+          "$ref": "#/$defs/completionStatus"
+        },
+        "reasonCodes": {
+          "$ref": "#/$defs/reasonCodes"
+        },
+        "rootStepId": {
+          "$ref": "#/$defs/id"
+        },
         "primaryPath": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/id"},
+          "items": {
+            "$ref": "#/$defs/id"
+          },
           "uniqueItems": true
         },
         "steps": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/step"}
+          "items": {
+            "$ref": "#/$defs/step"
+          }
         },
         "edges": {
           "type": "array",
-          "items": {"$ref": "#/$defs/edge"}
+          "items": {
+            "$ref": "#/$defs/edge"
+          }
         },
         "breaks": {
           "type": "array",
-          "items": {"$ref": "#/$defs/break"}
+          "items": {
+            "$ref": "#/$defs/break"
+          }
         },
         "impactStepIds": {
           "type": "array",
           "minItems": 0,
-          "items": {"$ref": "#/$defs/id"},
+          "items": {
+            "$ref": "#/$defs/id"
+          },
           "uniqueItems": true
         },
-        "budget": {"$ref": "#/$defs/chainBudget"}
+        "budget": {
+          "$ref": "#/$defs/chainBudget"
+        }
       },
       "allOf": [
         {
-          "if": {"properties": {"status": {"const": "complete"}}, "required": ["status"]},
-          "then": {"properties": {"breaks": {"maxItems": 0}, "reasonCodes": {"maxItems": 0}}}
+          "if": {
+            "properties": {
+              "status": {
+                "const": "complete"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "breaks": {
+                "maxItems": 0
+              },
+              "reasonCodes": {
+                "maxItems": 0
+              }
+            }
+          }
         },
         {
-          "if": {"properties": {"status": {"enum": ["partial", "ambiguous", "unknown"]}}, "required": ["status"]},
-          "then": {"properties": {"breaks": {"minItems": 1}, "reasonCodes": {"minItems": 1}}}
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "partial",
+                  "ambiguous",
+                  "unknown"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "breaks": {
+                "minItems": 1
+              },
+              "reasonCodes": {
+                "minItems": 1
+              }
+            }
+          }
         }
       ]
     },
     "finding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "fact", "conclusion", "occurrences", "primaryOccurrenceId", "evidenceChain"],
+      "required": [
+        "id",
+        "fact",
+        "conclusion",
+        "occurrences",
+        "primaryOccurrenceId",
+        "evidenceChain"
+      ],
       "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "fact": {"$ref": "#/$defs/fact"},
-        "conclusion": {"$ref": "#/$defs/conclusion"},
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "fact": {
+          "$ref": "#/$defs/fact"
+        },
+        "conclusion": {
+          "$ref": "#/$defs/conclusion"
+        },
         "occurrences": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/occurrence"}
+          "items": {
+            "$ref": "#/$defs/occurrence"
+          }
         },
-        "primaryOccurrenceId": {"$ref": "#/$defs/id"},
-        "evidenceChain": {"$ref": "#/$defs/evidenceChain"},
-        "extensions": {"$ref": "#/$defs/extensions"}
+        "primaryOccurrenceId": {
+          "$ref": "#/$defs/id"
+        },
+        "evidenceChain": {
+          "$ref": "#/$defs/evidenceChain"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
       }
     },
     "diagnostic": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "code", "stage", "severity", "status", "reasonCodes", "count", "findingIds", "refs"],
+      "required": [
+        "id",
+        "code",
+        "stage",
+        "severity",
+        "status",
+        "reasonCodes",
+        "count",
+        "findingIds",
+        "refs"
+      ],
       "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "code": {"type": "string", "minLength": 1},
-        "stage": {"type": "string", "minLength": 1},
-        "severity": {"$ref": "#/$defs/severity"},
-        "status": {"$ref": "#/$defs/completionStatus"},
-        "reasonCodes": {"$ref": "#/$defs/reasonCodes"},
-        "count": {"type": "integer", "minimum": 1},
-        "representativeLocation": {"$ref": "#/$defs/source"},
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "status": {
+          "$ref": "#/$defs/completionStatus"
+        },
+        "reasonCodes": {
+          "$ref": "#/$defs/reasonCodes"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "representativeLocation": {
+          "$ref": "#/$defs/source"
+        },
         "findingIds": {
           "type": "array",
-          "items": {"$ref": "#/$defs/id"},
+          "items": {
+            "$ref": "#/$defs/id"
+          },
           "uniqueItems": true
         },
         "refs": {
           "type": "array",
-          "items": {"$ref": "#/$defs/typedRef"},
+          "items": {
+            "$ref": "#/$defs/typedRef"
+          },
           "uniqueItems": true
         },
-        "extensions": {"$ref": "#/$defs/extensions"}
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
       }
     }
   }

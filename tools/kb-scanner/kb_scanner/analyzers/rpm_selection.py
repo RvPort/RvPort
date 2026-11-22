@@ -1,4 +1,8 @@
 """RPM occurrence DAG. Missing ancestors never become complete proof."""
+# RPM 出现（occurrence）DAG 分析：基于 RPM spec 的出现记录构建选择图。
+# 关键不变量：任何祖先（parent）缺失或结构不完整时，对应证明只能记
+# unknown，绝不升格为 complete。位于 analyzer 阶段，由
+# BuildSelectionAnalyzer 检测到 rpm 方言事实时调用。
 from __future__ import annotations
 from dataclasses import replace
 
@@ -6,9 +10,19 @@ from ..core import AnalysisSnapshot, CompletionStatus, Diagnostic, DiagnosticSev
 
 KINDS = {"build_assignment":"defines", "build_arch_probe":"depends_on", "build_dependency":"requires",
          "build_argument":"adds_argument", "build_source":"selects", "build_arch_constraint":"excludes"}
+# RPM 事实种类到关系 kind 的映射；未列出的种类回退为 selects。
 
 
 def analyze_rpm(context, facts, base, max_relations, max_paths):
+    """对 RPM 方言事实构建出现 DAG、关系与证明路径。
+
+    参数：
+      context: 扫描上下文（含 target_arch）。
+      facts: normalizer 快照，仅处理 metadata 带 'rpm' 的事实。
+      base: 已有分析快照，在其上追加。
+      max_relations/max_paths: 本阶段新增关系/路径预算。
+    返回 StageResult；不完整/预算截断以去重后的 WARNING 诊断标注 PARTIAL。
+    """
     selected = [f for f in facts.facts if 'rpm' in f.metadata]
     by_key = {(f.subject_id,f.metadata['rpm']['key']):f for f in selected}
     entities = {e.id:e for e in (*facts.entities,*base.entities)}
@@ -32,6 +46,13 @@ def analyze_rpm(context, facts, base, max_relations, max_paths):
             reason,producer='rpm-selection',details={'reason':reason}))
 
     def visit(f,trail=()):
+        """递归展开出现记录的父链并建边建证明，memo 缓存结果元组。
+
+        返回 (是否完整, 证明路径元组, 涉及关系 ID 元组, 原因)。
+        完整性 = 事实状态非 unknown 且结构/取值已知（argument/source 还
+        要求 buildUseKnown）；任一父缺失即降级。预算截断时不只丢弃新边，
+        还会把本次已建的边/证明统一改写为 unknown（回写降级）。
+        """
         if f.id in memo:
             return memo[f.id]
         if f.id in trail or len(trail)>=64:

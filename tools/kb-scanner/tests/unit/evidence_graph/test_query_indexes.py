@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from kb_scanner.analyzers.evidence_graph import GraphEntityIndexer, RelationBuilder, _index_branches, _contains, _x86_knowledge_ids
+from kb_scanner.analyzers.evidence_graph import GraphEntityIndexer, RelationBuilder, _index_branches, _contains, _family_knowledge_ids
 from .support import context, evidence, file, knowledge, snapshot
 from kb_scanner.core import stable_id, KnowledgeEntry
 
@@ -50,14 +50,14 @@ class QueryIndexTests(unittest.TestCase):
         with patch("kb_scanner.analyzers.evidence_graph.re.compile", wraps=re.compile) as compile_pattern:
             for text in ("_mm_add", "call(_mm_add)", "prefix_mm_add_suffix", "special.op", "specialXop", "αxβ"):
                 item = evidence(source, "call_expression", text, 1)
-                actual = _x86_knowledge_ids(item, facts, cache)
+                actual = _family_knowledge_ids(item, facts, cache)
                 expected = tuple(sorted(entry.id for entry in entries if
                     text.casefold() == entry.canonical_value.casefold() or
                     re.search(r"(?<![A-Za-z0-9_])" + re.escape(entry.canonical_value.casefold()) + r"(?![A-Za-z0-9_])", text.casefold())))
                 self.assertEqual(expected, actual)
             self.assertEqual(3, compile_pattern.call_count)
-        self.assertEqual((), _x86_knowledge_ids(replace(item, value=None), facts))
-        self.assertEqual((), _x86_knowledge_ids(item, knowledge(), {}))
+        self.assertEqual((), _family_knowledge_ids(replace(item, value=None), facts))
+        self.assertEqual((), _family_knowledge_ids(item, knowledge(), {}))
 
     def test_branch_containment_only_visits_matching_paths(self):
         sources, values = [], []

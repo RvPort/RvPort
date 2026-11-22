@@ -38,5 +38,9 @@
   "test_gap": {
     "zh": "请核查 RISC-V 目标对应的测试资产、选择路径及其与实现的关联，补齐有证据支持的测试覆盖缺口；当前静态扫描不代表测试已经运行或通过。",
     "en": "Review test assets, selection paths and their links to implementations for the RISC-V target, and address evidence-backed coverage gaps. This static scan does not mean tests have run or passed."
+  },
+  "family_gap": {
+    "zh": "构建已选中源架构家族成员且范围内未观察到 RISC-V 或通用实现，请按推导的目标路径补齐对应成员或确认其不需要；本结论限于授权文件清单，不代表全项目缺失，真实构建需在后续阶段验证。",
+    "en": "The build selects a source-architecture family member while no RISC-V or portable member is observed in scope. Add the derived target member or confirm it is unnecessary. This conclusion is limited to the authorized file list and does not claim a project-wide absence; actual builds require later validation."
   }
 }

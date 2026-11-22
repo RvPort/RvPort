@@ -24,3 +24,4 @@ backend/runtime/
 **/*.profraw
 **/*.profdata
 **/.idea/
+docs/examples/KbScannerDemo.class

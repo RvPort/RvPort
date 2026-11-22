@@ -31,7 +31,6 @@ class BuildSelectionDetector:
         analysis: AnalysisSnapshot,
         knowledge: KnowledgeSnapshot,
     ) -> StageResult[DetectionSnapshot]:
-        del context
         evidence_ids = {item.id for item in facts.evidence}
         evidence_by_id = {item.id: item for item in facts.evidence}
         entity_ids = {item.id for item in analysis.entities}
@@ -39,7 +38,7 @@ class BuildSelectionDetector:
         flag_knowledge = {
             entry.canonical_value.lower(): entry
             for entry in knowledge.entries
-            if entry.architecture_family.lower() == "x86" and entry.fact_kind == "compilerFlags"
+            if entry.architecture_family.lower() == context.source_arch and entry.fact_kind == "compilerFlags"
         }
         for relation in analysis.relations:
             if relation.source_id not in entity_ids or relation.target_id not in entity_ids or not set(relation.evidence_ids).issubset(evidence_ids):
@@ -59,6 +58,11 @@ class BuildSelectionDetector:
                 continue
             if issue == "missing_riscv_selection_path":
                 _add_observation(observations, "missing_riscv_selection_path", relation, (), "candidate", "high", relation.target_id)
+                continue
+            if issue == "missing_riscv_family_member":
+                # 架构家族升格条目（architecture_family/absence）：构建已选中源架构
+                # 成员且家族内无 riscv/generic 成员。kind 同名、级别同 selection_gap。
+                _add_observation(observations, "missing_riscv_family_member", relation, (), "candidate", "high", relation.target_id)
                 continue
             if item_kind not in _RELEVANT_KINDS:
                 continue

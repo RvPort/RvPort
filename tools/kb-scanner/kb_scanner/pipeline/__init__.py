@@ -1,3 +1,9 @@
+"""pipeline 门面：八阶段流水线的编排与组装（re-export）。
+
+ScanApplication 是对外入口，StagedPipelineRunner 负责按序执行八个阶段，
+composite/default/profile/qualification 提供各阶段的组合与装配能力。
+"""
+
 from .application import ScanApplication
 from .orchestrator import StagedPipelineRunner
 from .profile import ApplicationProfile, PipelineProfile

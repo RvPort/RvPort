@@ -5,7 +5,10 @@ export type ProjectKnowledgeBaseScanStatus =
   'PENDING' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'TIMEOUT'
 
 export interface ProjectKnowledgeBaseScanConfig {
-  language: string
+  /** 扫描语言（多选 label；提交时映射：'C/C++'→c,cpp，其余 label=value）*/
+  language: string[]
+  /** 源架构族 */
+  sourceArch?: string
   scope: string
   excludedDirectoryNames: string
   excludedPaths: string

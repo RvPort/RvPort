@@ -1,10 +1,23 @@
 """CMake event proofs and target/source closure, independent of Make recipes."""
+# CMake 事件证明与目标/源闭包分析：基于 CMake 事件流（metadata 带 "cmake"
+# 键的事实）构建选择证明，与 Make recipe 路径相互独立。位于 analyzer 阶段，
+# 由 BuildSelectionAnalyzer 检测到 CMake 方言事实时调用。
 from collections import defaultdict
 
 from ..core import AnalysisSnapshot, CompletionStatus, Diagnostic, DiagnosticSeverity, Entity, ProofPath, Relation, StageResult, stable_id
 
 
 def analyze_cmake(context, facts, knowledge, base, max_relations, max_paths):
+    """对 CMake 方言事实构建事件图、证明路径与源文件依赖。
+
+    参数：
+      context: 扫描上下文（含 target_arch）。
+      facts: normalizer 快照，仅处理 metadata 带 "cmake" 的事实。
+      knowledge: 知识快照，用于把源文件事实匹配到 x86 知识条目。
+      base: 已有分析快照，在其上追加。
+      max_relations/max_paths: 本阶段新增关系/路径预算（限额 = 已有量 + 预算）。
+    返回 StageResult；预算耗尽、父事件缺失等以 WARNING 诊断标注 PARTIAL。
+    """
     from .build_selection import BuildSourceReachabilityResolver, _knowledge_matches
     selected = [f for f in facts.facts if "cmake" in f.metadata]
     by_key = {f.metadata["cmake"]["key"]: f for f in selected}
@@ -20,6 +33,11 @@ def analyze_cmake(context, facts, knowledge, base, max_relations, max_paths):
                                      properties={"factId": fact.id, "sourceEvidenceId": fact.evidence_ids[0]})
 
     def edge(source, target, evidence_ids, state, metadata, prefix=(), kind="selects"):
+        """建一条边并同步生成证明路径；预算耗尽时记 reason 并返回空路径。
+
+        路径完整性 = 本边状态为 selected/inactive 且前缀路径上的关系
+        均非 unknown；不完整时证明状态记 unknown。
+        """
         if len(relations) >= limits[0] or len(proofs) >= limits[1]:
             reasons.add("cmake-proof-budget")
             return ()
@@ -34,6 +52,11 @@ def analyze_cmake(context, facts, knowledge, base, max_relations, max_paths):
         return path
 
     def visit(fact, trail=()):
+        """沿事件 parents 递归访问，memo 缓存 (首条成功路径, 状态)。
+
+        父事件缺失或父状态 unknown 时本事件状态降级为 unknown；
+        环或深度超 64 层记 cmake-proof-cycle-or-depth。
+        """
         if fact.id in memo:
             return memo[fact.id]
         if fact.id in trail or len(trail) >= 64:
@@ -74,7 +97,7 @@ def analyze_cmake(context, facts, knowledge, base, max_relations, max_paths):
     local = defaultdict(list)
     entries_by_kind = defaultdict(list)
     for entry in knowledge.entries:
-        if entry.architecture_family.lower() == "x86":
+        if entry.architecture_family.lower() == context.source_arch:
             entries_by_kind[entry.fact_kind].append(entry)
     matches_by_value = {}
     for fact in facts.facts:
@@ -86,6 +109,8 @@ def analyze_cmake(context, facts, knowledge, base, max_relations, max_paths):
         if fact.kind == "build_source":
             memberships[fact.metadata["cmake"].get("source")].append(fact)
     for name, sources in sorted(memberships.items(), key=lambda item: str(item[0])):
+        # 目标-源成员闭包：对每个被 CMake 目标收录的源文件，把其中命中
+        # x86 知识的事实建为 architecture_dependency 实体并挂边与证明。
         source = source_entities.get(name)
         if source is None:
             reasons.add("cmake-source-unavailable")

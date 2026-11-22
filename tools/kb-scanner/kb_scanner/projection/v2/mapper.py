@@ -26,11 +26,11 @@ _FACT_KIND = {
 
 
 class V2FindingMapper:
-    def __init__(self, index: SnapshotIndex, chain_builder: EvidenceChainBuilder, source_context: SourceContextProjector, usage=None) -> None:
+    def __init__(self, index: SnapshotIndex, chain_builder: EvidenceChainBuilder, source_context: SourceContextProjector, usage=None, *, architecture_family: str = "x86") -> None:
         self._index = index
         self._chain_builder = chain_builder
         self._source_context = source_context
-        self._intrinsic_symbols = intrinsic_symbols(index.knowledge.values())
+        self._intrinsic_symbols = intrinsic_symbols(index.knowledge.values(), architecture_family)
         self._macro_terminals = proven_macro_terminals(index.relations.values())
         self._macro_effects = MacroEffectsProjection(index.relations.values())
         self._families = FamilyProjection(index.entities.values())

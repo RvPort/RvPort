@@ -192,7 +192,7 @@ class TestSelectionAnalyzer:
         knowledge_values = tuple(
             (item.canonical_value.lower(), item.id)
             for item in knowledge.entries
-            if item.architecture_family.lower() == "x86"
+            if item.architecture_family.lower() == context.source_arch
         )
         build_endpoint = {
             str(item.metadata.get("factId")): entities.get(item.target_id)

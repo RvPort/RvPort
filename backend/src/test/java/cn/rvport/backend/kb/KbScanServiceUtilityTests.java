@@ -40,7 +40,7 @@ class KbScanServiceUtilityTests {
         assertThat((String) invoke(defaults, "defaultLanguage")).isEqualTo("c,cpp");
 
         RvPortProperties configured = new RvPortProperties(null,
-                new RvPortProperties.KbScan(null, null, null, " ", 45, null, " rust ", "riscv64", -3),
+                new RvPortProperties.KbScan(null, null, null, " ", 45, null, " rust ", null, "riscv64", -3, null),
                 new RvPortProperties.Worker(false));
         KbScanService custom = service(configured);
         assertThat((int) invoke(custom, "timeoutSeconds")).isEqualTo(45);
@@ -55,8 +55,10 @@ class KbScanServiceUtilityTests {
         Path absolute = Path.of("target").toAbsolutePath();
         assertThat((Path) invoke(service, "resolvePath", absolute.toString())).isEqualTo(absolute.normalize());
         assertThat((Path) invoke(service, "resolvePath", ".")).isEqualTo(Path.of(".").toAbsolutePath().normalize());
-        assertThat((Path) invoke(service, "resolvePath", "backend/pom.xml"))
-                .isEqualTo(Path.of("..", "backend/pom.xml").toAbsolutePath().normalize());
+        // 父级回退语义依赖 cwd 布局（原断言假设 cwd=backend/ 且父目录是仓库根）——
+        // 在任意工作目录下改为验证确定性语义：两侧都不存在时回退 cwd 绝对路径。
+        assertThat((Path) invoke(service, "resolvePath", "definitely/missing/nested/file.txt"))
+                .isEqualTo(Path.of("definitely/missing/nested/file.txt").toAbsolutePath().normalize());
         assertThat((Path) invoke(service, "resolvePath", "definitely-missing-path"))
                 .isEqualTo(Path.of("definitely-missing-path").toAbsolutePath().normalize());
     }

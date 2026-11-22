@@ -1,9 +1,15 @@
 {
   "schemaVersion": "1.0",
-  "rulePack": {"id": "riscv-porting-rules", "version": "2026.06"},
+  "rulePack": {
+    "id": "riscv-porting-rules",
+    "version": "2026.06"
+  },
   "knowledgeManifest": {
     "path": "knowledge-manifest.json",
-    "sha256": "010cf1f188d2175d7c3b666b1c79de3da673966fd18dd06f39ead41b298274f8"
+    "sha256": "0c8efd35baaa14db83dcda75e7e31f8c7ba27b689f13b94c3654457fa137b101"
   },
-  "projectionPolicy": {"id": "kb-scanner.compatible-projection", "version": 1}
+  "projectionPolicy": {
+    "id": "kb-scanner.compatible-projection",
+    "version": 1
+  }
 }

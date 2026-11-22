@@ -1,3 +1,10 @@
+"""compile_commands.json 读取器：把编译数据库归一为编译单元上下文。
+
+frontend 阶段的前置输入：解析 JSON 编译数据库（支持 arguments 数组
+与 command 字符串两种形式），校验每条目的源文件必须落在项目根内，
+并提取包含目录/宏定义/语言标准等结构化字段。数据库缺失只是
+UNAVAILABLE（基线解析照常），条目级问题降级为 PARTIAL。
+"""
 from __future__ import annotations
 
 import json
@@ -16,6 +23,13 @@ from ...core import (
 
 
 class CompilationDatabaseReader:
+    """编译数据库读取器：单入口 read()，无状态（slots 为空）。
+
+    不变量：返回的每个 CompilationUnitContext.path 都是解析后的绝对
+    路径且位于 project_root 内；上下文按 (相对路径, entry_index) 排序，
+    保证同一输入得到确定顺序。
+    """
+
     __slots__ = ()
 
     def read(
@@ -23,6 +37,12 @@ class CompilationDatabaseReader:
         path: Path | None,
         project_root: Path,
     ) -> StageResult[tuple[CompilationUnitContext, ...]]:
+        """读取并校验编译数据库，返回排序后的编译单元上下文元组。
+
+        path 为 None 或不存在 → UNAVAILABLE（附 INFO 诊断，属正常路径）；
+        JSON 无效/根不是数组 → UNAVAILABLE；单条目缺 file、源文件逃逸
+        工作区、命令 tokenize 失败 → 跳过该条目并记 WARNING，其余继续。
+        """
         if path is None or not path.exists():
             diagnostic = Diagnostic(
                 code="compilation-database.missing",
@@ -100,6 +120,12 @@ class CompilationDatabaseReader:
 
 
 def compilation_context_id(context: CompilationUnitContext, project_root: Path) -> str:
+    """编译上下文的稳定ID（SHA-256）：同一编译命令在同一项目内得到同一 ID。
+
+    token 先经 _identity_token 归一（项目根/命令目录替换为占位符、外部
+    路径折叠为 $EXTERNAL/文件名），避免仅因绝对路径不同而产生不同 ID，
+    同时保留会改变解析语义的差异。
+    """
     root = project_root.resolve()
     relative_source = normalize_project_path(context.path, root)
     identity_tokens = tuple(_identity_token(token, root, context.directory) for token in context.tokens)
@@ -115,6 +141,11 @@ def compilation_context_id(context: CompilationUnitContext, project_root: Path) 
 
 
 def _entry_tokens(entry: dict[str, object]) -> tuple[list[str], str | None, str | None]:
+    """取条目命令 token：优先 arguments 数组，否则 shlex 切分 command 字符串。
+
+    返回 (tokens, raw_command, error)；两者都缺省时返回空 token 且不报错
+    （该条目仍可作为无参上下文参与）。
+    """
     arguments = entry.get("arguments")
     command = entry.get("command")
     if isinstance(arguments, list):
@@ -131,6 +162,11 @@ def _entry_tokens(entry: dict[str, object]) -> tuple[list[str], str | None, str 
 
 
 def _parse_context_tokens(tokens: list[str]) -> tuple[list[str], dict[str, str | None], str | None]:
+    """从命令 token 中提取 (include 目录, 宏定义, 语言标准)。
+
+    单遍扫描：-I/-isystem 等支持分离与连写两种形式；-D 支持
+    -DNAME=VALUE 与 -DNAME（值为 None）；-std= 只保留最后一个。
+    """
     include_dirs: list[str] = []
     defines: dict[str, str | None] = {}
     language_standard: str | None = None
@@ -160,6 +196,7 @@ def _parse_context_tokens(tokens: list[str]) -> tuple[list[str], dict[str, str |
 
 
 def _add_define(defines: dict[str, str | None], raw: str) -> None:
+    """解析单个 -D 参数：NAME=VALUE 拆分键值，仅 NAME 则值为 None。"""
     if "=" in raw:
         key, value = raw.split("=", 1)
         defines[key] = value
@@ -168,10 +205,17 @@ def _add_define(defines: dict[str, str | None], raw: str) -> None:
 
 
 def _compiler_name(value: str) -> str:
+    """从编译器路径（含反斜杠）取最后的文件名部分。"""
     return value.replace("\\", "/").rsplit("/", 1)[-1]
 
 
 def _identity_token(token: str, root: Path, directory: Path | None) -> str:
+    """把单个 token 归一为身份等价形式，用于稳定ID 计算。
+
+    项目根 → $PROJECT、命令目录 → $COMMAND_DIR（换机器/换检出路径不
+    改变 ID）；include 前缀外的绝对路径折叠为 $EXTERNAL/文件名（外部
+    依赖只按名字参与身份，具体安装位置不算语义差异）。
+    """
     normalized = token.replace("\\", "/")
     root_text = root.as_posix().rstrip("/")
     if root_text and root_text in normalized:
@@ -192,6 +236,7 @@ def _identity_token(token: str, root: Path, directory: Path | None) -> str:
 
 
 def _entry_diagnostic(code: str, entry_index: int, message: str) -> Diagnostic:
+    """构造条目级 WARNING 诊断，details 携带 entryIndex 便于定位。"""
     return Diagnostic(
         code=code,
         stage="compilation-database",
@@ -203,6 +248,7 @@ def _entry_diagnostic(code: str, entry_index: int, message: str) -> Diagnostic:
 
 
 def _unavailable(code: str, message: str) -> StageResult[tuple[CompilationUnitContext, ...]]:
+    """构造整体 UNAVAILABLE 的 StageResult（数据库级失败，非条目级）。"""
     diagnostic = Diagnostic(
         code=code,
         stage="compilation-database",

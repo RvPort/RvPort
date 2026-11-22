@@ -7,6 +7,7 @@ public record KbScanRequest(
         UUID sourceRevisionId,
         String ruleVersion,
         String language,
+        String sourceArch,
         KbScanScope scanScope,
         List<String> excludePaths
 ) {

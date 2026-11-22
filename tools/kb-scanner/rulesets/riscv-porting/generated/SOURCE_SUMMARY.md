@@ -68,3 +68,27 @@ match:
 ```
 
 规则引擎会合并本目录下所有 `*-x86-entries.json` 文件中的同名集合。
+
+## ARM64 Collected Corpus
+
+来源：
+
+- 语料原件: `collected/arm64/`（Arm Architecture Reference Manual 人工提取，冻结）
+- 官方手册: https://developer.arm.com/documentation/ddi0487/latest
+- 生成脚本: `tools/collect_aarch64_entries.py`
+- 输出文件: `arm64-collected-entries.json`（manifest 以 `collected-v1` 类型登记）
+
+当前统计：
+
+```text
+assemblyInstructions = 2161   (aarch64.opcode，清洗掉 48 条手册表格字段名)
+platformMacros       = 121    (aarch64.macro，剔除 __arm_ 等截断脏值)
+headers              = 16     (aarch64.intrinsics 清单)
+builtins             = 8      (aarch64.builtin)
+```
+
+说明：
+
+- 手册语料无精确 git revision，溯源为语料原件 SHA-256 + 手册 URL + 采集日期（collected-v1 契约）。
+- 该词表服务 `--source-arch arm64` 扫描（arm64→RISC-V），与 x86 词表按架构族隔离；
+  两条流水线（legacy generatedSet glob 与新 KnowledgeIndex 均按族过滤）互不串扰。

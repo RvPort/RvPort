@@ -1,17 +1,96 @@
 {
   "schemaVersion": "2.0",
   "catalogId": "riscv-porting-x86-facts",
-  "version": "2026.09-curated.1",
+  "version": "2026.11-rust.1",
   "sources": [
-    {"sourceId": "binutils-2.42-x86", "kind": "generated-v2", "path": "generated/binutils-2.42-x86.json", "sha256": "e3ff7d8acccd50fd7e8a2f8c64d4a303e147b7540702a362c1b00f9bbdf29345"},
-    {"sourceId": "clang-x86-entries", "kind": "legacy-generated", "path": "generated/clang-x86-entries.json", "sha256": "947e2ad0797248f8179f2bc29f4e7e0591bd7a14801ba819c9e56d31926e9a8c"},
     {
-      "sourceId": "curated-x86-migration-semantics", "kind": "curated-v1",
-      "path": "curated/x86-migration-semantics.json", "sha256": "21b7ccc36186a21994c4e39965ece16da429da916a9272112f38817d3bcccc6b",
-      "referencePath": "curated/source-references.json", "referenceSha256": "5b93af6804d175ecb73dc0c407c559bb8b4ff50168b7dd46c32457e352105ab5"
+      "sourceId": "binutils-2.42-x86",
+      "kind": "generated-v2",
+      "path": "generated/binutils-2.42-x86.json",
+      "sha256": "e3ff7d8acccd50fd7e8a2f8c64d4a303e147b7540702a362c1b00f9bbdf29345"
     },
-    {"sourceId": "gcc-14.2.0-x86-target", "kind": "generated-v2", "path": "generated/gcc-14.2.0-x86-target.json", "sha256": "aa04d904fb8dd76c20898ec3b11355e3ed30c742865cdbe6bdfea9c084dea26c"},
-    {"sourceId": "gcc-x86-entries", "kind": "legacy-generated", "path": "generated/gcc-x86-entries.json", "sha256": "22d68c2ab3c8c40c8606451af2e5f493877661d031b6b2f379eff7886c23d191"},
-    {"sourceId": "llvm-18.1.8-x86", "kind": "generated-v2", "path": "generated/llvm-18.1.8-x86.json", "sha256": "021708c5e89a9565c36d83f98e8175cd058b1afb9c39c660e0d7e1425ad64722"}
+    {
+      "sourceId": "clang-x86-entries",
+      "kind": "legacy-generated",
+      "path": "generated/clang-x86-entries.json",
+      "sha256": "947e2ad0797248f8179f2bc29f4e7e0591bd7a14801ba819c9e56d31926e9a8c"
+    },
+    {
+      "sourceId": "collected-arm64-entries",
+      "kind": "collected-v1",
+      "path": "generated/arm64-collected-entries.json",
+      "sha256": "4301bb10dd4ae3b035b9eda39caff01be7f52f4daaee55c33efae6917a7554f4",
+      "collectedFiles": [
+        "collected/arm64/aarch64.builtin",
+        "collected/arm64/aarch64.intrinsics",
+        "collected/arm64/aarch64.macro",
+        "collected/arm64/aarch64.opcode"
+      ]
+    },
+    {
+      "sourceId": "collected-riscv-entries",
+      "kind": "collected-v1",
+      "path": "generated/riscv-collected-entries.json",
+      "sha256": "ec18d767685bfe6956d3c36f848cea7cfcdf7358a4a460bfb22f43f884a75853",
+      "collectedFiles": [
+        "collected/riscv/riscv.macro"
+      ]
+    },
+    {
+      "sourceId": "collected-rust-arm64-entries",
+      "kind": "collected-v1",
+      "path": "generated/rust-arm64-collected-entries.json",
+      "sha256": "830c89a146ddb6fc9d87ee5c1b946122b8f7d5d727bc6c02ea812d61337e71b5",
+      "collectedFiles": [
+        "collected/rust/arch-functions.json",
+        "collected/rust/arch-structs.json"
+      ]
+    },
+    {
+      "sourceId": "collected-rust-riscv-entries",
+      "kind": "collected-v1",
+      "path": "generated/rust-riscv-collected-entries.json",
+      "sha256": "c4aaefa2a0d3dce04a897c5f4dd01b468faf8d0c43551c54122f05a12490f430",
+      "collectedFiles": [
+        "collected/rust/arch-functions.json",
+        "collected/rust/arch-structs.json"
+      ]
+    },
+    {
+      "sourceId": "collected-rust-x86-entries",
+      "kind": "collected-v1",
+      "path": "generated/rust-x86-collected-entries.json",
+      "sha256": "303b5fb8fdd107aa2bb78af3c5bfc8c175d46c7d2568018a1d01baf5f5dc0e7e",
+      "collectedFiles": [
+        "collected/rust/arch-functions.json",
+        "collected/rust/arch-structs.json"
+      ]
+    },
+    {
+      "sourceId": "curated-x86-migration-semantics",
+      "kind": "curated-v1",
+      "path": "curated/x86-migration-semantics.json",
+      "sha256": "21b7ccc36186a21994c4e39965ece16da429da916a9272112f38817d3bcccc6b",
+      "referencePath": "curated/source-references.json",
+      "referenceSha256": "5b93af6804d175ecb73dc0c407c559bb8b4ff50168b7dd46c32457e352105ab5"
+    },
+    {
+      "sourceId": "gcc-14.2.0-x86-target",
+      "kind": "generated-v2",
+      "path": "generated/gcc-14.2.0-x86-target.json",
+      "sha256": "aa04d904fb8dd76c20898ec3b11355e3ed30c742865cdbe6bdfea9c084dea26c"
+    },
+    {
+      "sourceId": "gcc-x86-entries",
+      "kind": "legacy-generated",
+      "path": "generated/gcc-x86-entries.json",
+      "sha256": "22d68c2ab3c8c40c8606451af2e5f493877661d031b6b2f379eff7886c23d191"
+    },
+    {
+      "sourceId": "llvm-18.1.8-x86",
+      "kind": "generated-v2",
+      "path": "generated/llvm-18.1.8-x86.json",
+      "sha256": "021708c5e89a9565c36d83f98e8175cd058b1afb9c39c660e0d7e1425ad64722"
+    }
   ]
 }

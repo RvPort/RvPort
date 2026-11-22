@@ -1,3 +1,9 @@
+"""JSON 元数据的"深冻结"工具：把任意 JSON 风格值变成不可变结构。
+
+流水线中所有 DTO 的 value/metadata 字段都经本模块冻结（dict→
+MappingProxyType、list→tuple），从机制上杜绝跨阶段共享可变状态。
+"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -8,6 +14,7 @@ from typing import Any, TypeAlias
 
 JsonScalar: TypeAlias = None | bool | int | float | str
 JsonValue: TypeAlias = JsonScalar | tuple["JsonValue", ...] | Mapping[str, "JsonValue"]
+# JSON 值的类型别名：冻结后的容器只能是 tuple 与只读 Mapping。
 
 
 class _SharedJsonMapping(Mapping):
@@ -51,6 +58,12 @@ def freeze_shared_metadata(value: Mapping[str, Any]) -> Mapping[str, JsonValue]:
 
 
 def freeze_json(value: Any, *, field_name: str = "value") -> JsonValue:
+    """递归冻结 JSON 风格值：dict→只读 MappingProxyType，list→tuple。
+
+    逐项校验：键必须是字符串、浮点数必须有限（拒绝 NaN/Inf）、
+    不支持的类型抛 TypeError。已经是 _SharedJsonMapping 的值原样返回
+    （跨 DTO 共享已冻结子树时避免重复拷贝）。
+    """
     if type(value) is _SharedJsonMapping:
         return value
     if isinstance(value, float) and not math.isfinite(value):
@@ -70,6 +83,7 @@ def freeze_json(value: Any, *, field_name: str = "value") -> JsonValue:
 
 
 def freeze_metadata(value: Mapping[str, Any] | None) -> Mapping[str, JsonValue]:
+    """冻结 metadata 字段：None 视为空映射，结果必须仍是 Mapping。"""
     frozen = freeze_json(value or {}, field_name="metadata")
     if not isinstance(frozen, Mapping):
         raise TypeError("metadata must be a mapping")
@@ -77,6 +91,7 @@ def freeze_metadata(value: Mapping[str, Any] | None) -> Mapping[str, JsonValue]:
 
 
 def to_json_compatible(value: JsonValue) -> Any:
+    """把冻结 JSON 值还原为可序列化结构（只读 Mapping→dict，tuple→list）。"""
     if isinstance(value, Mapping):
         return {key: to_json_compatible(item) for key, item in value.items()}
     if isinstance(value, tuple):

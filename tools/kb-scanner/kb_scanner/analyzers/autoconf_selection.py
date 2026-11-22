@@ -1,10 +1,22 @@
 """Autoconf event graph: source occurrences, not keyword-based architecture gaps."""
+# autoconf 事件图分析：基于源码中真实出现的事件构建选择证明，
+# 而不是靠关键字猜测架构缺口。位于 analyzer 阶段，由 BuildSelectionAnalyzer
+# 在检测到 autoconf 方言事实时调用，产出实体/关系/证明路径快照。
 from __future__ import annotations
 
 from ..core import AnalysisSnapshot, CompletionStatus, Diagnostic, DiagnosticSeverity, Entity, ProofPath, Relation, StageResult, stable_id
 
 
 def analyze_autoconf(context, facts, base, max_relations, max_paths):
+    """对 autoconf 方言事实构建选择图与证明路径。
+
+    参数：
+      context: 扫描上下文（含 target_arch）。
+      facts: normalizer 产出的快照，仅处理 metadata 带 "autoconf" 且非 raw 的事实。
+      base: 已有的分析快照，本函数在其基础上追加。
+      max_relations/max_paths: 本阶段可新增的关系数/证明路径数预算。
+    返回 StageResult；预算耗尽等情形以 WARNING 诊断形式标注为 PARTIAL。
+    """
     selected = [fact for fact in facts.facts if "autoconf" in fact.metadata and not fact.metadata["autoconf"].get("raw")]
     by_key = {fact.metadata["autoconf"]["key"]: fact for fact in selected}
     entities = {item.id: item for item in (*facts.entities, *base.entities)}
@@ -21,6 +33,11 @@ def analyze_autoconf(context, facts, base, max_relations, max_paths):
     counts = [0, 0]
 
     def visit(fact, trail=()):
+        """沿 parents 链自顶向下递归建边，memo 缓存每个事实的 (路径元组, 是否完整)。
+
+        完整性判据：无失败原因且 resultStatus/outcome 已是 accepted 或 rejected。
+        遇到环、深度超限或父事件缺失时放弃完整性（记 unknown），不中断整体扫描。
+        """
         if fact.id in memo:
             return memo[fact.id]
         if fact.id in trail or len(trail) >= 64:

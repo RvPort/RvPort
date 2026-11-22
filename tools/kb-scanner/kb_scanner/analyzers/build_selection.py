@@ -1,3 +1,10 @@
+"""构建选择分析（analyzer 阶段）：把 build_* 事实转成"架构选择器→构建项"的证据图。
+
+支持 Make/CMake/Autoconf/RPM 等构建方言，按方言分流到对应的 selection 模块；
+通用路径负责建实体/关系/证明路径、推导 RISC-V 选择缺口（selection_gap），
+并通过 Make 模式匹配把源码成员可达性解析为 x86 知识依赖。
+所有 ID 由 stable_id（SHA-256）派生；预算耗尽时降级为 PARTIAL 而非失败。
+"""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -24,6 +31,12 @@ from ..core import (
 
 @dataclass(frozen=True, slots=True)
 class BuildProofBudgets:
+    """构建选择分析的证明预算（frozen 不可变）。
+
+    max_relations: 本阶段允许新增的关系数上限。
+    max_paths: 本阶段允许新增的证明路径数上限。
+    预算是"本阶段新增量"而非全图总量；不足 1 视为配置错误。
+    """
     max_relations: int = 10000
     max_paths: int = 4096
 
@@ -33,6 +46,7 @@ class BuildProofBudgets:
 
 
 _ITEM_KIND = {
+    # build_* 事实种类到实体 kind 的映射（build_branch → build_branch 等）。
     "build_assignment": "build_variable",
     "build_condition": "build_condition",
     "build_branch": "build_branch",
@@ -52,6 +66,7 @@ _ITEM_KIND = {
 
 
 _RELATION_KIND = {
+    # build_* 事实种类到关系 kind 的映射（定义/依赖/选择/包含等语义）。
     "build_assignment": "defines",
     "build_condition": "depends_on",
     "build_branch": "selects",
@@ -71,6 +86,13 @@ _RELATION_KIND = {
 
 
 class BuildSelectionAnalyzer:
+    """构建选择分析器：analyzer 阶段的构建系统入口。
+
+    职责：校验事实引用完整性；按方言（cmake/autoconf/rpm）分流处理；
+    通用路径生成 architecture_selector → build_branch → 构建项的选择链；
+    最后统一调用 bind_build_macros 绑定宏效果。
+    不变式：输出快照中的实体/关系按稳定次序排序；预算只限制本阶段新增。
+    """
     __slots__ = ("_budgets",)
 
     def __init__(self, budgets: BuildProofBudgets = BuildProofBudgets()) -> None:
@@ -79,6 +101,10 @@ class BuildSelectionAnalyzer:
     def analyze(
         self, context, facts, knowledge, base=AnalysisSnapshot(),
     ):
+        """分析入口：先跑通用/方言语义，再统一绑定宏作用。
+
+        返回 StageResult；宏绑定达到预算时追加 WARNING 并降级为 PARTIAL。
+        """
         result = self._analyze(context, facts, knowledge, base)
         if result.value is None:
             return result
@@ -102,6 +128,18 @@ class BuildSelectionAnalyzer:
         knowledge: KnowledgeSnapshot,
         base: AnalysisSnapshot = AnalysisSnapshot(),
     ) -> StageResult[AnalysisSnapshot]:
+        """核心分析逻辑（analyze 的内部实现）。
+
+        流程：1) 引用完整性校验，失败则整阶段 FAILED；
+        2) 检测事实 metadata 是否携带 cmake/autoconf/rpm 方言标记——
+           有则先递归处理"非该方言"的其余事实得到 base，再交给对应
+           方言分析器（共享剩余预算）；
+        3) 无 build 事实时直接透传 base；
+        4) 通用路径：建 architecture_selector 实体，逐个 build 事实建
+           实体+关系+证明路径（conditionGroup 相同的事实共享 build_branch
+           中间节点）；随后做 Make 源码可达性解析；最后扫描 x86 分支
+           无 RISC-V/通用路径的 subject，生成 selection_gap 实体与证据。
+        """
         evidence_ids = {item.id for item in facts.evidence}
         entity_by_id = {item.id: item for item in (*facts.entities, *base.entities)}
         for fact in facts.facts:
@@ -173,6 +211,8 @@ class BuildSelectionAnalyzer:
             source_entity = selector
             path_relations: list[str] = []
             if condition_group:
+                # 同一 (subject, conditionGroup, role) 的事实共享一个 build_branch
+                # 中间节点，避免选择器到分支的关系重复；后续项都从分支出发。
                 key = (fact.subject_id, condition_group, role)
                 branch = branch_by_key.get(key)
                 if branch is None:
@@ -241,6 +281,9 @@ class BuildSelectionAnalyzer:
         )
 
         for subject_id, subject_facts in relevant_by_subject.items():
+            # 选择缺口检测：subject 存在 x86 分支但没有任何已选中的
+            # riscv/generic/portable/scalar/fallback 分支时，标记为
+            # missing_riscv_selection_path（证据取全部分支证据的并集）。
             branch_facts = [item for item in subject_facts if item.kind == "build_branch"]
             has_x86 = any(_metadata_text(item, "role", "") == "x86" for item in branch_facts)
             has_selected_path = any(
@@ -284,6 +327,15 @@ class BuildSelectionAnalyzer:
 
 
 class BuildSourceReachabilityResolver:
+    """Make 源码可达性解析器：从构建目标推导源文件成员与 x86 知识依赖。
+
+    思路：对每个 make 目标，若其 subject 存在 "%.c" 等模式规则且能按
+    目标名+后缀唯一匹配到一个已注册 source_file 实体，则建立
+    target → source 的 uses_source 关系；再沿 includes 关系闭包收集
+    可达源文件，把其中命中 x86 知识库（intrinsics/SSE/AVX 等）的事实
+    建为 architecture_dependency 实体并挂证明路径。
+    事实种类到知识类别的映射由 _KNOWLEDGE_KINDS 固定。
+    """
     __slots__ = ("_budgets",)
 
     _TARGET = re.compile(r"^[A-Za-z0-9_.+-]+$")
@@ -314,6 +366,12 @@ class BuildSourceReachabilityResolver:
         proofs: dict[str, ProofPath],
         item_by_fact: dict[str, Entity],
     ) -> None:
+        """就地解析：向 entities/relations/proofs 追加可达性结果，无返回值。
+
+        任何一步预算（关系数/路径数）耗尽立即整体返回，保留已产出内容。
+        状态合成规则：模式与目标状态均为 selected 才是 selected；目标
+        inactive/not_selected 传递为 inactive；其余情况一律 unknown。
+        """
         source_by_path = {item.name: item for item in entities.values() if item.kind == "source_file"}
         subject_by_id = {item.id: item for item in facts.entities}
         patterns_by_subject: dict[str, list[NormalizedFact]] = defaultdict(list)
@@ -326,7 +384,7 @@ class BuildSourceReachabilityResolver:
                 facts_by_subject[fact.subject_id].append(fact)
         entries_by_kind = defaultdict(list)
         for entry in knowledge.entries:
-            if entry.architecture_family.lower() == "x86":
+            if entry.architecture_family.lower() == context.source_arch:
                 entries_by_kind[entry.fact_kind].append(entry)
         source_facts: dict[str, list[tuple[NormalizedFact, tuple[str, ...]]]] = {}
 
@@ -351,6 +409,7 @@ class BuildSourceReachabilityResolver:
             )
             candidates = tuple(item for item in candidates if item is not None)
             if len(candidates) != 1:
+                # 模式匹配出的候选源文件必须唯一，否则放弃该目标的可达性推导。
                 continue
             target_entity = item_by_fact.get(target_fact.id)
             if target_entity is None:
@@ -474,6 +533,9 @@ class BuildSourceReachabilityResolver:
         entities: dict[str, Entity],
         relations: dict[str, Relation],
     ) -> tuple[tuple[Entity, tuple[str, ...]], ...]:
+        """BFS 计算从 source 出发、沿 status=complete 的 includes 关系可达的
+        source_file 集合，返回 (实体, 途经关系 ID 路径) 元组列表（按实体 ID 排序）。
+        """
         output: dict[str, tuple[Entity, tuple[str, ...]]] = {source.id: (source, ())}
         queue = [source.id]
         while queue:
@@ -491,6 +553,7 @@ class BuildSourceReachabilityResolver:
 
 
 def _item_entity(fact: NormalizedFact, entities: dict[str, Entity]) -> Entity:
+    """把 build_* 事实映射为图实体；source_file 类复用同名已有实体避免重复。"""
     kind = _ITEM_KIND[fact.kind]
     if kind == "source_file":
         normalized = fact.canonical_value.removeprefix("./")
@@ -506,6 +569,7 @@ def _item_entity(fact: NormalizedFact, entities: dict[str, Entity]) -> Entity:
 
 
 def _relation(kind: str, source: str, target: str, evidence_ids: tuple[str, ...], status: str, metadata: dict[str, object]) -> Relation:
+    """构造关系：过滤空 metadata 值；status 非 unknown 时置信度为 high。"""
     clean = {key: value for key, value in metadata.items() if value != ""}
     return Relation(
         stable_id("relation", 1, kind, source, target, tuple(sorted(evidence_ids)), status, clean),
@@ -520,16 +584,20 @@ def _relation(kind: str, source: str, target: str, evidence_ids: tuple[str, ...]
 
 
 def _metadata_text(fact: NormalizedFact, name: str, default: str) -> str:
+    """安全读取事实 metadata 中的字符串字段；非字符串或缺失时返回默认值。"""
     value = fact.metadata.get(name, default)
     return value if isinstance(value, str) else default
 
 
 def _pattern_supports_target(pattern: str, target: str) -> bool:
+    """判断 make 模式规则（如 "%.c"）是否适用于给定目标名。"""
     normalized = pattern.strip().strip("'\"")
     return normalized in {"%.c", "%.cc", "%.cpp", "%.cxx", "%.s", "%.S", "%.asm"} and bool(target)
 
 
 def _knowledge_matches(value: str, knowledge_value: str, fact_kind: str) -> bool:
+    """判断事实值是否命中知识条目：类型/内联汇编/预处理宏类按词边界
+    忽略大小写搜索；编译参数支持前缀= 形式；其余要求精确相等。"""
     if fact_kind in {"type", "inline_asm", "declaration_attribute", "preprocessor", "macro"}:
         return re.search(rf"(?<![A-Za-z0-9_]){re.escape(knowledge_value)}(?![A-Za-z0-9_])", value, re.IGNORECASE) is not None
     if fact_kind == "compiler_argument":
@@ -538,9 +606,11 @@ def _knowledge_matches(value: str, knowledge_value: str, fact_kind: str) -> bool
 
 
 def _warning(code: str, message: str, reason: str) -> Diagnostic:
+    """构造 build-selection 的 WARNING 诊断。"""
     return Diagnostic(code, "analyzer.build-selection", DiagnosticSeverity.WARNING, message, producer="build-selection-analyzer", details={"reason": reason})
 
 
 def _failed(code: str, message: str) -> StageResult[AnalysisSnapshot]:
+    """构造整阶段 FAILED 的 StageResult（带 ERROR 诊断，影响退出码）。"""
     diagnostic = Diagnostic(code, "analyzer.build-selection", DiagnosticSeverity.ERROR, message, producer="build-selection-analyzer", affects_exit_code=True)
     return StageResult(None, CompletionStatus.FAILED, (diagnostic,))
