@@ -173,7 +173,15 @@ public class AiMigrationService {
     /** 页面内展示用的产物文本上限；超出部分截断并标记，完整内容走下载。 */
     static final int MAX_ARTIFACT_CONTENT_CHARS = 512 * 1024;
 
-    public record ArtifactContent(ArtifactKind kind, String filename, String content, boolean truncated) {
+    public record ArtifactContent(
+            @com.fasterxml.jackson.annotation.JsonProperty("kind") String kind,
+            String filename,
+            String content,
+            boolean truncated) {
+
+        public static ArtifactContent of(ArtifactKind kind, String filename, String content, boolean truncated) {
+            return new ArtifactContent(kind == ArtifactKind.DIFF ? "diff" : "result", filename, content, truncated);
+        }
     }
 
     /** 读取某次运行的迁移产物文本，供页面内展示；归属校验与下载一致。 */
@@ -184,9 +192,9 @@ public class AiMigrationService {
             byte[] bytes = artifact.resource().getInputStream().readAllBytes();
             String text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
             if (text.length() <= MAX_ARTIFACT_CONTENT_CHARS) {
-                return new ArtifactContent(kind, artifact.filename(), text, false);
+                return ArtifactContent.of(kind, artifact.filename(), text, false);
             }
-            return new ArtifactContent(kind, artifact.filename(),
+            return ArtifactContent.of(kind, artifact.filename(),
                     text.substring(0, MAX_ARTIFACT_CONTENT_CHARS), true);
         } catch (java.io.IOException ex) {
             throw new ApiException(HttpStatus.NOT_FOUND, "AI_MIGRATION_ARTIFACT_NOT_FOUND",

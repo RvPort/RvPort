@@ -83,8 +83,7 @@ class AiMigrationControllerTests {
     @Test
     void 产物内容端点委托服务并回传文本() {
         when(service.artifactContent(runId, AiMigrationService.ArtifactKind.DIFF, actor, false))
-                .thenReturn(new AiMigrationService.ArtifactContent(
-                        AiMigrationService.ArtifactKind.DIFF, "migration-diff.patch", "+line", false));
+                .thenReturn(new AiMigrationService.ArtifactContent("diff", "migration-diff.patch", "+line", false));
 
         var response = controller.artifactContent(principal, runId, "diff", request);
 

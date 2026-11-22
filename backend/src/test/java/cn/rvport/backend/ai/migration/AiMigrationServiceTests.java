@@ -238,6 +238,7 @@ class AiMigrationServiceTests {
         assertThat(content.content()).isEqualTo("+a\n-b\n");
         assertThat(content.truncated()).isFalse();
         assertThat(content.filename()).isEqualTo("migration-diff.patch");
+        assertThat(content.kind()).isEqualTo("diff");
 
         var big = "+line\n".repeat(AiMigrationService.MAX_ARTIFACT_CONTENT_CHARS / 6 + 10);
         when(storedArtifactService.download(artifact.id())).thenReturn(
