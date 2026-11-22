@@ -279,6 +279,8 @@ public class AiMigrationAgentRuntime {
             schemaVersion/items 结构，也不得把条目放在其他字段名下）：
             {"entries":[{"id":"<条目id>","status":"DONE","changeSummary":"一句话改动说明","files":["src/a.c"],"reason":"NO_WORK_NEEDED 或 PENDING 时必填"}]}
             manifest 的 missingFiles 中列出的文件不可用，对应条目应保持 PENDING 并说明原因。
+            条目 uncertain=true 表示扫描器未能确认其参与编译：请自行读构建配置与条件编译做必要性分析，
+            确认无需迁移时用 NO_WORK_NEEDED 并给出依据，不确定时用 PENDING。
             最终回复只输出一行：DONE 或 FAIL: <原因>。不输出 Markdown，不访问其他项目、
             远程主机或 workspace 之外的文件。
             """;

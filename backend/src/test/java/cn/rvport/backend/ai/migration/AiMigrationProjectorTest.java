@@ -41,9 +41,65 @@ class AiMigrationProjectorTest {
         assertThat(item.matchedText()).isEqualTo("_mm256_add_epi32");
         assertThat(item.severity()).isEqualTo("high");
         assertThat(item.blocking()).isTrue();
+        assertThat(item.uncertain()).isFalse();
         assertThat(item.description()).isEqualTo("标题：原因");
         assertThat(item.suggestion()).isEqualTo("建议");
         assertThat(item.evidence()).containsExactly(new AiMigrationProjector.EvidenceRef("src/sse.c", 56, "sym-f1"));
+    }
+
+    @Test
+    void 白名单判定的分支覆盖() {
+        assertThat(AiMigrationProjector.architectureUncertain(null)).isFalse();
+        assertThat(AiMigrationProjector.architectureUncertain("x86_comment_hint")).isFalse();
+        assertThat(AiMigrationProjector.architectureUncertain("hint")).isFalse();
+        assertThat(AiMigrationProjector.architectureUncertain("x86_intrinsic_reference")).isTrue();
+        assertThat(AiMigrationProjector.architectureUncertain("x86_anything")).isTrue();
+        assertThat(AiMigrationProjector.architectureUncertain("target_attribute_candidate")).isTrue();
+        assertThat(AiMigrationProjector.architectureUncertain("inline_asm_candidate")).isTrue();
+        assertThat(AiMigrationProjector.architectureUncertain("architecture_candidate")).isTrue();
+        assertThat(AiMigrationProjector.architectureUncertain("enum_architecture_candidate")).isTrue();
+        assertThat(AiMigrationProjector.architectureUncertain("fixed_vector_width_candidate")).isTrue();
+        assertThat(AiMigrationProjector.architectureUncertain("build_selection_unknown")).isTrue();
+        assertThat(AiMigrationProjector.architectureUncertain("test_selection_unknown")).isTrue();
+        assertThat(AiMigrationProjector.architectureUncertain("some_other_type")).isFalse();
+        assertThat(AiMigrationProjector.architectureUncertain("")).isFalse();
+    }
+
+    @Test
+    void 架构相关不确定类放行并标注uncertain() {
+        FindingView uncertainIntrinsic = finding("u1", evidence(Map.of(
+                "scannerFindingId", "finding:ui",
+                "factKind", "intrinsic_call",
+                "findingType", "x86_intrinsic_reference",
+                "actionable", false,
+                "conclusionStatus", "unknown")), "src/u.c", 1, "high");
+        FindingView targetAttr = finding("u2", evidence(Map.of(
+                "scannerFindingId", "finding:ta",
+                "factKind", "architecture_probe",
+                "findingType", "target_attribute_candidate",
+                "actionable", false)), "src/t.c", 2, "medium");
+
+        AiMigrationProjector.Projection projection = AiMigrationProjector.project(SCAN_RUN, List.of(uncertainIntrinsic, targetAttr));
+
+        assertThat(projection.items()).hasSize(2);
+        assertThat(projection.items()).allSatisfy(item -> assertThat(item.uncertain()).isTrue());
+    }
+
+    @Test
+    void 注释提示与非架构类仍被过滤() {
+        FindingView commentHint = finding("h1", evidence(Map.of(
+                "scannerFindingId", "finding:ch",
+                "factKind", "macro_invocation",
+                "findingType", "x86_comment_hint",
+                "actionable", false)), "src/c.c", 1, "low");
+        FindingView unknownKind = finding("h2", evidence(Map.of(
+                "scannerFindingId", "finding:uk",
+                "factKind", "macro_invocation",
+                "actionable", false)), "src/k.c", 1, "low");
+
+        AiMigrationProjector.Projection projection = AiMigrationProjector.project(SCAN_RUN, List.of(commentHint, unknownKind));
+
+        assertThat(projection.items()).isEmpty();
     }
 
     @Test
@@ -188,10 +244,11 @@ class AiMigrationProjectorTest {
         FindingView nullEvidence = new FindingView(
                 UUID.randomUUID(), UUID.randomUUID(), SCAN_RUN, UUID.randomUUID(),
                 "r3", "c3", "high", "无证据", "  ", "src/x.c", 9, 9, "sym-x",
-                null, "sug", "fp3", "DETECTED", null);
+                null, null, "fp3", "DETECTED", null);
         Map<String, Object> oddTypes = new HashMap<>();
         oddTypes.put("scannerFindingId", "finding:odd");
         oddTypes.put("factKind", "header_include");
+        oddTypes.put("findingType", "x86_header_reference");
         oddTypes.put("actionable", true);
         oddTypes.put("blocking", 7);
         FindingView odd = new FindingView(
@@ -201,14 +258,13 @@ class AiMigrationProjectorTest {
 
         AiMigrationProjector.Projection projection = AiMigrationProjector.project(SCAN_RUN, List.of(nullEvidence, odd));
 
-        assertThat(projection.items()).hasSize(2);
-        var first = projection.items().stream().filter(i -> "sym-x".equals(i.symbol())).findFirst().orElseThrow();
-        assertThat(first.solverType()).isEqualTo("inline_asm");
-        assertThat(first.description()).isEqualTo("无证据");
-        assertThat(first.evidence()).containsExactly(new AiMigrationProjector.EvidenceRef("src/x.c", 9, "sym-x"));
-        var second = projection.items().stream().filter(i -> "sym-y".equals(i.symbol())).findFirst().orElseThrow();
-        assertThat(second.blocking()).isNull();
-        assertThat(second.solverType()).isEqualTo("headers");
+        // null 证据（无 findingType）不属于架构不确定白名单，仍被过滤
+        assertThat(projection.items()).hasSize(1);
+        var only = projection.items().stream()
+                .filter(i -> "finding:odd".equals(i.id())).findFirst().orElseThrow();
+        assertThat(only.solverType()).isEqualTo("headers");
+        assertThat(only.blocking()).isNull();
+        assertThat(only.description()).isEqualTo("t4：d4");
     }
 
     private String solverFor(String factKind, String file, String severity) {

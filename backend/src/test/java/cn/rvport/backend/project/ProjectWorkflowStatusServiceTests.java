@@ -137,6 +137,46 @@ class ProjectWorkflowStatusServiceTests {
     }
 
     @Test
+    void aiMigrationStageReflectsLatestRunAndPrerequisites() throws Exception {
+        UUID project = UUID.randomUUID();
+        var context = new cn.rvport.backend.workflow.ProjectContextSnapshot(null, null);
+        // 无源码版本 → ACTIVE_SOURCE_MISSING
+        WorkflowStageResponse noSource = ReflectionTestUtils.invokeMethod(service(), "aiMigration", project, context);
+        org.assertj.core.api.Assertions.assertThat(noSource.reasonCode()).isEqualTo("ACTIVE_SOURCE_MISSING");
+
+        // 有源码、无运行、无当前扫描 → KB_SCAN_MISSING
+        var withSource = new cn.rvport.backend.workflow.ProjectContextSnapshot(UUID.randomUUID(), null);
+        org.mockito.Mockito.when(aiMigrationRepository.listRuns(project, 0, 1)).thenReturn(java.util.List.of());
+        org.mockito.Mockito.when(scanContextService.currentRun(org.mockito.ArgumentMatchers.any(UUID.class), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Optional.empty());
+        WorkflowStageResponse missing = ReflectionTestUtils.invokeMethod(service(), "aiMigration", project, withSource);
+        org.assertj.core.api.Assertions.assertThat(missing.reasonCode()).isEqualTo("KB_SCAN_MISSING");
+
+        // 无运行 + 扫描就绪
+        var scanRun = new cn.rvport.backend.kb.KbScanView(UUID.randomUUID(), project, null, null, null, null,
+                cn.rvport.backend.task.TaskStatus.SUCCEEDED, null, null, null);
+        org.mockito.Mockito.when(scanContextService.currentRun(org.mockito.ArgumentMatchers.any(UUID.class),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Optional.of(scanRun));
+        WorkflowStageResponse ready = ReflectionTestUtils.invokeMethod(service(), "aiMigration", project, withSource);
+        org.assertj.core.api.Assertions.assertThat(ready.reasonCode()).isEqualTo("AI_MIGRATION_MISSING");
+
+        // 有运行 → 状态映射
+        var run = new cn.rvport.backend.ai.migration.AiMigrationRunView(UUID.randomUUID(), project, null, null, null,
+                "SUCCEEDED", java.util.Map.of(), 3, 3, 0, 0, null, null, null, null, null);
+        org.assertj.core.api.Assertions.assertThat(run.status()).isEqualTo("SUCCEEDED");
+        org.mockito.Mockito.when(aiMigrationRepository.listRuns(project, 0, 1)).thenReturn(java.util.List.of(run));
+        WorkflowStageResponse done = ReflectionTestUtils.invokeMethod(service(), "aiMigration", project, withSource);
+        org.assertj.core.api.Assertions.assertThat(done.status()).isEqualTo(WorkflowStageStatus.DONE);
+
+        var failed = new cn.rvport.backend.ai.migration.AiMigrationRunView(UUID.randomUUID(), project, null, null, null,
+                "FAILED", java.util.Map.of(), 0, 0, 0, 0, null, null, null, null, null);
+        org.mockito.Mockito.when(aiMigrationRepository.listRuns(project, 0, 1)).thenReturn(java.util.List.of(failed));
+        WorkflowStageResponse blocked = ReflectionTestUtils.invokeMethod(service(), "aiMigration", project, withSource);
+        org.assertj.core.api.Assertions.assertThat(blocked.status()).isEqualTo(WorkflowStageStatus.BLOCKED);
+    }
+
+    @Test
     void returnsStableFullWorkflowForEmptyProject() {
         UUID projectId = UUID.randomUUID();
         ProjectRuntimeEnvironmentResponse runtime = runtime(projectId, null, null, false);
@@ -398,9 +438,6 @@ class ProjectWorkflowStatusServiceTests {
                 archiveRepository);
         ReflectionTestUtils.setField(service,"fixLists",fixLists);
         ReflectionTestUtils.setField(service, "aiMigrationRepository", aiMigrationRepository);
-        org.mockito.Mockito.lenient().when(aiMigrationRepository.listRuns(
-                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt(),
-                org.mockito.ArgumentMatchers.anyInt())).thenReturn(java.util.List.of());
         org.mockito.Mockito.lenient().when(fixLists.current(org.mockito.ArgumentMatchers.any())).thenReturn(
                 new cn.rvport.backend.report.review.CurrentFixListResolver.Current(false,null,null,null,0,"REPORT_NOT_GENERATED"));
         ReflectionTestUtils.setField(service, "scanContextService", scanContextService);

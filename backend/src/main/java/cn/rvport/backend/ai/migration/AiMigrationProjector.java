@@ -43,6 +43,7 @@ public final class AiMigrationProjector {
             Boolean blocking,
             String description,
             String suggestion,
+            Boolean uncertain,
             List<EvidenceRef> evidence) {
     }
 
@@ -71,13 +72,38 @@ public final class AiMigrationProjector {
         if ("test_asset".equals(textValue(evidence.get("factKind")))) {
             return true;
         }
-        if (Boolean.FALSE.equals(boolValue(evidence.get("actionable")))) {
-            return true;
-        }
         if ("inactive".equals(textValue(evidence.get("conclusionStatus")))) {
             return true;
         }
-        return "info".equals(finding.severity()) && !Boolean.TRUE.equals(boolValue(evidence.get("actionable")));
+        if (Boolean.TRUE.equals(boolValue(evidence.get("actionable")))) {
+            return false;
+        }
+        // 不可行动条目：仅架构相关的不确定类放行（交给 agent 必要性分析），
+        // 纯提示（注释线索等）与非架构类仍然跳过。
+        return !architectureUncertain(textValue(evidence.get("findingType")));
+    }
+
+    /**
+     * 架构相关的不确定类白名单：x86/ARM 专有 API、intrinsic、向量类型、汇编、寄存器、
+     * 目标属性、架构别名/宏/枚举候选、构建选择不确定、测试选择不确定等——扫描器未能
+     * 证明参与编译，但条目本身是架构绑定信号，正适合 agent 做 NO_WORK_NEEDED 判定。
+     * 纯注释提示（x86_comment_hint）与 hint 级其余类别不在此列。
+     */
+    static boolean architectureUncertain(String findingType) {
+        if (findingType == null) {
+            return false;
+        }
+        if (findingType.equals("x86_comment_hint") || findingType.equals("hint")) {
+            return false;
+        }
+        return findingType.startsWith("x86_")
+                || findingType.equals("target_attribute_candidate")
+                || findingType.equals("inline_asm_candidate")
+                || findingType.equals("architecture_candidate")
+                || findingType.equals("enum_architecture_candidate")
+                || findingType.equals("fixed_vector_width_candidate")
+                || findingType.equals("build_selection_unknown")
+                || findingType.equals("test_selection_unknown");
     }
 
     private static Item toItem(FindingView finding) {
@@ -95,13 +121,14 @@ public final class AiMigrationProjector {
                 boolValue(evidence.get("blocking")),
                 description(finding),
                 finding.suggestion(),
+                !Boolean.TRUE.equals(boolValue(evidence.get("actionable"))),
                 List.of(new EvidenceRef(finding.filePath(), finding.lineStart(), finding.symbol())));
     }
 
     private static Item withFindingIds(Item item, List<UUID> ids) {
         return new Item(item.id(), List.copyOf(ids), item.status(), item.solverType(), item.file(), item.line(),
                 item.symbol(), item.matchedText(), item.severity(), item.blocking(), item.description(),
-                item.suggestion(), item.evidence());
+                item.suggestion(), item.uncertain(), item.evidence());
     }
 
     /** fact.kind → solver_type；注意不得使用 findings.category（conclusion.findingType，语义不同）。 */
