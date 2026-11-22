@@ -1,144 +1,92 @@
-import { useMemo } from 'react'
-import { ReloadOutlined, RocketOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Space, Table, Tag, Typography } from 'antd'
+import { RocketOutlined } from '@ant-design/icons'
+import { Alert, Button, Flex } from 'antd'
 
-import {
-  type AiMigrationRun,
-  createProjectAiMigration,
-  getProjectAiMigrations} from '@/api/project/ai-migration'
-import { getProjectKnowledgeBaseScanLatest } from '@/api/project/knowledge-base'
-
+import RecordViewTitle from '../components/RecordViewTitle'
 import StageSurface from '../components/StageSurface'
 import { getStageDrawerWidth } from '../drawerWidth'
 import type { StageDrawerProps } from '../types'
+import PatchView from './components/PatchView'
+import { RunList } from './components/RunList'
+import { useAiMigrationDrawer } from './useAiMigrationDrawer'
 
-const STATUS_TAG: Record<string, { color: string; text: string }> = {
-  PENDING: { color: 'default', text: '排队中' },
-  RUNNING: { color: 'processing', text: '迁移中' },
-  SUCCEEDED: { color: 'success', text: '已完成' },
-  FAILED: { color: 'error', text: '失败' },
-  CANCELLED: { color: 'warning', text: '已取消' },
-  TIMEOUT: { color: 'error', text: '超时' }
-}
+import styles from './index.module.scss'
 
-function statusTag(status: string) {
-  const preset = STATUS_TAG[status] ?? { color: 'default', text: status }
-  return <Tag color={preset.color}>{preset.text}</Tag>
-}
-
-export default function AiMigration({
-  projectId,
-  visible,
-  stage,
-  onClose
-}: StageDrawerProps) {
-  const { message } = App.useApp()
-  const queryClient = useQueryClient()
-
-  const latestScanQuery = useQuery({
-    queryKey: ['project', projectId, 'kb-scan', 'latest'],
-    queryFn: () => getProjectKnowledgeBaseScanLatest(projectId ?? ''),
-    enabled: visible && Boolean(projectId)
-  })
-
-  const runsQuery = useQuery({
-    queryKey: ['project', projectId, 'ai-migrations'],
-    queryFn: () => getProjectAiMigrations(projectId ?? '', { page: 0, pageSize: 20 }),
-    enabled: visible && Boolean(projectId)
-  })
-
-  const createMutation = useMutation({
-    mutationFn: () => createProjectAiMigration(projectId ?? ''),
-    onSuccess: async () => {
-      message.success('AI 迁移任务已创建')
-      await queryClient.invalidateQueries({ queryKey: ['project', projectId, 'ai-migrations'] })
-    },
-    onError: (error: { response?: { data?: { message?: string } } }) => {
-      message.error(error.response?.data?.message ?? '创建失败，请检查阶段模型绑定与扫描状态')
-    }
-  })
-
-  const scan = latestScanQuery.data?.result ?? null
-  const scanReady = scan?.status === 'SUCCEEDED'
-  const runs = useMemo(() => runsQuery.data?.items ?? [], [runsQuery.data])
-
-  const columns = [
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: (status: string) => statusTag(status)
-    },
-    {
-      title: '条目',
-      key: 'items',
-      width: 180,
-      render: (_: unknown, record: AiMigrationRun) =>
-        record.status === 'PENDING'
-          ? '—'
-          : `${record.doneCount} 完成 / ${record.falsePositiveCount} 误报 / ${record.pendingCount} 待处理`
-    },
-    {
-      title: '扫描',
-      dataIndex: 'scanRunId',
-      key: 'scanRunId',
-      width: 120,
-      render: (id: string) => (
-        <Typography.Text copyable={{ text: id }} style={{ fontSize: 12 }}>
-          {id.slice(0, 8)}…
-        </Typography.Text>
-      )
-    }
-  ]
+export default function AiMigration({ projectId, visible, stage, onClose }: StageDrawerProps) {
+  const drawer = useAiMigrationDrawer(projectId, visible)
+  const patchView = drawer.view.type === 'diff' ? drawer.view : null
 
   return (
     <StageSurface
-      title="AI 迁移 · 基于知识库扫描条目的自动化代码迁移"
+      afterOpenChange={(open) => {
+        if (!open) drawer.showRuns()
+      }}
+      extra={
+        patchView ? undefined : (
+          <Flex align="center" gap={4}>
+            <Button
+              aria-label="刷新运行状态"
+              loading={drawer.runsQuery.isFetching && !drawer.runsQuery.isLoading}
+              onClick={() => void drawer.runsQuery.refetch()}
+              type="text"
+            >
+              刷新
+            </Button>
+            <Button
+              disabled={!drawer.scanReady || drawer.isCreating}
+              icon={<RocketOutlined />}
+              loading={drawer.isCreating}
+              type="primary"
+              onClick={drawer.createMigration}
+            >
+              发起迁移
+            </Button>
+          </Flex>
+        )
+      }
       size={getStageDrawerWidth(stage?.id)}
+      title={
+        patchView ? (
+          <RecordViewTitle backLabel="返回迁移运行" title="迁移补丁" onBack={drawer.showRuns} />
+        ) : (
+          (stage?.title ?? 'AI 迁移')
+        )
+      }
       visible={visible}
       onClose={onClose}
-      extra={
-        <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => runsQuery.refetch()}
-            loading={runsQuery.isFetching}
-          >
-            刷新
-          </Button>
-          <Button
-            type="primary"
-            icon={<RocketOutlined />}
-            disabled={!scanReady || !projectId}
-            loading={createMutation.isPending}
-            onClick={() => createMutation.mutate()}
-            title={scanReady ? undefined : '需要当前有效的知识库扫描'}
-          >
-            发起 AI 迁移
-          </Button>
-        </Space>
-      }
     >
-      {!latestScanQuery.isLoading && !scanReady && (
-        <Alert
-          type="info"
-          showIcon
-          message="尚无有效的知识库扫描"
-          description="AI 迁移以知识库扫描条目为输入，请先完成知识库扫描。"
-          style={{ marginBottom: 16 }}
-        />
-      )}
-      <Table<AiMigrationRun>
-        rowKey="id"
-        size="small"
-        columns={columns}
-        dataSource={runs}
-        loading={runsQuery.isLoading}
-        pagination={{ pageSize: 10, hideOnSinglePage: true }}
-        locale={{ emptyText: '暂无迁移运行' }}
-      />
+      <div className={styles.content}>
+        {patchView ? (
+          <PatchView
+            error={drawer.diffQuery.isError}
+            isLoading={drawer.diffQuery.isLoading}
+            runId={patchView.runId}
+            truncated={drawer.diffQuery.data?.truncated ?? false}
+            value={drawer.diffQuery.data?.content ?? ''}
+          />
+        ) : (
+          <>
+            <div className={styles.intro}>
+              <p>
+                以知识库扫描发现的架构相关代码为输入，由迁移代理在隔离容器中逐条分析并改写为 RISC-V
+                实现，结果以补丁形式给出，不会直接改动你的源码。
+              </p>
+              {!drawer.isScanLoading && !drawer.scanReady ? (
+                <Alert
+                  showIcon
+                  type="info"
+                  message="需要一次有效的知识库扫描"
+                  description="AI 迁移以当前源码的扫描结果为输入，请先完成知识库扫描。"
+                />
+              ) : null}
+            </div>
+            <RunList
+              isLoading={drawer.runsQuery.isLoading}
+              runs={drawer.runs}
+              onViewDiff={drawer.showDiff}
+            />
+          </>
+        )}
+      </div>
     </StageSurface>
   )
 }

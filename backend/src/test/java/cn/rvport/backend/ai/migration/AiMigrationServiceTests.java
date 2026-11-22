@@ -40,6 +40,8 @@ class AiMigrationServiceTests {
 
     final UUID project = UUID.randomUUID();
     final UUID actor = UUID.randomUUID();
+    final UUID runId = UUID.randomUUID();
+    final UUID taskId = UUID.randomUUID();
     final UUID scanRun = UUID.randomUUID();
     final UUID revision = UUID.randomUUID();
     final UUID profileId = UUID.randomUUID();
@@ -52,8 +54,12 @@ class AiMigrationServiceTests {
     final TaskService taskService = mock(TaskService.class);
     final ModelProfileService models = mock(ModelProfileService.class);
     final AuditLogService auditLogService = mock(AuditLogService.class);
+    final cn.rvport.backend.artifact.StoredArtifactRepository storedArtifactRepository =
+            mock(cn.rvport.backend.artifact.StoredArtifactRepository.class);
+    final cn.rvport.backend.artifact.StoredArtifactService storedArtifactService =
+            mock(cn.rvport.backend.artifact.StoredArtifactService.class);
     final AiMigrationService service = new AiMigrationService(repository, kbScanRepository, sourceRepository,
-            projectAccessService, taskService, models, auditLogService);
+            projectAccessService, taskService, models, auditLogService, storedArtifactRepository, storedArtifactService);
 
     @BeforeEach
     void setup() {
@@ -150,8 +156,133 @@ class AiMigrationServiceTests {
                 .isInstanceOf(ApiException.class);
     }
 
+    @Test
+    void 详情与列表携带产物元数据() {
+        when(repository.countRuns(project)).thenReturn(1L);
+        when(repository.listRuns(project, 0, 20)).thenReturn(List.of(runView()));
+        when(repository.findRun(any())).thenReturn(Optional.of(runView()));
+        var diff = new cn.rvport.backend.artifact.StoredArtifactView(UUID.randomUUID(), project, taskId,
+                cn.rvport.backend.artifact.StoredArtifactOwnerType.AI_MIGRATION, runId, "MIGRATION_DIFF",
+                "bucket", "key", "text/x-diff", 11, "sha", Map.of(), null);
+        when(storedArtifactRepository.listByOwner(
+                cn.rvport.backend.artifact.StoredArtifactOwnerType.AI_MIGRATION, runId)).thenReturn(List.of(diff));
+
+        var detail = service.detail(runId, actor, false);
+        assertThat(detail.artifacts()).hasSize(1);
+        assertThat(detail.artifacts().get(0).artifactType()).isEqualTo("MIGRATION_DIFF");
+
+        var page = service.list(project, 0, 20, actor, false);
+        assertThat(page.items().get(0).artifacts()).hasSize(1);
+    }
+
+    @Test
+    void 下载补丁与结果按类型取产物并带文件名() {
+        when(repository.findRun(runId)).thenReturn(Optional.of(runView()));
+        var diffArtifact = new cn.rvport.backend.artifact.StoredArtifactView(UUID.randomUUID(), project, taskId,
+                cn.rvport.backend.artifact.StoredArtifactOwnerType.AI_MIGRATION, runId, "MIGRATION_DIFF",
+                "bucket", "diff-key", "text/x-diff", 5, "sha", Map.of(), null);
+        var resultArtifact = new cn.rvport.backend.artifact.StoredArtifactView(UUID.randomUUID(), project, taskId,
+                cn.rvport.backend.artifact.StoredArtifactOwnerType.AI_MIGRATION, runId, "MIGRATION_RESULT",
+                "bucket", "result-key", "application/json", 7, "sha", Map.of(), null);
+        when(storedArtifactRepository.findByOwner(
+                cn.rvport.backend.artifact.StoredArtifactOwnerType.AI_MIGRATION, runId, "MIGRATION_DIFF"))
+                .thenReturn(Optional.of(diffArtifact));
+        when(storedArtifactRepository.findByOwner(
+                cn.rvport.backend.artifact.StoredArtifactOwnerType.AI_MIGRATION, runId, "MIGRATION_RESULT"))
+                .thenReturn(Optional.of(resultArtifact));
+        var diffBytes = new org.springframework.core.io.ByteArrayResource("+patch".getBytes());
+        var resultBytes = new org.springframework.core.io.ByteArrayResource("{}".getBytes());
+        when(storedArtifactService.download(diffArtifact.id()))
+                .thenReturn(new cn.rvport.backend.artifact.StoredArtifactResource(diffArtifact, diffBytes));
+        when(storedArtifactService.download(resultArtifact.id()))
+                .thenReturn(new cn.rvport.backend.artifact.StoredArtifactResource(resultArtifact, resultBytes));
+
+        var diff = service.downloadArtifact(runId, AiMigrationService.ArtifactKind.DIFF, actor, false);
+        assertThat(diff.filename()).isEqualTo("migration-diff.patch");
+        assertThat(diff.contentType()).isEqualTo("text/x-diff");
+        assertThat(diff.resource()).isSameAs(diffBytes);
+
+        var result = service.downloadArtifact(runId, AiMigrationService.ArtifactKind.RESULT, actor, false);
+        assertThat(result.filename()).isEqualTo("migration-result.json");
+        assertThat(result.resource()).isSameAs(resultBytes);
+        verify(projectAccessService, org.mockito.Mockito.times(2)).requireProjectAccess(project, actor, false);
+    }
+
+    @Test
+    void 下载时运行不存在或产物缺失返回404() {
+        when(repository.findRun(UUID.randomUUID())).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.downloadArtifact(UUID.randomUUID(), AiMigrationService.ArtifactKind.DIFF,
+                actor, false))
+                .isInstanceOf(ApiException.class)
+                .extracting("code").isEqualTo("AI_MIGRATION_RUN_NOT_FOUND");
+
+        when(repository.findRun(runId)).thenReturn(Optional.of(runView()));
+        when(storedArtifactRepository.findByOwner(any(), any(), any())).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.downloadArtifact(runId, AiMigrationService.ArtifactKind.RESULT, actor, false))
+                .isInstanceOf(ApiException.class)
+                .extracting("code").isEqualTo("AI_MIGRATION_ARTIFACT_NOT_FOUND");
+    }
+
+    @Test
+    void 产物内容接口返回文本并在超限时截断() throws Exception {
+        when(repository.findRun(runId)).thenReturn(Optional.of(runView()));
+        var artifact = new cn.rvport.backend.artifact.StoredArtifactView(UUID.randomUUID(), project, taskId,
+                cn.rvport.backend.artifact.StoredArtifactOwnerType.AI_MIGRATION, runId, "MIGRATION_DIFF",
+                "bucket", "diff-key", "text/x-diff", 5, "sha", Map.of(), null);
+        when(storedArtifactRepository.findByOwner(any(), any(), any())).thenReturn(Optional.of(artifact));
+
+        var small = new org.springframework.core.io.ByteArrayResource("+a\n-b\n".getBytes());
+        when(storedArtifactService.download(artifact.id()))
+                .thenReturn(new cn.rvport.backend.artifact.StoredArtifactResource(artifact, small));
+        var content = service.artifactContent(runId, AiMigrationService.ArtifactKind.DIFF, actor, false);
+        assertThat(content.content()).isEqualTo("+a\n-b\n");
+        assertThat(content.truncated()).isFalse();
+        assertThat(content.filename()).isEqualTo("migration-diff.patch");
+
+        var big = "+line\n".repeat(AiMigrationService.MAX_ARTIFACT_CONTENT_CHARS / 6 + 10);
+        when(storedArtifactService.download(artifact.id())).thenReturn(
+                new cn.rvport.backend.artifact.StoredArtifactResource(artifact,
+                        new org.springframework.core.io.ByteArrayResource(big.getBytes())));
+        var truncated = service.artifactContent(runId, AiMigrationService.ArtifactKind.DIFF, actor, false);
+        assertThat(truncated.truncated()).isTrue();
+        assertThat(truncated.content()).hasSize(AiMigrationService.MAX_ARTIFACT_CONTENT_CHARS);
+    }
+
+    @Test
+    void 产物内容读取失败映射为404() {
+        when(repository.findRun(runId)).thenReturn(Optional.of(runView()));
+        var artifact = new cn.rvport.backend.artifact.StoredArtifactView(UUID.randomUUID(), project, taskId,
+                cn.rvport.backend.artifact.StoredArtifactOwnerType.AI_MIGRATION, runId, "MIGRATION_RESULT",
+                "bucket", "result-key", "application/json", 5, "sha", Map.of(), null);
+        when(storedArtifactRepository.findByOwner(any(), any(), any())).thenReturn(Optional.of(artifact));
+        var broken = org.mockito.Mockito.mock(org.springframework.core.io.Resource.class);
+        when(storedArtifactService.download(artifact.id()))
+                .thenReturn(new cn.rvport.backend.artifact.StoredArtifactResource(artifact, broken));
+        try {
+            when(broken.getInputStream()).thenThrow(new java.io.IOException("gone"));
+        } catch (java.io.IOException ex) {
+            throw new IllegalStateException(ex);
+        }
+
+        assertThatThrownBy(() -> service.artifactContent(runId, AiMigrationService.ArtifactKind.RESULT, actor, false))
+                .isInstanceOf(ApiException.class)
+                .extracting("code").isEqualTo("AI_MIGRATION_ARTIFACT_NOT_FOUND");
+    }
+
+    @Test
+    void 产物类型路径值解析() {
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue("diff"))
+                .isEqualTo(AiMigrationService.ArtifactKind.DIFF);
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue(" patch "))
+                .isEqualTo(AiMigrationService.ArtifactKind.DIFF);
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue("RESULT"))
+                .isEqualTo(AiMigrationService.ArtifactKind.RESULT);
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue("nope")).isNull();
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue(null)).isNull();
+    }
+
     private AiMigrationRunView runView() {
-        return new AiMigrationRunView(UUID.randomUUID(), project, UUID.randomUUID(), scanRun, revision, "SUCCEEDED",
+        return new AiMigrationRunView(runId, project, taskId, scanRun, revision, "SUCCEEDED",
                 Map.of(), 3, 2, 1, 0, profileId, runtimeId, null, null, null);
     }
 

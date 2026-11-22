@@ -38,6 +38,11 @@ export const projectQueryKeys = {
     ['project-knowledge-base-finding', findingId] as const,
   knowledgeBaseFindingCodeContext: (findingId?: string) =>
     [...projectQueryKeys.knowledgeBaseFinding(findingId), 'code-context'] as const,
+  knowledgeBaseLatestScan: (projectId?: string) =>
+    [...projectQueryKeys.knowledgeBaseScans(projectId), 'latest'] as const,
+  aiMigrations: (projectId?: string) => ['project-ai-migrations', projectId] as const,
+  aiMigrationArtifact: (runId?: string, kind?: string) =>
+    ['project-ai-migration-artifact', runId, kind] as const,
   knowledgeBaseAiExtensionReadiness: (projectId?: string, scanId?: string) =>
     scanId
       ? (['project-knowledge-base-ai-extension-readiness', projectId, scanId] as const)

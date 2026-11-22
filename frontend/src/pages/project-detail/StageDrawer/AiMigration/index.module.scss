@@ -1,0 +1,80 @@
+@use '../../../../styles/mixins' as type;
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  p {
+    @include type.body-text;
+    margin: 0;
+    color: var(--ant-color-text-secondary);
+  }
+}
+
+.runList {
+  display: flex;
+  flex-direction: column;
+}
+
+.run {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 0;
+
+  &:focus-within {
+    background: var(--ant-color-fill-quaternary);
+  }
+}
+
+.runHead {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.runTime {
+  @include type.helper-text;
+  color: var(--ant-color-text-tertiary);
+}
+
+.runSummary {
+  @include type.body-text;
+  color: var(--ant-color-text);
+  margin: 0;
+}
+
+.runMeta {
+  @include type.helper-text;
+  color: var(--ant-color-text-tertiary);
+}
+
+.runActions {
+  display: flex;
+  gap: 4px;
+}
+
+.patchView {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.patchMeta {
+  @include type.helper-text;
+  color: var(--ant-color-text-tertiary);
+}
+
+// 补丁查看器：保证可用高度，内容超出时由编辑器自身滚动。
+.patch {
+  height: clamp(320px, 55vh, 720px);
+  min-height: 0;
+}

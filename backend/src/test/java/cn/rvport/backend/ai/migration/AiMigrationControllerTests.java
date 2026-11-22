@@ -1,6 +1,7 @@
 package cn.rvport.backend.ai.migration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -60,5 +61,48 @@ class AiMigrationControllerTests {
         assertThat(detail.data().status()).isEqualTo("SUCCEEDED");
         assertThat(detail.data().itemCount()).isEqualTo(1);
         verify(service).detail(runId, actor, false);
+    }
+
+    @Test
+    void 下载端点返回附件响应() {
+        var resource = new org.springframework.core.io.ByteArrayResource("+line".getBytes());
+        when(service.downloadArtifact(org.mockito.ArgumentMatchers.eq(runId),
+                org.mockito.ArgumentMatchers.eq(AiMigrationService.ArtifactKind.DIFF),
+                org.mockito.ArgumentMatchers.eq(actor), org.mockito.ArgumentMatchers.eq(false)))
+                .thenReturn(new AiMigrationService.DownloadableArtifact("migration-diff.patch", "text/x-diff", resource));
+
+        var response = controller.downloadArtifact(principal, runId, "diff", request);
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getHeaders().getContentType().toString()).isEqualTo("text/x-diff");
+        assertThat(response.getHeaders().getFirst(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION))
+                .contains("attachment").contains("migration-diff.patch");
+        assertThat(response.getBody()).isSameAs(resource);
+    }
+
+    @Test
+    void 产物内容端点委托服务并回传文本() {
+        when(service.artifactContent(runId, AiMigrationService.ArtifactKind.DIFF, actor, false))
+                .thenReturn(new AiMigrationService.ArtifactContent(
+                        AiMigrationService.ArtifactKind.DIFF, "migration-diff.patch", "+line", false));
+
+        var response = controller.artifactContent(principal, runId, "diff", request);
+
+        assertThat(response.data().content()).isEqualTo("+line");
+        assertThat(response.data().truncated()).isFalse();
+    }
+
+    @Test
+    void 产物内容端点拒绝未知产物类型() {
+        assertThatThrownBy(() -> controller.artifactContent(principal, runId, "nope", request))
+                .isInstanceOf(cn.rvport.backend.common.error.ApiException.class)
+                .extracting("code").isEqualTo("AI_MIGRATION_ARTIFACT_KIND_INVALID");
+    }
+
+    @Test
+    void 下载端点拒绝未知产物类型() {
+        assertThatThrownBy(() -> controller.downloadArtifact(principal, runId, "nope", request))
+                .isInstanceOf(cn.rvport.backend.common.error.ApiException.class)
+                .extracting("code").isEqualTo("AI_MIGRATION_ARTIFACT_KIND_INVALID");
     }
 }

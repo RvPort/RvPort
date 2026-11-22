@@ -2,6 +2,10 @@ package cn.rvport.backend.ai.migration;
 
 import cn.rvport.backend.agentruntime.AgentModelRuntimeConfig;
 import cn.rvport.backend.audit.AuditLogService;
+import cn.rvport.backend.artifact.StoredArtifactOwnerType;
+import cn.rvport.backend.artifact.StoredArtifactRepository;
+import cn.rvport.backend.artifact.StoredArtifactService;
+import cn.rvport.backend.artifact.StoredArtifactView;
 import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.common.web.PageResponse;
 import cn.rvport.backend.kb.KbScanRepository;
@@ -36,10 +40,13 @@ public class AiMigrationService {
     private final TaskService taskService;
     private final ModelProfileService models;
     private final AuditLogService auditLogService;
+    private final StoredArtifactRepository storedArtifactRepository;
+    private final StoredArtifactService storedArtifactService;
 
     public AiMigrationService(AiMigrationRepository repository, KbScanRepository kbScanRepository,
             SourceRepository sourceRepository, ProjectAccessService projectAccessService, TaskService taskService,
-            ModelProfileService models, AuditLogService auditLogService) {
+            ModelProfileService models, AuditLogService auditLogService,
+            StoredArtifactRepository storedArtifactRepository, StoredArtifactService storedArtifactService) {
         this.repository = repository;
         this.kbScanRepository = kbScanRepository;
         this.sourceRepository = sourceRepository;
@@ -47,6 +54,8 @@ public class AiMigrationService {
         this.taskService = taskService;
         this.models = models;
         this.auditLogService = auditLogService;
+        this.storedArtifactRepository = storedArtifactRepository;
+        this.storedArtifactService = storedArtifactService;
     }
 
     @Transactional
@@ -97,7 +106,8 @@ public class AiMigrationService {
         long total = repository.countRuns(projectId);
         List<AiMigrationResponse> runs = repository.listRuns(projectId, normalizedPage * normalizedSize, normalizedSize)
                 .stream()
-                .map(run -> AiMigrationResponse.from(run, List.of()))
+                .map(run -> AiMigrationResponse.from(run, storedArtifactRepository.listByOwner(
+                        StoredArtifactOwnerType.AI_MIGRATION, run.id())))
                 .toList();
         return PageResponse.of(runs, normalizedPage, normalizedSize, total);
     }
@@ -108,7 +118,96 @@ public class AiMigrationService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "AI_MIGRATION_RUN_NOT_FOUND",
                         "迁移运行不存在 / Migration run not found"));
         projectAccessService.requireProjectAccess(run.projectId(), actorUserId, superAdmin);
-        return AiMigrationResponse.from(run, List.of());
+        return AiMigrationResponse.from(run, storedArtifactRepository.listByOwner(
+                StoredArtifactOwnerType.AI_MIGRATION, run.id()));
+    }
+
+    /** 迁移产物类型；artifactType 与 AiMigrationRuntimeService 入库时使用的值一致。 */
+    public enum ArtifactKind {
+        DIFF(AiMigrationRuntimeService.ARTIFACT_TYPE_DIFF, "migration-diff.patch", "text/x-diff"),
+        RESULT(AiMigrationRuntimeService.ARTIFACT_TYPE_RESULT, "migration-result.json", "application/json");
+
+        private final String artifactType;
+        private final String filename;
+        private final String contentType;
+
+        ArtifactKind(String artifactType, String filename, String contentType) {
+            this.artifactType = artifactType;
+            this.filename = filename;
+            this.contentType = contentType;
+        }
+
+        public String artifactType() {
+            return artifactType;
+        }
+
+        public String filename() {
+            return filename;
+        }
+
+        public String contentType() {
+            return contentType;
+        }
+
+        public static ArtifactKind fromPathValue(String value) {
+            if (value == null) {
+                return null;
+            }
+            String normalized = value.trim().toLowerCase();
+            if (normalized.equals("diff") || normalized.equals("patch")) {
+                return DIFF;
+            }
+            if (normalized.equals("result")) {
+                return RESULT;
+            }
+            return null;
+        }
+    }
+
+    public record DownloadableArtifact(
+            String filename,
+            String contentType,
+            org.springframework.core.io.Resource resource) {
+    }
+
+    /** 页面内展示用的产物文本上限；超出部分截断并标记，完整内容走下载。 */
+    static final int MAX_ARTIFACT_CONTENT_CHARS = 512 * 1024;
+
+    public record ArtifactContent(ArtifactKind kind, String filename, String content, boolean truncated) {
+    }
+
+    /** 读取某次运行的迁移产物文本，供页面内展示；归属校验与下载一致。 */
+    @Transactional(readOnly = true)
+    public ArtifactContent artifactContent(UUID runId, ArtifactKind kind, UUID actorUserId, boolean superAdmin) {
+        DownloadableArtifact artifact = downloadArtifact(runId, kind, actorUserId, superAdmin);
+        try {
+            byte[] bytes = artifact.resource().getInputStream().readAllBytes();
+            String text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+            if (text.length() <= MAX_ARTIFACT_CONTENT_CHARS) {
+                return new ArtifactContent(kind, artifact.filename(), text, false);
+            }
+            return new ArtifactContent(kind, artifact.filename(),
+                    text.substring(0, MAX_ARTIFACT_CONTENT_CHARS), true);
+        } catch (java.io.IOException ex) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "AI_MIGRATION_ARTIFACT_NOT_FOUND",
+                    "迁移产物不存在 / Migration artifact not found");
+        }
+    }
+
+    /** 按类型下载某次运行的迁移产物；归属校验与详情一致，未知类型或产物缺失返回 404。 */
+    @Transactional(readOnly = true)
+    public DownloadableArtifact downloadArtifact(
+            UUID runId, ArtifactKind kind, UUID actorUserId, boolean superAdmin) {
+        AiMigrationRunView run = repository.findRun(runId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "AI_MIGRATION_RUN_NOT_FOUND",
+                        "迁移运行不存在 / Migration run not found"));
+        projectAccessService.requireProjectAccess(run.projectId(), actorUserId, superAdmin);
+        StoredArtifactView artifact = storedArtifactRepository.findByOwner(
+                        StoredArtifactOwnerType.AI_MIGRATION, run.id(), kind.artifactType())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "AI_MIGRATION_ARTIFACT_NOT_FOUND",
+                        "迁移产物不存在 / Migration artifact not found"));
+        return new DownloadableArtifact(kind.filename(), kind.contentType(),
+                storedArtifactService.download(artifact.id()).resource());
     }
 
     KbScanView resolveScanRun(UUID projectId, SourceRevisionView sourceRevision, UUID scanRunId) {

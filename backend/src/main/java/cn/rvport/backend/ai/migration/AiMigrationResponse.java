@@ -17,6 +17,7 @@ public record AiMigrationResponse(
         int doneCount,
         int falsePositiveCount,
         int pendingCount,
+        java.time.OffsetDateTime createdAt,
         List<StoredArtifactView> artifacts) {
 
     public static AiMigrationResponse from(AiMigrationRunView run, List<StoredArtifactView> artifacts) {
@@ -32,6 +33,7 @@ public record AiMigrationResponse(
                 run.doneCount(),
                 run.falsePositiveCount(),
                 run.pendingCount(),
+                run.createdAt(),
                 artifacts == null ? List.of() : artifacts);
     }
 }
