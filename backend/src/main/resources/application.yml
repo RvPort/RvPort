@@ -150,6 +150,8 @@ rvport:
       max-concurrent: ${RVPORT_AI_EXECUTOR_MAX_CONCURRENT:1}
       skill-repo-url: ${RVPORT_AI_SKILLS_REPO_URL:https://github.com/zte-riscv/rvport-skills.git}
       skill-branch: ${RVPORT_AI_SKILLS_BRANCH:master}
+      # 技能仓库专用代理：仅作用于访问技能远端的 git 命令，留空直连。
+      skill-repo-proxy: ${RVPORT_AI_SKILLS_PROXY:}
       skills-root: ${RVPORT_AI_SKILLS_ROOT:/var/lib/rvport/ai-skills}
       workspace-root: ${RVPORT_AI_WORKSPACE_ROOT:/var/lib/rvport/ai-workspaces}
       workspace-host-root: ${RVPORT_AI_WORKSPACE_HOST_ROOT:/var/lib/rvport/ai-workspaces}

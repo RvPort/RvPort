@@ -308,6 +308,8 @@ services:
       RVPORT_AI_SKILLS_VOLUME: ${RVPORT_AI_SKILLS_VOLUME_NAME:-${COMPOSE_PROJECT_NAME:-rvport}_rvport-ai-skills}
       RVPORT_AI_SKILLS_REPO_URL: ${RVPORT_AI_SKILLS_REPO_URL:-https://github.com/zte-riscv/rvport-skills.git}
       RVPORT_AI_SKILLS_BRANCH: ${RVPORT_AI_SKILLS_BRANCH:-master}
+      # 技能仓库专用代理（容器不继承宿主机代理，访问 GitHub 需单独指定）。
+      RVPORT_AI_SKILLS_PROXY: ${RVPORT_AI_SKILLS_PROXY:-}
       RVPORT_AI_SKILLS_ROOT: ${RVPORT_AI_SKILLS_ROOT:-/var/lib/rvport/ai-skills}
       RVPORT_AI_WORKSPACE_ROOT: /var/lib/rvport/ai-workspaces
       RVPORT_AI_WORKSPACE_HOST_ROOT: ${RVPORT_AI_WORKSPACE_HOST_DIR:-/var/lib/rvport/ai-workspaces}

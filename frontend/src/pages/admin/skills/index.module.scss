@@ -1,0 +1,100 @@
+@use '../../../styles/mixins' as type;
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  min-width: 0;
+
+  .pageHeader {
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h2 {
+      @include type.page-title;
+      color: var(--ant-color-text);
+    }
+
+    p {
+      margin-top: 4px;
+      color: var(--ant-color-text-secondary);
+      font-size: var(--ant-font-size, 14px);
+      line-height: 22px;
+    }
+  }
+}
+
+// 版本与技能用轻底色分组，不画边框盒子。
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  padding: 20px 24px;
+  background: var(--ant-color-fill-quaternary);
+  border-radius: var(--ant-border-radius-lg, 8px);
+
+  .fact {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 4px;
+
+    .label {
+      color: var(--ant-color-text-tertiary);
+      font-size: var(--ant-font-size-sm, 12px);
+      line-height: 20px;
+    }
+
+    .value {
+      color: var(--ant-color-text);
+      font-size: var(--ant-font-size, 14px);
+      line-height: 22px;
+    }
+  }
+}
+
+.status {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+
+  .summary {
+    color: var(--ant-color-text);
+    font-size: var(--ant-font-size, 14px);
+    line-height: 22px;
+    margin: 0;
+  }
+}
+
+.changes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  h3 {
+    @include type.section-title;
+    color: var(--ant-color-text);
+    margin: 0;
+  }
+
+  ul {
+    background: var(--ant-color-fill-quaternary);
+    border-radius: var(--ant-border-radius-lg, 8px);
+    margin: 0;
+    max-height: 280px;
+    overflow: auto;
+    padding: 12px 24px;
+
+    li {
+      color: var(--ant-color-text);
+      font-family: var(--ant-font-family-code, monospace);
+      font-size: var(--ant-font-size-sm, 12px);
+      line-height: 22px;
+    }
+  }
+}

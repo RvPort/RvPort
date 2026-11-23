@@ -14,6 +14,7 @@ vi.mock('@/pages/admin/users', () => ({ default: () => <h1>用户管理页面</h
 vi.mock('@/pages/admin/mail', () => ({ default: () => <h1>邮件管理页面</h1> }))
 vi.mock('@/pages/admin/models', () => ({ default: () => <h1>模型管理页面</h1> }))
 vi.mock('@/pages/admin/workers', () => ({ default: () => <h1>Worker 管理页面</h1> }))
+vi.mock('@/pages/admin/skills', () => ({ default: () => <h1>AI 迁移技能页面</h1> }))
 vi.mock('@/pages/home', () => ({ default: () => <h1>项目首页</h1> }))
 vi.mock('@/pages/settings/profile', () => ({ default: () => <h1>个人资料页面</h1> }))
 vi.mock('@/pages/project-detail', () => ({ default: () => <h1>项目详情页面</h1> }))
@@ -29,7 +30,8 @@ const adminPages = [
   ['/admin/users', '用户管理页面'],
   ['/admin/mail', '邮件管理页面'],
   ['/admin/models', '模型管理页面'],
-  ['/admin/workers', 'Worker 管理页面']
+  ['/admin/workers', 'Worker 管理页面'],
+  ['/admin/skills', 'AI 迁移技能页面']
 ] as const
 const businessPages = ['/home', '/settings/profile', '/projects/project-1/workflow']
 const protectedPaths = [...adminPages.map(([path]) => path), ...businessPages]

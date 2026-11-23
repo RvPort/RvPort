@@ -36,7 +36,7 @@ class ExecutorBeanWiringTests {
     void 执行器服务读取统一配置() {
         new ApplicationContextRunner()
                 .withBean(AiMigrationExecutorProperties.class, () -> new AiMigrationExecutorProperties(
-                        "container", "my-img:1", "my-vol", null, null, "http://skills", "dev", "/s", "/w", "/hw"))
+                        "container", "my-img:1", "my-vol", null, null, "http://skills", "dev", "/s", "/w", "/hw", null))
                 .withBean(AuditLogService.class, () -> mock(AuditLogService.class))
                 .withUserConfiguration(ExecutorContainerService.class, SkillRepository.class,
                         SkillAdminService.class, SkillAdminController.class)

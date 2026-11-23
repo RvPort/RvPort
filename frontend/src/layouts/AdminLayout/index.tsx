@@ -6,7 +6,8 @@ import {
   ClusterOutlined,
   HomeOutlined,
   MailOutlined,
-  TeamOutlined
+  TeamOutlined,
+  ToolOutlined
 } from '@ant-design/icons'
 import { Button, Flex, Layout, Tabs, Tag } from 'antd'
 
@@ -47,6 +48,14 @@ const items = [
     label: (
       <Fragment>
         <ClusterOutlined /> Worker 管理
+      </Fragment>
+    )
+  },
+  {
+    key: '/admin/skills',
+    label: (
+      <Fragment>
+        <ToolOutlined /> AI 迁移技能
       </Fragment>
     )
   }

@@ -20,7 +20,8 @@ public record AiMigrationExecutorProperties(
         String skillBranch,
         String skillsRoot,
         String workspaceRoot,
-        String workspaceHostRoot) {
+        String workspaceHostRoot,
+        String skillRepoProxy) {
 
     public AiMigrationExecutorProperties {
         executionMode = executionMode == null || executionMode.isBlank() ? "container" : executionMode.trim();
@@ -45,6 +46,9 @@ public record AiMigrationExecutorProperties(
         workspaceHostRoot = workspaceHostRoot == null || workspaceHostRoot.isBlank()
                 ? workspaceRoot
                 : workspaceHostRoot;
+        // 技能仓库专用代理：容器内不继承宿主机代理（清空以免内部服务被代理劫持），
+        // 因此访问 GitHub 的 git 命令需单独指定。仅作用于技能仓库的 git 操作，留空则直连。
+        skillRepoProxy = skillRepoProxy == null ? "" : skillRepoProxy.trim();
     }
 
     public boolean containerMode() {
@@ -54,7 +58,7 @@ public record AiMigrationExecutorProperties(
     /** 测试与回退场景的便捷构造：仅指定模式与 workspace 根（宿主根缺省同 workspace 根）。 */
     public static AiMigrationExecutorProperties forMode(String mode, String workspaceRoot, String workspaceHostRoot) {
         return new AiMigrationExecutorProperties(mode, null, null, null, null, null, null, null,
-                workspaceRoot, workspaceHostRoot);
+                workspaceRoot, workspaceHostRoot, null);
     }
 
     public boolean validMode() {

@@ -92,6 +92,10 @@ const routes: RouteObject[] = [
           {
             path: 'workers',
             lazy: async () => ({ Component: (await import('@/pages/admin/workers')).default })
+          },
+          {
+            path: 'skills',
+            lazy: async () => ({ Component: (await import('@/pages/admin/skills')).default })
           }
         ]
       },

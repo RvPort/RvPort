@@ -63,7 +63,7 @@ class SkillRepositoryTests {
     }
 
     private SkillRepository repository(Path root, StubGit git) {
-        return new SkillRepository(new SkillRepositoryProperties(root, "https://example/skills.git", "main"), git);
+        return new SkillRepository(new SkillRepositoryProperties(root, "https://example/skills.git", "main", null), git);
     }
 
     @Test
@@ -87,6 +87,47 @@ class SkillRepositoryTests {
         // git 进程失败（非 IO）直接透传，保留退出码上下文
         assertThatThrownBy(() -> repository(temp.resolve("s2"), git).ensureCloned())
                 .hasMessageContaining("GIT_FAILED(128)");
+    }
+
+    @Test
+    void 配置代理时仅联网命令携带代理且原样透传给git() throws IOException {
+        StubGit git = new StubGit();
+        git.phase(Map.of(
+                "rev-parse HEAD", "a",
+                "rev-parse refs/remotes/origin/main", "b",
+                "rev-list --count HEAD..refs/remotes/origin/main", "1",
+                "--no-pager diff --stat HEAD..refs/remotes/origin/main", " f | 1 +\n"));
+        Path root = temp.resolve("proxied");
+        Files.createDirectories(root.resolve(".git"));
+        Files.writeString(root.resolve(".git").resolve("HEAD"), "ref: refs/heads/main\n");
+        var repository = new SkillRepository(
+                new SkillRepositoryProperties(root, "https://example/skills.git", "main", "http://proxy:8080"), git);
+
+        repository.status();
+        repository.update();
+
+        // 联网命令（fetch）：共两次，每次都必须带代理且值与配置一致
+        List<String> fetches = git.runLog.stream().filter(c -> c.contains(" fetch ")).toList();
+        assertThat(fetches).hasSize(2);
+        assertThat(fetches).allSatisfy(c -> assertThat(c)
+                .isEqualTo("-c http.proxy=http://proxy:8080 fetch --force origin main:refs/remotes/origin/main"));
+        // 本地命令（版本比较、对齐）：不得带代理
+        List<String> localCalls = git.runLog.stream().filter(c -> !c.contains(" fetch ")).toList();
+        assertThat(localCalls).isNotEmpty();
+        assertThat(localCalls).noneMatch(c -> c.contains("proxy"));
+        assertThat(localCalls).anySatisfy(c -> assertThat(c).isEqualTo("reset --hard refs/remotes/origin/main"));
+    }
+
+    @Test
+    void 未配置代理时联网命令不带代理() throws IOException {
+        StubGit git = new StubGit();
+        var repository = new SkillRepository(
+                new SkillRepositoryProperties(temp.resolve("plain"), "https://example/skills.git", "main", "  "), git);
+
+        repository.ensureCloned();
+
+        assertThat(git.runLog).hasSize(1);
+        assertThat(git.runLog.get(0)).isEqualTo("clone --branch main https://example/skills.git plain");
     }
 
     @Test
@@ -128,15 +169,16 @@ class SkillRepositoryTests {
 
     @Test
     void 技能仓库配置默认值与显式值() {
-        var defaults = new SkillRepositoryProperties(null, null, " ");
+        var defaults = new SkillRepositoryProperties(null, null, " ", null);
         assertThat(defaults.skillsRoot()).isEqualTo(java.nio.file.Path.of("/var/lib/rvport/ai-skills"));
         assertThat(defaults.remoteUrl()).contains("rvport-skills");
         assertThat(defaults.branch()).isEqualTo("master");
 
-        var explicit = new SkillRepositoryProperties(java.nio.file.Path.of("/x"), "http://r", "dev");
+        var explicit = new SkillRepositoryProperties(java.nio.file.Path.of("/x"), "http://r", "dev", "http://p:1");
         assertThat(explicit.skillsRoot()).isEqualTo(java.nio.file.Path.of("/x"));
         assertThat(explicit.remoteUrl()).isEqualTo("http://r");
         assertThat(explicit.branch()).isEqualTo("dev");
+        assertThat(explicit.proxy()).isEqualTo("http://p:1");
     }
 
     @Test
@@ -253,11 +295,13 @@ class SkillRepositoryTests {
 
     @Test
     void 属性null与空白组合全兜底() {
-        var allNull = new SkillRepositoryProperties(null, null, null);
+        var allNull = new SkillRepositoryProperties(null, null, null, null);
         assertThat(allNull.remoteUrl()).isEqualTo("https://github.com/zte-riscv/rvport-skills.git");
         assertThat(allNull.branch()).isEqualTo("master");
-        var blankUrl = new SkillRepositoryProperties(null, "   ", null);
+        assertThat(allNull.proxy()).isEmpty();
+        var blankUrl = new SkillRepositoryProperties(null, "   ", null, "  ");
         assertThat(blankUrl.remoteUrl()).contains("rvport-skills");
+        assertThat(blankUrl.proxy()).isEmpty();
     }
 
     @Test
@@ -308,7 +352,7 @@ class SkillRepositoryTests {
 
     @Test
     void 生产构造器使用进程git() {
-        var repository = new SkillRepository(new SkillRepositoryProperties(temp.resolve("prod"), null, null));
+        var repository = new SkillRepository(new SkillRepositoryProperties(temp.resolve("prod"), null, null, null));
         assertThat(repository).isNotNull();
     }
 
@@ -348,7 +392,7 @@ class SkillRepositoryTests {
 
         Path root = temp.resolve("skills");
         SkillRepository repository = new SkillRepository(
-                new SkillRepositoryProperties(root, remote.toUri().toString(), "main"),
+                new SkillRepositoryProperties(root, remote.toUri().toString(), "main", null),
                 new SkillRepository.ProcessGitCli());
 
         repository.ensureCloned();

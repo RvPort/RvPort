@@ -6,7 +6,8 @@ import java.nio.file.Path;
 public record SkillRepositoryProperties(
         Path skillsRoot,
         String remoteUrl,
-        String branch) {
+        String branch,
+        String proxy) {
 
     public SkillRepositoryProperties {
         skillsRoot = skillsRoot == null ? Path.of("/var/lib/rvport/ai-skills") : skillsRoot;
@@ -14,5 +15,7 @@ public record SkillRepositoryProperties(
                 ? "https://github.com/zte-riscv/rvport-skills.git"
                 : remoteUrl;
         branch = branch == null || branch.isBlank() ? "master" : branch;
+        // 仅用于技能仓库的 git 网络操作；留空表示直连。
+        proxy = proxy == null ? "" : proxy.trim();
     }
 }

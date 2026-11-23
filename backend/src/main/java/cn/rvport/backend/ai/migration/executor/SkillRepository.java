@@ -26,12 +26,14 @@ public class SkillRepository {
     private final Path skillsRoot;
     private final String remoteUrl;
     private final String branch;
+    private final String proxy;
     private final GitCli git;
 
     @org.springframework.beans.factory.annotation.Autowired
     public SkillRepository(AiMigrationExecutorProperties executorProperties) {
         this(new SkillRepositoryProperties(Path.of(executorProperties.skillsRoot()),
-                executorProperties.skillRepoUrl(), executorProperties.skillBranch()), new ProcessGitCli());
+                executorProperties.skillRepoUrl(), executorProperties.skillBranch(),
+                executorProperties.skillRepoProxy()), new ProcessGitCli());
     }
 
     SkillRepository(SkillRepositoryProperties properties) {
@@ -42,7 +44,20 @@ public class SkillRepository {
         this.skillsRoot = properties.skillsRoot();
         this.remoteUrl = properties.remoteUrl();
         this.branch = properties.branch();
+        this.proxy = properties.proxy();
         this.git = git;
+    }
+
+    /** 访问远端用：配置了代理则每次命令单独指定，不影响进程内的其它网络设置。 */
+    private String[] withProxy(String... args) {
+        if (proxy == null || proxy.isBlank()) {
+            return args;
+        }
+        List<String> command = new ArrayList<>(args.length + 2);
+        command.add("-c");
+        command.add("http.proxy=" + proxy);
+        command.addAll(List.of(args));
+        return command.toArray(String[]::new);
     }
 
     /** 确保仓库就绪：目录空则克隆；幂等。 */
@@ -53,7 +68,7 @@ public class SkillRepository {
         try {
             Files.createDirectories(skillsRoot.getParent());
             git.run(skillsRoot.getParent(), Duration.ofMinutes(10),
-                    "clone", "--branch", branch, remoteUrl, skillsRoot.getFileName().toString());
+                    withProxy("clone", "--branch", branch, remoteUrl, skillsRoot.getFileName().toString()));
             log.info("skills cloned from {} into {}", remoteUrl, skillsRoot);
         } catch (IOException ex) {
             throw new IllegalStateException("SKILL_CLONE_FAILED: " + ex.getMessage(), ex);
@@ -63,8 +78,8 @@ public class SkillRepository {
     public synchronized SkillStatus status() {
         ensureCloned();
         String current = git.read(skillsRoot, "rev-parse", "HEAD");
-        git.run(skillsRoot, Duration.ofMinutes(2), "fetch", "--force", "origin",
-                branch + ":refs/remotes/origin/" + branch);
+        git.run(skillsRoot, Duration.ofMinutes(2), withProxy("fetch", "--force", "origin",
+                branch + ":refs/remotes/origin/" + branch));
         String remote = git.read(skillsRoot, "rev-parse", "refs/remotes/origin/" + branch);
         int behind = Integer.parseInt(git.read(skillsRoot, "rev-list", "--count",
                 "HEAD..refs/remotes/origin/" + branch).trim());
@@ -78,8 +93,8 @@ public class SkillRepository {
     public synchronized SkillUpdateResult update() {
         ensureCloned();
         String before = git.read(skillsRoot, "rev-parse", "HEAD");
-        git.run(skillsRoot, Duration.ofMinutes(2), "fetch", "--force", "origin",
-                branch + ":refs/remotes/origin/" + branch);
+        git.run(skillsRoot, Duration.ofMinutes(2), withProxy("fetch", "--force", "origin",
+                branch + ":refs/remotes/origin/" + branch));
         String after = git.read(skillsRoot, "rev-parse", "refs/remotes/origin/" + branch);
         int changed = Integer.parseInt(git.read(skillsRoot, "rev-list", "--count",
                 "HEAD..refs/remotes/origin/" + branch).trim());

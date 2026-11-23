@@ -9,7 +9,7 @@ class AiMigrationExecutorPropertiesTests {
 
     @Test
     void 全部缺省兜底() {
-        var props = new AiMigrationExecutorProperties(null, null, null, null, null, null, null, null, null, null);
+        var props = new AiMigrationExecutorProperties(null, null, null, null, null, null, null, null, null, null, null);
         assertThat(props.executionMode()).isEqualTo("container");
         assertThat(props.image()).isEqualTo("rvport-ai-executor:local");
         assertThat(props.skillsVolume()).isEqualTo("rvport-ai-skills");
@@ -21,13 +21,15 @@ class AiMigrationExecutorPropertiesTests {
         assertThat(props.workspaceRoot()).isEqualTo("/var/lib/rvport/ai-workspaces");
         // 未配置宿主根 → 与 workspaceRoot 相同
         assertThat(props.workspaceHostRoot()).isEqualTo(props.workspaceRoot());
+        // 未配置代理 → 空字符串（表示直连）
+        assertThat(props.skillRepoProxy()).isEmpty();
         assertThat(props.containerMode()).isTrue();
         assertThat(props.validMode()).isTrue();
     }
 
     @Test
     void 空白与非法值兜底() {
-        var props = new AiMigrationExecutorProperties("  ", "  ", "\t", Duration.ZERO, 0, " ", "", " ", "", null);
+        var props = new AiMigrationExecutorProperties("  ", "  ", "\t", Duration.ZERO, 0, " ", "", " ", "", null, null);
         assertThat(props.executionMode()).isEqualTo("container");
         assertThat(props.image()).isEqualTo("rvport-ai-executor:local");
         assertThat(props.skillsVolume()).isEqualTo("rvport-ai-skills");
@@ -42,7 +44,7 @@ class AiMigrationExecutorPropertiesTests {
     @Test
     void 负超时与负并发兜底() {
         var negative = new AiMigrationExecutorProperties("process", "img:1", "vol", Duration.ofSeconds(-3), -5,
-                "http://r", "dev", "/skills", "/ws", null);
+                "http://r", "dev", "/skills", "/ws", null, null);
         assertThat(negative.dockerTimeout()).isEqualTo(Duration.ofHours(2));
         assertThat(negative.maxConcurrent()).isEqualTo(1);
         assertThat(negative.containerMode()).isFalse();
@@ -52,7 +54,7 @@ class AiMigrationExecutorPropertiesTests {
     @Test
     void 显式值全部保留且宿主根独立() {
         var explicit = new AiMigrationExecutorProperties("Container ", "my-image:2", "my-vol", Duration.ofMinutes(45),
-                3, "http://skills", "release", "/s", "/w", "/host/w");
+                3, "http://skills", "release", "/s", "/w", "/host/w", "http://proxy:8080");
         // 模式大小写不敏感且去除首尾空白
         assertThat(executionModeTrimmed(explicit)).isEqualTo("Container");
         assertThat(explicit.containerMode()).isTrue();
@@ -65,17 +67,18 @@ class AiMigrationExecutorPropertiesTests {
         assertThat(explicit.skillsRoot()).isEqualTo("/s");
         assertThat(explicit.workspaceRoot()).isEqualTo("/w");
         assertThat(explicit.workspaceHostRoot()).isEqualTo("/host/w");
+        assertThat(explicit.skillRepoProxy()).isEqualTo("http://proxy:8080");
     }
 
     @Test
     void 空白宿主根回落到workspaceRoot() {
-        var props = new AiMigrationExecutorProperties("process", null, null, null, null, null, null, null, "/w", "  ");
+        var props = new AiMigrationExecutorProperties("process", null, null, null, null, null, null, null, "/w", "  ", "  ");
         assertThat(props.workspaceHostRoot()).isEqualTo("/w");
     }
 
     @Test
     void 非法模式被识别() {
-        var invalid = new AiMigrationExecutorProperties("weird", null, null, null, null, null, null, null, null, null);
+        var invalid = new AiMigrationExecutorProperties("weird", null, null, null, null, null, null, null, null, null, null);
         assertThat(invalid.validMode()).isFalse();
         assertThat(invalid.containerMode()).isFalse();
     }
