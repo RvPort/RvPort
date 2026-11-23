@@ -26,6 +26,7 @@ RUN echo "Types: deb" > /etc/apt/sources.list.d/rvport.sources \
         ca-certificates curl git xz-utils \
         qemu-user-static \
         gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
+        gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # node（tar 直装，同 backend/Dockerfile 模式）
@@ -58,9 +59,10 @@ RUN ln -sf /usr/lib/binfmt.d /usr/bin/.binfmt-alias 2>/dev/null || true \
     && qemu-riscv64 --version | head -1 \
     && riscv64-linux-gnu-gcc --version | head -1 \
     && echo 'int main(){return 0;}' > /tmp/t.c \
-    && riscv64-linux-gnu-gcc -static -o /tmp/t /tmp/t.c \
-    && qemu-riscv64 /tmp/t \
-    && rm -f /tmp/t /tmp/t.c
+    && gcc -O2 -o /tmp/t-x86 /tmp/t.c \
+    && riscv64-linux-gnu-gcc -static -o /tmp/t-rv /tmp/t.c \
+    && qemu-riscv64 /tmp/t-rv \
+    && rm -f /tmp/t.c /tmp/t-x86 /tmp/t-rv
 
 WORKDIR /app
 ENTRYPOINT ["/opt/rvport/entrypoint.sh"]
