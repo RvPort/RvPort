@@ -184,9 +184,9 @@ class ProjectWorkflowStatusServiceTests {
         var response = service().aggregate(projectId, null, runtime, new ProjectContextSnapshot(null, 1L));
 
         assertThat(response.stages()).extracting(WorkflowStageResponse::id).containsExactly(
-                "project", "env", "assets", "x86-build", "kb", "ai-migration", "rv-dependency-analysis",
+                "project", "env", "assets", "x86-build", "kb", "rv-dependency-analysis",
                 "floating-point-analysis", "memory-order-analysis",
-                "report", "manual", "build", "test", "optimize", "archive");
+                "report", "ai-migration", "manual", "build", "test", "optimize", "archive");
         assertThat(response.stages().getFirst().status()).isEqualTo(WorkflowStageStatus.DONE);
         assertThat(response.recommendedStageId()).isEqualTo("env");
     }

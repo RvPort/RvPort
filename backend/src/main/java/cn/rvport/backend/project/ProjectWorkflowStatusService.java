@@ -116,13 +116,14 @@ public class ProjectWorkflowStatusService {
         stages.add(assets(projectId, activeSource));
         stages.add(x86Build(projectId, runtime, context));
         stages.add(kb(projectId, context));
-        stages.add(aiMigration(projectId, context));
         stages.add(dependency(projectId, context));
         stages.add(specialized(projectId, context, SpecializedAnalyzerType.FLOATING_POINT, FLOATING_POINT));
         stages.add(specialized(projectId, context, SpecializedAnalyzerType.MEMORY_ORDER, MEMORY_ORDER));
         var currentList=fixLists.current(projectId);
         WorkflowStageResponse report = report(projectId, context,currentList);
         stages.add(report);
+        // AI 迁移与人工修复并列：都是读完评估报告后处理代码的方式，顺序与前端流水线拓扑一致。
+        stages.add(aiMigration(projectId, context));
         stages.add(manual(report, activeSource,currentList));
         stages.add(build(projectId, runtime, context));
         stages.add(test(projectId, context));
