@@ -75,8 +75,21 @@ public class SkillRepository {
         }
     }
 
+    /**
+     * 拉取前把仓库记录的远端对齐到当前配置的地址。配置的地址只在首次克隆时生效，
+     * 已有仓库仍会连它克隆时记下的远端；换源后若不对齐，拉取会连到旧地址。
+     */
+    private void ensureRemoteAligned() {
+        String recorded = git.read(skillsRoot, "remote", "get-url", "origin").trim();
+        if (!remoteUrl.equals(recorded)) {
+            git.run(skillsRoot, Duration.ofSeconds(30), "remote", "set-url", "origin", remoteUrl);
+            log.info("skills remote realigned from {} to {}", recorded, remoteUrl);
+        }
+    }
+
     public synchronized SkillStatus status() {
         ensureCloned();
+        ensureRemoteAligned();
         String current = git.read(skillsRoot, "rev-parse", "HEAD");
         git.run(skillsRoot, Duration.ofMinutes(2), withProxy("fetch", "--force", "origin",
                 branch + ":refs/remotes/origin/" + branch));
@@ -92,6 +105,7 @@ public class SkillRepository {
 
     public synchronized SkillUpdateResult update() {
         ensureCloned();
+        ensureRemoteAligned();
         String before = git.read(skillsRoot, "rev-parse", "HEAD");
         git.run(skillsRoot, Duration.ofMinutes(2), withProxy("fetch", "--force", "origin",
                 branch + ":refs/remotes/origin/" + branch));

@@ -26,6 +26,8 @@ class SkillRepositoryTests {
         final Map<String, String> readResults = new LinkedHashMap<>();
         final Deque<Map<String, String>> readPhases = new ArrayDeque<>();
         RuntimeException failure;
+        /** 仓库当前记录的远端地址；默认与各用例使用的地址一致，使已有用例不触发换源。 */
+        String recordedRemote = "https://example/skills.git";
 
         @Override
         public void run(Path dir, Duration timeout, String... args) {
@@ -33,6 +35,9 @@ class SkillRepositoryTests {
                 throw failure;
             }
             runLog.add(String.join(" ", args));
+            if (args.length >= 4 && args[0].equals("remote") && args[1].equals("set-url")) {
+                recordedRemote = args[3];
+            }
         }
 
         @Override
@@ -41,6 +46,9 @@ class SkillRepositoryTests {
                 throw failure;
             }
             String key = String.join(" ", args);
+            if (key.equals("remote get-url origin")) {
+                return recordedRemote + "\n";
+            }
             Map<String, String> phase = readPhases.isEmpty() ? readResults : readPhases.peek();
             return phase.getOrDefault(key, "");
         }
@@ -116,6 +124,50 @@ class SkillRepositoryTests {
         assertThat(localCalls).isNotEmpty();
         assertThat(localCalls).noneMatch(c -> c.contains("proxy"));
         assertThat(localCalls).anySatisfy(c -> assertThat(c).isEqualTo("reset --hard refs/remotes/origin/main"));
+    }
+
+    @Test
+    void 仓库记录的远端与配置不一致时先换源再拉取() throws IOException {
+        StubGit git = new StubGit();
+        git.recordedRemote = "file:///opt/old-remote";
+        git.phase(Map.of(
+                "rev-parse HEAD", "a",
+                "rev-parse refs/remotes/origin/main", "b",
+                "rev-list --count HEAD..refs/remotes/origin/main", "1",
+                "--no-pager diff --stat HEAD..refs/remotes/origin/main", " f | 1 +\n"));
+        Path root = temp.resolve("realigned");
+        Files.createDirectories(root.resolve(".git"));
+        Files.writeString(root.resolve(".git").resolve("HEAD"), "ref: refs/heads/main\n");
+        var repository = new SkillRepository(
+                new SkillRepositoryProperties(root, "https://example/skills.git", "main", null), git);
+
+        repository.status();
+
+        List<String> calls = git.runLog;
+        int setUrl = calls.indexOf("remote set-url origin https://example/skills.git");
+        int fetch = calls.indexOf("fetch --force origin main:refs/remotes/origin/main");
+        assertThat(setUrl).isGreaterThanOrEqualTo(0);
+        assertThat(fetch).isGreaterThan(setUrl);
+        assertThat(git.recordedRemote).isEqualTo("https://example/skills.git");
+    }
+
+    @Test
+    void 远端已与配置一致时不重复换源() throws IOException {
+        StubGit git = new StubGit();
+        git.phase(Map.of(
+                "rev-parse HEAD", "a",
+                "rev-parse refs/remotes/origin/main", "a",
+                "rev-list --count HEAD..refs/remotes/origin/main", "0"));
+        Path root = temp.resolve("aligned");
+        Files.createDirectories(root.resolve(".git"));
+        Files.writeString(root.resolve(".git").resolve("HEAD"), "ref: refs/heads/main\n");
+        var repository = new SkillRepository(
+                new SkillRepositoryProperties(root, "https://example/skills.git", "main", null), git);
+
+        var status = repository.status();
+
+        assertThat(status.commitsBehind()).isZero();
+        assertThat(git.runLog).noneMatch(c -> c.startsWith("remote set-url"));
     }
 
     @Test

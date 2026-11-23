@@ -198,11 +198,18 @@ services:
       RVPORT_WORKER_CLEANUP_LOST_TIMEOUT_SECONDS: ${RVPORT_WORKER_CLEANUP_LOST_TIMEOUT_SECONDS:-300}
       RVPORT_WORKER_CLEANUP_RETENTION_HOURS: ${RVPORT_WORKER_CLEANUP_RETENTION_HOURS:-24}
       RVPORT_WORKER_CLEANUP_BATCH_SIZE: ${RVPORT_WORKER_CLEANUP_BATCH_SIZE:-100}
+      # 技能管理接口（查看版本、更新）由本服务提供，需要与 backend-worker 相同的技能
+      # 仓库配置与数据卷；代理仅用于访问技能远端的 git 命令。
+      RVPORT_AI_SKILLS_REPO_URL: ${RVPORT_AI_SKILLS_REPO_URL:-https://github.com/zte-riscv/rvport-skills.git}
+      RVPORT_AI_SKILLS_BRANCH: ${RVPORT_AI_SKILLS_BRANCH:-master}
+      RVPORT_AI_SKILLS_PROXY: ${RVPORT_AI_SKILLS_PROXY:-}
+      RVPORT_AI_SKILLS_ROOT: ${RVPORT_AI_SKILLS_ROOT:-/var/lib/rvport/ai-skills}
       RVPORT_LIQUIBASE_ENABLED: "true"
     ports:
       - "${RVPORT_BACKEND_PORT:-8080}:8080"
     volumes:
       - rvport-backend-runtime:/app/backend/runtime
+      - rvport-ai-skills:/var/lib/rvport/ai-skills
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/actuator/health', timeout=5).read()\""]
       interval: 10s
