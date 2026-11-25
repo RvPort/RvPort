@@ -6,6 +6,14 @@
 
 后端 SHALL 将当前有效 `KB_SCAN` 运行的 findings 投影为 `scan_result.json` 条目集合，条目 `id` SHALL 使用 `evidence.scannerFindingId`，`sourceFindingIds` SHALL 携带当前运行 findings 的数据库 ID；投影 MUST NOT 以每运行变化的 `fingerprint` 或数据库 UUID 作为跨运行身份。
 
+条目文件的结构 SHALL 遵循 riscv-migrate 技能协议：顶层为 `target`、`suggestion_class_count`、`missing_class_count`、`suggestion_class[]`、`missing_class[]`；每个条目含 `class_type`、`file_name`、`file_path`、`solver_name`、`solver_type`、`solver_description`、`start_line`、`end_line`、`migration_suggestion`、`status`、`marking`。`file_path` SHALL 是 agent 实际能打开的绝对路径（工作区里 `source/` 之下），容器模式为 `/app/source/<相对路径>`。平台专有字段（`id`、`sourceFindingIds`、`symbol`、`matched_text`、`severity`、`blocking`、`uncertain`、`description`、`evidence`）SHALL 作为附加字段一并输出。平台的知识库扫描不产出「缺失架构实现」类条目，`missing_class` SHALL 为空数组。已由协议字段表达的信息（文件相对路径、行号、建议文本）MUST NOT 再以别的字段名重复出现。
+
+#### Scenario: 条目文件结构
+- **WHEN** 后端写出 `input/scan_result.json`
+- **THEN** 顶层与条目字段 SHALL 如上所述，`suggestion_class_count` SHALL 等于 `suggestion_class` 的长度
+- **AND** 每个条目 SHALL 带有 `id`，供后端核对 agent 的结论
+- **AND** `start_line` SHALL 不大于 `end_line`；行区间缺失或倒置时 SHALL 退化为单行
+
 #### Scenario: 过滤不可迁移条目
 - **WHEN** 某 finding 的 `evidence.actionable` 为 false、`conclusionStatus` 为 inactive，或 severity 为 info 且非 actionable
 - **THEN** SHALL 不产生投影条目，原始 finding 保留
@@ -13,8 +21,14 @@
 
 #### Scenario: solver_type 映射
 - **WHEN** 投影 `fact.kind`
-- **THEN** intrinsic_call 与 vector_type SHALL 映射 intrinsics；macro_invocation 与 macro_replacement SHALL 映射 macros；architecture_probe SHALL 映射 inline_asm 且 `.S`/`.s`/`.asm` 文件归 asm_file；compiler_flag 与 build_argument SHALL 按构建文件类型归 build_makefile 或 build_cmake；header_include SHALL 映射 headers；test_asset SHALL 跳过；未知 kind SHALL 兜底 inline_asm
-- **AND** 映射源 MUST NOT 使用 `findings.category`（conclusion.findingType）
+- **THEN** `solver_type` SHALL 取 riscv-migrate 技能协议的整数枚举：intrinsic_call 与 vector_type SHALL 映射 1；macro_invocation、macro_replacement 与 header_include SHALL 映射 3；compiler_flag 与 build_argument SHALL 按构建文件类型映射 0（Makefile）或 10（CMake 等）；test_asset SHALL 跳过；未识别的 kind SHALL 兜底 3
+- **AND** `architecture_probe` 一个 kind 涵盖汇编、宏、构建选择三种性质，SHALL 再按 `evidence.findingType` 与文件类型细分：汇编文件（`.S`/`.s`/`.asm`）归 5；汇编指令与内联汇编候选归 4；构建选择与测试选择类按构建文件类型归 0 或 10；其余（架构标识符候选、平台宏引用、目标属性候选）归 3
+- **AND** 主分类 MUST 以 `evidence.factKind` 为准，MUST NOT 以 `findings.category`（即 `evidence.findingType`）替代——同一个 findingType 可对应多种 factKind，混用会把不同性质的事实并为一类；findingType 仅用于上述 kind 内部的细分
+- **AND** 条目 SHALL 同时给出与整数一致的 `solver_name` 与 `solver_description`
+
+> 修订记录（2026-11-24）：`solver_type` 原为平台自定义的字符串（intrinsics / macros / inline_asm / asm_file /
+> build_makefile / build_cmake / headers），技能按协议的整数枚举分流，字符串值会全部失配；且旧规则把所有
+> architecture_probe 归为内联汇编，构建文件条目因此被套上汇编的完整流程。现改为整数枚举并按 findingType 细分。
 
 #### Scenario: 一对多展开
 - **WHEN** 单个 finding 展开为多条目
@@ -40,6 +54,7 @@
 ### Requirement: Agent 执行必须在隔离 workspace 内保持输入完整性
 
 后端 SHALL 在独立 workspace 内组装 `input/scan_result.json`、`input/manifest.json`、按投影涉及文件物化的 `source/` 与 `.opencode/agent/` 技能；执行前后 SHALL 对输入文件做 hash 校验；workspace 在产物入库后 SHALL 清理。
+（容器模式的技能随执行器镜像内置、不释放到 workspace，见 `add-ai-migration-executor`；两种模式共用同一份条目文件，`file_path` 按各自模式下 agent 实际看到的 `source/` 位置定位。）
 
 #### Scenario: 只物化涉及文件
 - **WHEN** 组装 source 树

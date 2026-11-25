@@ -73,8 +73,8 @@
   color: var(--ant-color-text-tertiary);
 }
 
-// 补丁查看器：保证可用高度，内容超出时由编辑器自身滚动。
+// 补丁查看器：高度由 PatchView 的 height 属性交给编辑器（样式表里的高度会被
+// 编辑器组件的内联 height 覆盖）；内容超出时由编辑器自身滚动。
 .patch {
-  height: clamp(320px, 55vh, 720px);
   min-height: 0;
 }
