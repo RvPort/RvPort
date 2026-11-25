@@ -182,3 +182,9 @@ databaseChangeLog:
   - include:
       file: changes/0137-retire-node-confirmation.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/0138-source-analysis-input-plans.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0139-report-ai-review-checkpoints.sql
+      relativeToChangelogFile: true

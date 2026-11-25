@@ -69,6 +69,42 @@ class ReportAiReviewRuntimeTests {
         assertThat(result.summary()).containsEntry("valid",1); assertThat(path.get()).doesNotExist();
         verify(models,never()).resolveAgentForStage(any(),any());
     }
+    @Test void resumesOnlyValidatedBatchesAndDoesNotPublishIncompleteSecondBatch() throws Exception {
+        var initial=manifest(ReportMode.AI_ENHANCED,"src/a.c",1,ReviewState.PENDING_REVIEW);
+        var items=new ArrayList<ReviewItemSnapshot>();
+        for(int index=1;index<=33;index++) items.add(new ReviewItemSnapshot(new UUID(0,index),"SCANNER","KB_FINDING",
+                revision,new UUID(1,index),"identity"+index,"evidence",Map.of("riskLevel","LOW"),"候选","Candidate",
+                "key","src/a.c",1,1,1,1,hash,null,null,new ReviewDecision(ReviewState.PENDING_REVIEW,null,null),null,Map.of(),actor));
+        var manifest=new ReportReviewManifest(project,revision,"ctx",ReportMode.AI_ENHANCED,null,initial.source(),items,null,null);
+        var checkpoints=mock(ReportAiCheckpointRepository.class);
+        Map<Integer,List<AiReviewValidator.Result>> saved=new HashMap<>();
+        when(checkpoints.find(any(),anyString(),anyString(),anyInt())).thenAnswer(call->Optional.ofNullable(saved.get(call.getArgument(3))));
+        doAnswer(call->{saved.put(call.getArgument(3),call.getArgument(4));return null;})
+                .when(checkpoints).save(any(),anyString(),anyString(),anyInt(),anyList());
+        when(context.publish(any())).thenAnswer(call->((java.util.function.Supplier<?>)call.getArgument(0)).get());
+        var calls=new java.util.concurrent.atomic.AtomicInteger();
+        when(adapter.run(any())).thenAnswer(call->{
+            AgentRuntimeExecutionRequest request=call.getArgument(0);
+            if(calls.incrementAndGet()==2) return new CodexProcessResult(1,false,"","");
+            List<String> output=new ArrayList<>();
+            for(String line:Files.readAllLines(request.workspace().resolve("input/findings.jsonl"))) {
+                var item=json.readTree(line);
+                output.add(json.writeValueAsString(Map.of("inputId",item.path("inputId").asText(),"verdict","CONFIRMED_ISSUE",
+                        "reason","源码确认","reasonEn","Confirmed against source","evidenceRefs",item.path("evidenceRefs"))));
+            }
+            Files.write(request.workspace().resolve("output/results.jsonl"),output);
+            return new CodexProcessResult(0,false,"","");
+        });
+        var runtime=new ReportAiReviewRuntime(models,registry,artifacts,json,checkpoints);
+        assertThatThrownBy(()->runtime.run(manifest,selection,context)).hasMessage("REPORT_AI_EXECUTION_FAILED");
+        assertThat(saved).containsOnlyKeys(0); assertThat(saved.get(0)).hasSize(32);
+        var result=runtime.run(manifest,selection,context);
+        assertThat(calls.get()).isEqualTo(3);
+        assertThat(result.results()).hasSize(33).extracting(AiReviewValidator.Result::inputId)
+                .containsExactlyElementsOf(items.stream().map(ReviewItemSnapshot::id).toList());
+        assertThat(result.summary()).containsEntry("validatedItems",33).containsEntry("validatedBatches",2);
+        verify(checkpoints,times(2)).save(any(),anyString(),anyString(),anyInt(),anyList());
+    }
     @Test void timeoutNonzeroMissingOutputAndTamperedSourceNeverPublishAReview() throws Exception {
         var manifest=manifest(ReportMode.AI_ENHANCED,"src/a.c",1,ReviewState.TO_FIX);
         when(adapter.run(any())).thenReturn(new CodexProcessResult(0,true,"",""),new CodexProcessResult(126,false,"","REPORT_AI_SANDBOX_UNAVAILABLE"),
@@ -127,5 +163,40 @@ class ReportAiReviewRuntimeTests {
         });
         var result = service.run(manifest(ReportMode.AI_ENHANCED,"src/a.c",line,ReviewState.PENDING_REVIEW),selection,context);
         assertThat(result.results().getFirst().verdict()).isEqualTo(AiReviewValidator.Verdict.INSUFFICIENT_EVIDENCE);
+    }
+
+    @Test void checkpointRecoveryRevalidatesSourceAndNeverReexecutesAValidatedBatch() throws Exception {
+        var store = mock(ReportAiCheckpointRepository.class);
+        var batched = new ReportAiReviewRuntime(models, registry, artifacts, json, store);
+        var manifest = manifest(ReportMode.AI_ENHANCED,"src/a.c",1,ReviewState.PENDING_REVIEW);
+        var cache = new java.util.concurrent.atomic.AtomicReference<List<AiReviewValidator.Result>>();
+        when(context.publish(any())).thenAnswer(call -> ((java.util.function.Supplier<?>)call.getArgument(0)).get());
+        when(store.find(any(),anyString(),anyString(),eq(0))).thenAnswer(call -> Optional.ofNullable(cache.get()));
+        doAnswer(call -> { cache.set(call.getArgument(4)); return null; }).when(store).save(any(),anyString(),anyString(),eq(0),anyList());
+        when(adapter.run(any())).thenAnswer(call -> {
+            AgentRuntimeExecutionRequest request = call.getArgument(0);
+            var row=json.readTree(Files.readString(request.workspace().resolve("input/findings.jsonl")));
+            Files.writeString(request.workspace().resolve("output/results.jsonl"),json.writeValueAsString(Map.of(
+                    "inputId",id,"verdict","CONFIRMED_ISSUE","reason","需要修复","reasonEn","Fix required","evidenceRefs",row.get("evidenceRefs"))));
+            return new CodexProcessResult(0,false,"","");
+        });
+        var first = batched.run(manifest, selection, context);
+        var recovered = batched.run(manifest, selection, context);
+        assertThat(recovered.results()).isEqualTo(first.results());
+        assertThat(recovered.summary()).containsEntry("totalItems",1).containsEntry("validatedItems",1).containsEntry("validatedBatches",1);
+        verify(adapter, times(1)).run(any()); verify(store,times(1)).save(any(),anyString(),anyString(),eq(0),anyList());
+        when(artifacts.download(artifact)).thenReturn(new StoredArtifactResource(null,new ByteArrayResource(new byte[]{1})));
+        assertThatThrownBy(() -> batched.run(manifest,selection,context)).hasMessage("SOURCE_CONTENT_CHANGED");
+    }
+
+    @Test void configurationChangesBeforeBatchCannotMixWithCheckpointResults() throws Exception {
+        var original = models.resolveExecution(actor,project,profile,runtime);
+        var changedModel = new CodexProviderResolvedConfig(true,"opencode",CodexProviderType.OPENAI_COMPATIBLE,
+                "http://mock.invalid","different-model",CodexProviderWireApi.CHAT,"fake",10,15);
+        var changed = new AgentModelRuntimeConfig(original.runtime(), original.modelProfile(), changedModel);
+        when(models.resolveExecution(actor,project,profile,runtime)).thenReturn(original, changed);
+        assertThatThrownBy(() -> service.run(manifest(ReportMode.AI_ENHANCED,"src/a.c",1,ReviewState.TO_FIX),selection,context))
+                .hasMessage("REPORT_AI_CONFIGURATION_CHANGED");
+        verifyNoInteractions(adapter);
     }
 }

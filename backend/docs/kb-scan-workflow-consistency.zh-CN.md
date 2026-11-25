@@ -1,52 +1,37 @@
 # KB 扫描上下文与历史结果
 
-## 当前结果的判定
+## 源码扫描与可选增强
 
-KB 扫描必须绑定本项目源码在当前源环境、项目运行环境版本下选中的成功 `SOURCE_ONLY` x86 构建。构建按活动状态优先，再按创建时间及 ID 降序选择；新失败或活动构建不会回退到旧成功构建，`BOTH` 不能替代 `SOURCE_ONLY`。
+KB Scanner 本身直接扫描源码。本次只调整后端资格、固定输入、可选编译上下文和结果有效性，不修改扫描算法。
 
-`kb_scan_runs` 和任务输入保存 `source_environment_id`、`runtime_environment_version`、`build_run_id`。其中运行环境版本来自 `project_runtime_environments.version`，不是单台环境的配置版本。创建时在同一事务内取得项目上下文锁，再校验和创建任务；源码、运行环境、构建写入的数据库 trigger 使用同一事务锁。
+固定源码与扫描器可用即可创建任务；不要求远程环境或 x86 构建。`SOURCE_DISCOVERY` 不提供构建引用，不把内部分析计划登记为真实编译数据库。`BUILD_ARTIFACTS` 只消费创建时选定、同项目同源码且摘要/架构/归属匹配的成功 `SOURCE_ONLY` 构建。活动或失败的新构建不回退旧成功构建，`BOTH` 不代替前置构建。
 
 | 情况 | overview KB | latest | 能否创建扫描 |
 | --- | --- | --- | --- |
-| 首次上传，无构建、无扫描 | PENDING / KB_SCAN_MISSING | EMPTY | 409，X86_BUILD_MISSING |
-| 只有旧扫描或缺少绑定的历史扫描 | PENDING / KB_SCAN_STALE | STALE，保留原执行状态 | 按当前构建独立判定 |
-| 当前有效扫描排队或运行 | RUNNING | CURRENT | 当前成功构建满足前置 |
-| 当前有效扫描成功，包括零 finding | DONE | CURRENT | 当前成功构建满足前置 |
-| 当前有效扫描失败、取消、超时 | BLOCKED | CURRENT | 不以更早成功替代 |
+| 仅源码，无扫描、无构建 | PENDING | EMPTY | 源码和扫描器就绪即可 |
+| 当前扫描运行中 | RUNNING | 当前执行事实 | 按既有并发限制 |
+| 当前合法扫描成功，包括零发现 | DONE | 当前成功产出 | 可以重新发起 |
+| 最近扫描失败、取消或超时 | BLOCKED | execution 保留失败，currentResult 可另指旧有效产出 | 可以重新发起 |
+| 只有旧源码或实际已失效的增强结果 | PENDING | STALE，历史保留 | 按当前必需输入判定 |
 
-环境和源码已就绪时，overview 将 x86 构建排在 KB 扫描之前。overview、KB latest 和 readiness 采用可重复读事务，避免单个响应混用并发变更前后的上下文。
+`X86_BUILD.required=false`，overview 的前置构建 `optional=true`。依赖分析仍要求有效成功 `SOURCE_ONLY`；后续 `BOTH` 只要求源码、所需环境与构建配置，自动化测试仍要求对应双端成功验证。
 
-## API 与历史读取
+## 固定计划与有效性
 
-创建入口未满足前置时返回 `409 PREREQUISITE_NOT_SATISFIED`，details 包含 `stageId=kb` 和 prerequisite 的 key、status、reasonCode。不会留下 task、event、scan 或队列消息。显式指定本项目历史源码仍受同一构建前置约束；跨项目请求仍拒绝。
+任务固定 `AnalysisInputPlan`、源码摘要、规范化语言/架构/范围、规则版本和可选制品 ID/hash。请求计划和实际计划分别持久化。可选制品不可用时记录降级，不从其他构建补绑；已固定降级的重试不自动升级。旧协议载荷缺少计划时受控失败并提示重发。
 
-KB 响应增加 `executionContext`、`current`、`message`、`message_en`，不提供服务器路径、凭据或存储 key。`currentSourceRevision` 仅表示源码 ID 是否相同，完整有效性以 `current` 为准。失效原因包括：
+源码结果不因未消费的环境或构建变化失效。同源码后来有可信构建只提示 `enhancementAvailable`；新合法分析结果发布后才替换报告来源。增强结果校验实际消费的构建与环境版本；源码切换后旧结果仅历史可读。项目权限、源码路径、制品归属和租约检查仍适用。
 
-- `KB_SCAN_CONTEXT_UNKNOWN`：旧记录或绑定不完整。
-- `KB_SCAN_SOURCE_CHANGED`：项目或当前源码不匹配。
-- `KB_SCAN_ENVIRONMENT_CHANGED`：源环境或运行环境版本变化。
-- `KB_SCAN_BUILD_NOT_READY`：当前选中构建不满足成功前置。
-- `KB_SCAN_BUILD_CHANGED`：绑定构建已被新构建替代。
+原始发现不由 AI 改写。AI 与人工处置统一在结果报告阶段，使用触发者个人 `REPORT_AI_REVIEW` 配置；不恢复旧 KB AI 建议或节点确认接口。
 
-默认 `currentOnly` 列表只返回完整匹配当前上下文的记录；`includeStale=true` 可以读取历史。latest 无当前记录时返回按创建时间最近的历史记录，即使项目已无 active source；没有任何记录才返回 EMPTY。历史详情、finding、artifact 和既有报告快照继续保留。
+## 证据与失败
 
-报告阶段 readiness 的 KB 前置只接受当前有效成功扫描。自动选择和新报告的输入解析过滤过期 KB finding，包括已经 confirmed 的历史引用；过滤不会删除这些确认记录。零 finding 仍是有效扫描结果。
+缺少构建、编译数据库或 bitcode 不直接导致专项 `PARTIAL`。完成度取自合法发布的工具输出，报告分别保留输入来源、覆盖范围、解析假设、实际失败及缺失证据。技术失败的半截输出不能作为合法分析结果。
 
-## worker 行为
+KB 子进程非零退出只提取受控、限长的诊断。明确的 `pipeline.memory-budget-exceeded` 才映射内存超限；137 或无完整输出不能独断为 OOM。最近失败诊断与旧有效结果并列返回，不发布残留 findings。
 
-worker 启动前以扫描记录为事实源，对比任务输入和当前构建、环境版本；旧载荷或失效上下文受控失败，记录 `KB_SCAN_CONTEXT_INVALID` 和中英文说明，不启动 scanner。仅 active source 切换时，只要绑定历史源码的构建和环境仍有效，可以继续执行。
+## 对接与验证
 
-compile database 只读取绑定构建：可用且归属正确为 USED；成功构建未提供数据库为 NOT_AVAILABLE；artifact 缺失、归属错误、下载或内容校验失败为 FALLBACK。没有成功构建不属于降级路径。scanner 启动后发生上下文变化，保留原输入及真实终态，由查询规则将结果判为历史。
+完整字段、状态和下载语义见 [源码独立分析接口契约](source-analysis-input-policy.zh-CN.md)。迁移 0138 允许源码计划没有构建/环境引用，同时约束增强计划的必要关联；不推测回填旧记录。API 与 worker 使用同版本，不承诺旧程序直接处理新无构建任务。
 
-## 升级与回滚
-
-1. 备份数据库并停止接收新的 KB 任务，等待活动任务结束或按既有取消流程结束；API 和 worker 应共同升级。
-2. 由新 API 执行 Liquibase `0128`，再启动同版本 worker。三个新增字段允许全部为空，禁止部分填写；历史记录不推测回填。旧排队任务由新 worker 判为失效，应在构建前置满足后重新提交。
-3. 验证创建拒绝、latest、overview、readiness，以及已有历史详情可读。只允许新版本写入完整绑定。
-4. 如需回滚，先停止新任务并停止 API/worker，恢复已验证的数据库备份与对应旧版本镜像。不要在仍有新 worker 的情况下删除列或 trigger；旧版本恢复后不再具备本变更的一致性保证，应继续禁用 KB 创建直到修复版本部署。
-
-## 验证入口
-
-从仓库根目录执行 Docker 单元测试和 Python 覆盖率命令，见 [开发指南](../../docs/开发指南.md)。Java `clean verify` 保持全部自有包及整体 LINE/BRANCH ≥90%，仅排除生成的 jOOQ 类型。独立数据库测试 `KbScanDatabaseTests,LiquibaseMigrationTests` 需显式提供 `RVPORT_MIGRATION_TEST_ENABLED=true` 及测试 JDBC 参数，不能指向部署数据库。
-
-本变更实际执行记录见 [验收记录](../openspec/changes/archive/2026-10-28-fix-kb-scan-workflow-consistency/verification.md)；原始报告位于根目录 `.migration-reports/fix-kb-scan-workflow-consistency/`（不纳入公开源码）。
+单测、JaCoCo/Python 覆盖率及独立 Compose 操作见 [开发指南](../../docs/开发指南.md)和本次 change 的验收记录。历史 change 中的测试结果不是当前版本的验收证明。

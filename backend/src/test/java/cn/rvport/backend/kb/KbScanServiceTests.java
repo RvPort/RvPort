@@ -71,9 +71,17 @@ class KbScanServiceTests {
 
 
     @Mock private KbScanContextService scanContextService;
+    @Mock private cn.rvport.backend.analysis.SourceAnalysisPlanService sourcePlans;
 
     @org.junit.jupiter.api.BeforeEach
     void contextDefaults() {
+        org.mockito.Mockito.lenient().when(sourcePlans.createKb(any(), any())).thenAnswer(call -> {
+            SourceRevisionView revision = call.getArgument(0);
+            return new cn.rvport.backend.analysis.AnalysisInputPlan(1, revision.projectId(), revision.id(), "a".repeat(64),
+                    "KB", "0.1.0", "kb-source@1", call.getArgument(1),
+                    cn.rvport.backend.analysis.AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY, null, List.of(), List.of(), List.of(), null);
+        });
+        org.mockito.Mockito.lenient().when(sourcePlans.enhance(any(), any(), any())).thenCallRealMethod();
         org.mockito.Mockito.lenient().when(scanContextService.resolve(any(), any()))
                 .thenAnswer(call -> KbContextFixtures.ready(call.getArgument(0), call.getArgument(1)));
         org.mockito.Mockito.lenient().when(scanContextService.current(any())).thenAnswer(call -> {
@@ -87,16 +95,33 @@ class KbScanServiceTests {
     private Path tempDir;
 
     @Test
-    void rejectsScanWithoutCurrentSuccessfulBuildBeforeAnyCreationSideEffects() throws Exception {
+    void createsSourceScanWithoutSuccessfulBuildAndPinsRulesAndLanguageIdentity() throws Exception {
         UUID project = UUID.randomUUID();
         UUID source = UUID.randomUUID();
         when(sourceRepository.findActive(project)).thenReturn(Optional.of(sourceRevision(project, source, tempDir)));
         org.mockito.Mockito.doReturn(new KbScanContextService.Selection(project, source, KbContextFixtures.ENV, 7L, null))
                 .when(scanContextService).resolve(project, source);
-        assertThatThrownBy(() -> service().create(project, null, UUID.randomUUID(), false, new MockHttpServletRequest()))
-                .isInstanceOf(cn.rvport.backend.workflow.PrerequisiteNotSatisfiedException.class)
-                .extracting("code").isEqualTo("PREREQUISITE_NOT_SATISFIED");
-        org.mockito.Mockito.verifyNoInteractions(taskService, kbScanRepository, auditLogService);
+        Path rules = Files.createDirectories(tempDir.resolve("rules"));
+        Files.writeString(rules.resolve("fixture.json"), "{}");
+        var properties = new RvPortProperties(null, new RvPortProperties.KbScan(null, null, rules.toString(),
+                null, null, null, "c,cpp", "x86", "riscv64", null, null), null);
+        UUID taskId = UUID.randomUUID();
+        when(taskService.create(any())).thenReturn(task(taskId, project));
+        when(kbScanRepository.createRun(any(), eq(taskId))).thenReturn(UUID.randomUUID());
+        org.mockito.Mockito.doAnswer(call -> new cn.rvport.backend.analysis.AnalysisInputPlan(1, project, source,
+                "a".repeat(64), "KB", "0.1.0", "kb-source@1", call.getArgument(1),
+                cn.rvport.backend.analysis.AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY, null, List.of(), List.of(), List.of(), null))
+                .when(sourcePlans).createKb(any(), any());
+        service(properties).create(project, new KbScanRequest(null, null, "cpp,c,c", "sparc", null, null),
+                UUID.randomUUID(), false, new MockHttpServletRequest());
+        ArgumentCaptor<KbScanInput> input = ArgumentCaptor.forClass(KbScanInput.class);
+        verify(kbScanRepository).createRun(input.capture(), eq(taskId));
+        assertThat(input.getValue().language()).isEqualTo("c,cpp");
+        assertThat(input.getValue().executionContext().sourceOnly()).isTrue();
+        var plan = input.getValue().executionContext().inputPlan();
+        assertThat(plan.identity().requestedSourceArch()).isEqualTo("sparc");
+        assertThat(plan.identity().architectureAssumed()).isTrue();
+        assertThat(plan.identity().ruleVersion()).isEqualTo(cn.rvport.backend.analysis.AnalysisDirectoryFingerprint.digest(rules));
         var order = org.mockito.Mockito.inOrder(projectAccessService, scanContextService, sourceRepository);
         order.verify(projectAccessService).requireProjectAccess(eq(project), any(), eq(false));
         order.verify(scanContextService).lock(project);
@@ -161,7 +186,7 @@ class KbScanServiceTests {
         verify(taskService).create(commandCaptor.capture());
         assertThat(commandCaptor.getValue().type()).isEqualTo(RvPortTaskTypes.KB_SCAN);
         assertThat(commandCaptor.getValue().inputSnapshot().get("sourceRevisionId")).isEqualTo(sourceRevisionId);
-        assertThat(commandCaptor.getValue().inputSnapshot().get("executionContext")).isEqualTo(KbContextFixtures.CONTEXT);
+        assertThat(((KbExecutionContext) commandCaptor.getValue().inputSnapshot().get("executionContext")).sourceOnly()).isTrue();
         assertThat(commandCaptor.getValue().inputSnapshot().toString()).doesNotContain(source.toString());
         assertThat(commandCaptor.getValue().inputSnapshot().get("excludePaths")).isEqualTo(List.of(".git", "build"));
     }
@@ -717,6 +742,7 @@ class KbScanServiceTests {
                 nodeReportInclusionService
         );
         org.springframework.test.util.ReflectionTestUtils.setField(service, "scanContextService", scanContextService);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "sourcePlans", sourcePlans);
         return service;
     }
 

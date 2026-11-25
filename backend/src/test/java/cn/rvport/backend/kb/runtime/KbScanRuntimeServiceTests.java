@@ -95,6 +95,64 @@ class KbScanRuntimeServiceTests {
     @TempDir
     private Path tempDir;
 
+    @Test void sourceOnlyWorkerPinsInventoryAndEffectivePlanWithoutBuildLookup() throws Exception {
+        UUID project=UUID.randomUUID(), source=UUID.randomUUID(), runId=UUID.randomUUID(), taskId=UUID.randomUUID();
+        Path scanner=fakeScannerWithBody("{\"schemaVersion\":\"2.0\",\"summary\":{\"status\":\"complete\"},\"findings\":[],\"diagnostics\":[]}",true);
+        Path rules=Files.createDirectories(scanner.resolve("rulesets/riscv-porting"));
+        Files.writeString(rules.resolve("rule.json"),"{}");
+        Path sourceRoot=Files.createDirectory(tempDir.resolve("fixed-source"));
+        Files.writeString(sourceRoot.resolve("a.c"),"int x;");
+        Files.writeString(sourceRoot.resolve("a.py"),"x=1");
+        var plan=new cn.rvport.backend.analysis.AnalysisInputPlan(1,project,source,"a".repeat(64),"KB","1","p1",
+                cn.rvport.backend.analysis.AnalysisInputPlan.Identity.of("c,python","x86","riscv64",Map.of(),List.of(),
+                        cn.rvport.backend.analysis.AnalysisDirectoryFingerprint.digest(rules)),
+                cn.rvport.backend.analysis.AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY,null,List.of(),List.of(),List.of("COMPILE_DATABASE_UNAVAILABLE"),null);
+        var binding=new cn.rvport.backend.kb.KbExecutionContext(null,null,null,plan);
+        var input=new KbScanInput(project,runId,source,null,"c,python","x86","riscv64",Map.of(),List.of(),binding);
+        var run=new KbScanView(runId,project,taskId,source,null,Map.of(),TaskStatus.QUEUED,Map.of(),null,null,binding);
+        var revision=sourceRevision(project,source,sourceRoot);
+        when(context.task()).thenReturn(task(taskId,project));
+        when(kbScanRepository.findByTaskId(taskId)).thenReturn(Optional.of(run));
+        when(sourceRepository.findById(source)).thenReturn(Optional.of(revision));
+        when(scanContextService.requireExecution(run,input)).thenReturn(null);
+        when(toolRunRepository.create(any(),any(),any(),any(),any(),any(),any())).thenReturn(UUID.randomUUID());
+        var plans=org.mockito.Mockito.mock(cn.rvport.backend.analysis.SourceAnalysisPlanService.class);
+        when(plans.materialize(plan,revision)).thenReturn(new cn.rvport.backend.report.review.ReportSourceMaterializer.Materialized(sourceRoot,sourceRoot,plan.sourceDigest()));
+        var runtime=service(scanner);
+        org.springframework.test.util.ReflectionTestUtils.setField(runtime,"sourcePlans",plans);
+        runtime.scanTask(input,context);
+        verify(kbScanRepository).storeEffectivePlan(runId,plan,plan);
+        ArgumentCaptor<Map<String,Object>> summary=ArgumentCaptor.forClass(Map.class);
+        verify(kbScanRepository).markSucceeded(eq(runId),summary.capture());
+        assertThat(summary.getValue()).containsEntry("analysisComplete",true).containsEntry("resultAvailable",true)
+                .containsEntry("missingEvidence",List.of("COMPILE_DATABASE_UNAVAILABLE"));
+        assertThat((Map<String,Object>)summary.getValue().get("coverage")).containsEntry("knownSourceFileCount",2);
+        verify(buildValidationRepository,never()).findById(any());
+        verify(storedArtifactService,never()).download(any());
+    }
+
+    @Test void oldWorkerPayloadIsRejectedAndItsRunIsMarkedFailed() throws Exception {
+        UUID project=UUID.randomUUID(),source=UUID.randomUUID(),taskId=UUID.randomUUID();
+        var run=cn.rvport.backend.kb.KbContextFixtures.scan(project,source,TaskStatus.QUEUED,cn.rvport.backend.kb.KbContextFixtures.CONTEXT);
+        when(context.task()).thenReturn(task(taskId,project));
+        when(kbScanRepository.findByTaskId(taskId)).thenReturn(Optional.of(run),Optional.empty());
+        var runtime=service(fakeScannerWithBody("{}",true));
+        for(var input:List.of(input(project,source),new KbScanInput(project,null,source,null,"c","x86","riscv64",Map.of(),List.of())))
+            assertThatThrownBy(()->runtime.scanTask(input,context)).hasMessageContaining("固定输入计划");
+        verify(kbScanRepository).markFailed(eq(run.id()),org.mockito.ArgumentMatchers.argThat(value->"ANALYSIS_INPUT_PLAN_REQUIRED".equals(value.get("reasonCode"))));
+        org.mockito.Mockito.verifyNoInteractions(sourceRepository,toolRunRepository);
+    }
+
+    @Test
+    void exactScopeExclusionsUseExistingScannerPathOption() throws Exception {
+        var runtime = service(fakeScannerWithBody("{\"schemaVersion\":\"2.0\"}", true));
+        @SuppressWarnings("unchecked") List<String> command = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                runtime, "command", input(UUID.randomUUID(), UUID.randomUUID()), tempDir, tempDir.resolve("out"),
+                null, List.of("vendor/simd", "src/not selected.c"));
+        assertThat(command).containsSubsequence("--exclude", "", "--exclude-path", "vendor/simd", "--exclude-path", "src/not selected.c");
+        assertThat(command).doesNotContain("--compile-commands");
+    }
+
     @Test
     void contextChangeAfterStartKeepsPinnedBuildAndSuccessfulZeroFindingResult() throws Exception {
         UUID project = UUID.randomUUID(), taskId = UUID.randomUUID(), revision = UUID.randomUUID(), scanId = UUID.randomUUID();
@@ -411,7 +469,7 @@ class KbScanRuntimeServiceTests {
 
         assertThatThrownBy(() -> service(fakeScanner("2.0", false)).scan(input(projectId, sourceRevisionId), context))
                 .isInstanceOf(TaskExecutionException.class)
-                .hasMessage("KB Scanner 执行失败");
+                .extracting("errorCode").isEqualTo("ANALYSIS_PROCESS_FAILED");
         verify(kbScanRepository).markFailed(eq(scanId), any());
         verify(toolRunRepository).finish(eq(toolRunId), eq(TaskStatus.FAILED), eq(1), any());
     }

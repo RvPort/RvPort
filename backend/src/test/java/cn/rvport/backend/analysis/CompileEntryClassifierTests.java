@@ -16,6 +16,29 @@ class CompileEntryClassifierTests {
     @TempDir Path tempDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
+    @Test void relativeEntryUsesItsOwnCaseSensitiveBuildDirectory() throws Exception {
+        Path database = Files.writeString(tempDir.resolve("relative.json"), """
+                [{"file":"main.c","directory":"/remote/Src/lib"},
+                 {"file":"main.c","directory":"/remote/other"},
+                 {"file":"./other.c","directory":"/remote/Src/lib/"},
+                 {"file":"../escape.c","directory":"/remote/Src/lib"}]
+                """);
+        var result = new CompileEntryClassifier(mapper).classify(database, tempDir, "/remote/Src");
+        assertThat(result.projectUnits()).extracting(CompileEntryClassification.ProjectUnit::path)
+                .containsExactly("lib/main.c", "lib/other.c");
+        assertThat(result.excludedReasons()).containsEntry("OUTSIDE_SOURCE_ROOT", 2);
+    }
+
+    @Test void pinnedBuildRootDoesNotUseRandomMaterializationDirectoryName() throws Exception {
+        Path database = Files.writeString(tempDir.resolve("pinned.json"), """
+                [{"file":"/remote/fixed/main.c"},{"file":"/other/main.c"},{"file":"relative.c"},
+                 {"file":"../escape.c"},{"file":"C:/other/main.c"}]
+                """);
+        var result = new CompileEntryClassifier(mapper).classify(database, tempDir, "/remote/fixed/");
+        assertThat(result.projectUnits()).extracting(CompileEntryClassification.ProjectUnit::path).containsExactly("main.c", "relative.c");
+        assertThat(result.excludedReasons()).containsEntry("OUTSIDE_SOURCE_ROOT", 3);
+    }
+
     @Test
     void separatesRawCandidatesProjectUnitsDuplicatesAndBuildProbes() throws Exception {
         Path source = Files.createDirectories(tempDir.resolve("revision-1"));

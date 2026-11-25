@@ -118,6 +118,17 @@ public class ProjectRuntimeEnvironmentService {
     }
 
     @Transactional(readOnly = true)
+    public ProjectRuntimeEnvironmentView requireSource(UUID projectId, UUID actorUserId, boolean superAdmin) {
+        projectAccessService.requireProjectAccess(projectId, actorUserId, superAdmin);
+        ProjectRuntimeEnvironmentView view = config(projectId);
+        if (view.sourceEnvironmentId() == null) {
+            throw badRequest("PROJECT_SOURCE_ENVIRONMENT_REQUIRED", "项目必须配置源环境后才能运行该节点");
+        }
+        requireEnvironment(projectId, view.sourceEnvironmentId(), EnvironmentRole.SOURCE_X86);
+        return view;
+    }
+
+    @Transactional(readOnly = true)
     public long currentVersion(UUID projectId) {
         return repository.currentVersion(projectId);
     }

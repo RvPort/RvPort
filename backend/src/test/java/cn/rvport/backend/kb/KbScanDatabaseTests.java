@@ -50,7 +50,7 @@ class KbScanDatabaseTests {
         String password = System.getenv("RVPORT_MIGRATION_TEST_PASSWORD");
         var admin = new DriverManagerDataSource(baseUrl, user, password);
         new JdbcTemplate(admin).execute("create schema " + schema);
-        var dataSource = new DriverManagerDataSource(baseUrl + (baseUrl.contains("?") ? "&" : "?") + "currentSchema=" + schema + ",public", user, password);
+        var dataSource = new DriverManagerDataSource(baseUrl + (baseUrl.contains("?") ? "&" : "?") + "currentSchema=" + schema, user, password);
         jdbc = new JdbcTemplate(dataSource);
         try {
             try (var connection = dataSource.getConnection()) {
@@ -71,6 +71,8 @@ class KbScanDatabaseTests {
                     assertThat(jdbc.queryForMap("select source_environment_id,runtime_environment_version,build_run_id from kb_scan_runs where id=?", legacy).values())
                             .containsOnlyNulls();
                     assertThat(jdbc.queryForObject("select status from kb_scan_runs where id=?", String.class, legacy)).isEqualTo("SUCCEEDED");
+                    // 历史 0128 升级断言完成后，再用当前完整 schema 验证当前仓储。
+                    liquibase.update(new Contexts(), new LabelExpression());
                 }
             }
             UUID credential = UUID.randomUUID();
@@ -105,7 +107,7 @@ class KbScanDatabaseTests {
             assertThat(repository.findLatestRunByContext(project, source, binding).orElseThrow().id()).isEqualTo(scanFailure);
             UUID scanActive = scan(task("2026-01-01T00:00:00Z"), "RUNNING", binding);
             assertThat(repository.findLatestRunByContext(project, source, binding).orElseThrow().id()).isEqualTo(scanActive);
-            assertThat(repository.findLatestHistoricalRun(project).orElseThrow().id()).isEqualTo(scanFailure);
+            assertThat(repository.findLatestHistoricalRun(project).orElseThrow().id()).isEqualTo(scanActive);
             for (String update : List.of("source_environment_id=null", "runtime_environment_version=null", "build_run_id=null", "runtime_environment_version=-1",
                     "source_environment_id='" + UUID.randomUUID() + "'", "build_run_id='" + UUID.randomUUID() + "'")) {
                 assertThatThrownBy(() -> jdbc.update("update kb_scan_runs set " + update + " where id=?", scanSuccess))
@@ -155,9 +157,24 @@ class KbScanDatabaseTests {
         var taskService = new TaskService(tasks, new TaskEventService(new TaskEventRepository(dsl, mapper), broker, broadcaster),
                 dispatch, mapper, access, null, null, null, new TaskMetadataResolver());
         var audit = mock(AuditLogService.class);
+        var properties = new RvPortProperties(null, new RvPortProperties.KbScan(null,null,sourcePath.toString(),
+                null,null,null,"c,cpp","x86","riscv64",null,null), null);
+        var artifacts = mock(cn.rvport.backend.artifact.StoredArtifactService.class);
         var target = new KbScanService(repository, sources, access, taskService, tasks, null, audit,
-                new RvPortProperties(null, null, null), null, null);
+                properties, artifacts, null);
         ReflectionTestUtils.setField(target, "scanContextService", context);
+        var plans = mock(cn.rvport.backend.analysis.SourceAnalysisPlanService.class);
+        when(plans.createKb(any(),any())).thenAnswer(call -> {
+            var build = context.current(project).build();
+            return new cn.rvport.backend.analysis.AnalysisInputPlan(1, project, source, "a".repeat(64),
+                    "KB", "0.1.0", "kb-source@1", call.getArgument(1),
+                    cn.rvport.backend.analysis.AnalysisInputPlan.InputOrigin.BUILD_ARTIFACTS,
+                    new cn.rvport.backend.analysis.AnalysisInputPlan.BuildBinding(build.id(), project, source, environment,
+                            7, "x86", "fixture", "x86", "fixture"),
+                    List.of(new cn.rvport.backend.analysis.AnalysisInputPlan.Artifact(UUID.randomUUID(), build.id(),
+                            "COMPILE_COMMANDS_JSON", "b".repeat(64))), List.of(), List.of(), null);
+        });
+        ReflectionTestUtils.setField(target, "sourcePlans", plans);
         var factory = new ProxyFactory(target);
         factory.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource()));
         var service = (KbScanService) factory.getProxy();
@@ -169,7 +186,9 @@ class KbScanDatabaseTests {
         verifyNoInteractions(dispatch, broker, broadcaster);
         reset(audit);
         var created = service.create(project, null, actor, true, new MockHttpServletRequest());
-        assertThat(repository.findByTaskId(created.id()).orElseThrow().executionContext()).isEqualTo(context.current(project).executionContext());
+        var createdContext = repository.findByTaskId(created.id()).orElseThrow().executionContext();
+        assertThat(createdContext.buildRunId()).isEqualTo(context.current(project).executionContext().buildRunId());
+        assertThat(createdContext.inputPlan()).isNotNull();
         verify(dispatch).publishAndMarkQueued(any());
         verify(broker).publish(any());
         verify(broadcaster).publishTaskEvent(any());

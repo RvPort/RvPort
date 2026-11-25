@@ -74,6 +74,8 @@ public class KbScanRuntimeService {
     private final ProjectRuntimeEnvironmentRepository runtimeEnvironmentRepository;
     @org.springframework.beans.factory.annotation.Autowired
     private cn.rvport.backend.kb.KbScanContextService scanContextService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private cn.rvport.backend.analysis.SourceAnalysisPlanService sourcePlans;
 
     public KbScanRuntimeService(
             KbScanRepository kbScanRepository,
@@ -97,6 +99,20 @@ public class KbScanRuntimeService {
         this.runtimeEnvironmentRepository = runtimeEnvironmentRepository;
     }
 
+    public void scanTask(KbScanInput input, TaskExecutionContext context) {
+        if (input.executionContext() == null || input.executionContext().inputPlan() == null) {
+            kbScanRepository.findByTaskId(context.task().id()).ifPresent(run -> context.publish(() -> {
+                kbScanRepository.markFailed(run.id(), Map.of("reasonCode", "ANALYSIS_INPUT_PLAN_REQUIRED",
+                        "resultAvailable", false, "message", "旧任务没有固定输入计划，请重新发起扫描。",
+                        "message_en", "This legacy task has no immutable input plan; start a new scan."));
+                return null;
+            }));
+            throw new TaskExecutionException("ANALYSIS_INPUT_PLAN_REQUIRED",
+                    "旧任务没有固定输入计划，请重新发起 / Start a new scan with an immutable input plan", null);
+        }
+        scan(input, context);
+    }
+
     public void scan(KbScanInput input, TaskExecutionContext context) {
         validate(input, context);
         KbScanView run = kbScanRepository.findByTaskId(context.task().id())
@@ -106,6 +122,7 @@ public class KbScanRuntimeService {
         UUID toolRunId = null;
         String phase = "PREPARE";
         Path outputDir = outputDir(run);
+        cn.rvport.backend.report.review.ReportSourceMaterializer.Materialized fixedSource = null;
         try {
             context.throwIfCancellationRequested();
             BuildValidationRunView boundBuild;
@@ -122,10 +139,28 @@ public class KbScanRuntimeService {
             context.publish(() -> { kbScanRepository.markRunning(run.id()); return null; });
             context.progress(5, "准备 KB 扫描");
             Files.createDirectories(outputDir);
-            Path sourceRoot = sourceRoot(sourceRevision);
+            var plan = run.executionContext() == null ? null : run.executionContext().inputPlan();
+            if (plan != null) {
+                Path rules = rulesetPath();
+                if (!rules.isAbsolute()) rules = scannerRoot().resolve(rules);
+                if (!plan.identity().ruleVersion().equals(cn.rvport.backend.analysis.AnalysisDirectoryFingerprint.digest(rules))) {
+                    finishFailed(context, run.id(), null, TaskStatus.FAILED, Map.of("phase", phase,
+                            "reasonCode", "ANALYSIS_RULES_CHANGED", "resultAvailable", false,
+                            "message", "扫描规则已变化，请重新发起", "message_en", "Scan rules changed; start a new scan"));
+                    throw new TaskExecutionException("ANALYSIS_RULES_CHANGED", "扫描规则已变化，请重新发起 / Scan rules changed; start a new scan", null);
+                }
+                fixedSource = sourcePlans.materialize(plan, sourceRevision);
+            }
+            Path sourceRoot = fixedSource == null ? sourceRoot(sourceRevision) : fixedSource.sourceRoot();
             if (!Files.isDirectory(sourceRoot)) {
                 fail(context, run.id(), null, phase, null, "源码工作副本不存在", null);
             }
+            var inventoryIdentity = plan == null ? cn.rvport.backend.analysis.AnalysisInputPlan.Identity.of(
+                    defaultText(input.language(), defaultLanguage()), defaultText(input.sourceArch(), defaultSourceArch()),
+                    defaultText(input.targetArch(), defaultTargetArch()), input.scanScope() == null ? Map.of("mode", "ALL") : input.scanScope(),
+                    safeList(input.excludePaths()), "runtime-inventory@1") : plan.identity();
+            KbSourceInventory.Inventory inventory = plan != null || "PATHS".equals(inventoryIdentity.scanScope().get("mode"))
+                    ? KbSourceInventory.inspect(sourceRoot, inventoryIdentity, 100_000) : null;
 
             toolRunId = context.publish(() -> toolRunRepository.create(
                     run.projectId(),
@@ -139,10 +174,20 @@ public class KbScanRuntimeService {
 
             phase = "SCAN";
             context.progress(15, "执行 KB Scanner");
+            // 重试不能把上次尝试的残留文件当成本次输出。
+            for (String name : List.of("scan-result.json", "scan-report.html", "scan.log")) Files.deleteIfExists(outputDir.resolve(name));
             CompileCommandsContext compileCommands = resolveCompileCommands(boundBuild, run, sourceRoot, outputDir, context);
+            var effectivePlan = plan == null ? null : compileCommands.path() == null
+                    && plan.inputOrigin() == cn.rvport.backend.analysis.AnalysisInputPlan.InputOrigin.BUILD_ARTIFACTS
+                    ? plan.sourceFallback("OPTIONAL_ARTIFACT_UNAVAILABLE") : plan;
+            if (effectivePlan != null) context.publish(() -> {
+                kbScanRepository.storeEffectivePlan(run.id(), plan, effectivePlan);
+                return null;
+            });
             ProcessResult rawProcess;
             try {
-                rawProcess = runScanner(input, sourceRoot, outputDir, compileCommands.path(), context);
+                rawProcess = runScanner(input, sourceRoot, outputDir, compileCommands.path(),
+                        inventory == null ? inventoryIdentity.excludePaths() : inventory.excludedPaths(), context);
             } finally {
                 deleteQuietly(compileCommands.path());
             }
@@ -150,7 +195,11 @@ public class KbScanRuntimeService {
             context.log(TaskLogType.STDOUT, truncate(process.stdout(), LOG_LIMIT));
             context.log(TaskLogType.STDERR, truncate(process.stderr(), LOG_LIMIT));
             if (process.exitCode() != 0) {
-                fail(context, run.id(), toolRunId, phase, process.exitCode(), "KB Scanner 执行失败", process);
+                var diagnostic = cn.rvport.backend.analysis.AnalysisFailureDiagnostics.kb(
+                        outputDir.resolve("scan-result.json"), process.exitCode(), memoryLimitMib());
+                diagnostic.put("phase", phase);
+                finishFailed(context, run.id(), toolRunId, TaskStatus.FAILED, diagnostic);
+                throw new TaskExecutionException(diagnostic.get("reasonCode").toString(), diagnostic.get("message").toString(), null);
             }
             context.throwIfCancellationRequested();
 
@@ -179,7 +228,8 @@ public class KbScanRuntimeService {
             });
             Map<String, Object> summary = sanitizeMap(
                     safeSummary(result, findings.size(), compileCommands.summary()), sourceRoot, outputRoot());
-
+            if (effectivePlan != null) summary.putAll(cn.rvport.backend.analysis.AnalysisEvidenceSummary.from(effectivePlan));
+            if (inventory != null) summary.put("coverage", inventory.coverage());
 
             List<StoredArtifactView> artifacts = new ArrayList<>();
             artifacts.add(saveArtifact(context, run, KbScanArtifactType.SCAN_RESULT_JSON, resultFile, Map.of("findingCount", findings.size(), "schemaVersion", result.schemaVersion())));
@@ -219,11 +269,18 @@ public class KbScanRuntimeService {
         } catch (Exception ex) {
             finishFailed(context, run.id(), toolRunId, TaskStatus.FAILED, phaseSummary(phase, "KB 扫描失败"));
             throw new TaskExecutionException(TaskErrorCode.HANDLER_FAILED, "KB 扫描失败", ex);
+        } finally {
+            if (fixedSource != null) {
+                try { fixedSource.close(); } catch (IOException ignored) { /* 不改变已发布结果。 */ }
+            }
             }
     }
 
-    private ProcessResult runScanner(KbScanInput input, Path sourceRoot, Path outputDir, Path compileCommandsPath, TaskExecutionContext context) throws IOException, InterruptedException {
-        List<String> command = command(input, sourceRoot, outputDir, compileCommandsPath);
+    private ProcessResult runScanner(KbScanInput input, Path sourceRoot, Path outputDir, Path compileCommandsPath,
+            List<String> excludedPaths, TaskExecutionContext context) throws IOException, InterruptedException {
+        List<String> command = command(input, sourceRoot, outputDir, compileCommandsPath, excludedPaths);
+        if (command.stream().mapToLong(value -> value.getBytes(StandardCharsets.UTF_8).length + 1L).sum() > 65_536)
+            throw new IOException("ANALYSIS_SCOPE_ARGUMENT_LIMIT_EXCEEDED");
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(scannerRoot().toFile());
         // kb-scanner 进程级内存硬闸门：扫描器入口据此 setrlimit(RLIMIT_AS)，超限转
@@ -242,7 +299,7 @@ public class KbScanRuntimeService {
         return new ProcessResult(process.exitValue(), stdout.join(), stderr.join(), Duration.ofNanos(System.nanoTime() - started));
     }
 
-    private List<String> command(KbScanInput input, Path sourceRoot, Path outputDir, Path compileCommandsPath) {
+    private List<String> command(KbScanInput input, Path sourceRoot, Path outputDir, Path compileCommandsPath, List<String> excludedPaths) {
         List<String> command = new ArrayList<>(splitCommand(pythonCommand()));
         command.add("-m");
         command.add("kb_scanner");
@@ -264,7 +321,11 @@ public class KbScanRuntimeService {
         command.add("--target-arch");
         command.add(defaultText(input.targetArch(), defaultTargetArch()));
         command.add("--exclude");
-        command.add(String.join(",", safeList(input.excludePaths())));
+        command.add("");
+        for (String path : excludedPaths) {
+            command.add("--exclude-path");
+            command.add(path);
+        }
         if (compileCommandsPath != null) {
             command.add("--compile-commands");
             command.add(compileCommandsPath.toString());
@@ -273,11 +334,15 @@ public class KbScanRuntimeService {
     }
 
     private CompileCommandsContext resolveCompileCommands(BuildValidationRunView buildRun, KbScanView run, Path sourceRoot, Path outputDir, TaskExecutionContext context) {
+        if (buildRun == null) return CompileCommandsContext.notAvailable("SOURCE_DISCOVERY");
         Map<String, Object> compileDatabase = mapValue(buildRun.buildFacts().get("compileDatabase"));
         if (!Boolean.TRUE.equals(compileDatabase.get("available"))) {
             return withBuild(CompileCommandsContext.notAvailable("COMPILE_DATABASE_NOT_AVAILABLE"), buildRun);
         }
-        UUID artifactId = uuidValue(compileDatabase.get("storedArtifactId"));
+        var requestedPlan = run.executionContext() == null ? null : run.executionContext().inputPlan();
+        var bound = requestedPlan == null ? null : requestedPlan.artifacts().stream()
+                .filter(a -> BuildValidationArtifacts.COMPILE_COMMANDS_JSON.equals(a.type())).findFirst().orElse(null);
+        UUID artifactId = requestedPlan == null ? uuidValue(compileDatabase.get("storedArtifactId")) : bound == null ? null : bound.id();
         if (artifactId == null) {
             return withBuild(CompileCommandsContext.fallback("ARTIFACT_ID_MISSING"), buildRun);
         }
@@ -289,10 +354,16 @@ public class KbScanRuntimeService {
                     || !BuildValidationArtifacts.COMPILE_COMMANDS_JSON.equals(resource.artifact().artifactType())) {
                 return withBuild(CompileCommandsContext.fallback("ARTIFACT_OWNER_MISMATCH"), buildRun);
             }
+            byte[] content;
+            int budget = (int) Math.min(maxOutputBytes(), 50L * 1024 * 1024);
+            try (var stream = resource.resource().getInputStream()) { content = stream.readNBytes(budget + 1); }
+            if (content.length > budget) return withBuild(CompileCommandsContext.fallback("ARTIFACT_SIZE_LIMIT_EXCEEDED"), buildRun);
+            if (bound != null && (!bound.sha256().equals(resource.artifact().sha256()) || !bound.sha256().equals(sha256(content))))
+                return withBuild(CompileCommandsContext.fallback("ARTIFACT_HASH_MISMATCH"), buildRun);
             Path compileCommandsPath = outputDir.resolve("compile_commands.input.json").toAbsolutePath().normalize();
             boolean pathRewritten = writeLocalCompileCommands(
                     compileCommandsPath,
-                    resource.resource().getContentAsByteArray(),
+                    content,
                     buildRun.workingDirectory(),
                     sourceRoot
             );
@@ -630,6 +701,9 @@ public class KbScanRuntimeService {
         summary.put("scan", result.scan() == null ? Map.of() : objectMapper.convertValue(result.scan(), MAP_TYPE));
         summary.put("findingCount", findingCount);
         summary.put("summary", result.summary() == null ? Map.of() : result.summary());
+        summary.put("resultAvailable", true);
+        summary.put("analysisComplete", result.summary() != null && "complete".equals(result.summary().get("status")));
+        summary.put("analysisStatus", result.summary() == null ? "UNKNOWN" : result.summary().getOrDefault("status", "UNKNOWN"));
         summary.put("diagnosticCount", result.diagnostics() == null ? 0 : result.diagnostics().size());
         summary.put("diagnostics", result.diagnostics() == null ? List.of() : result.diagnostics());
         summary.put("compileCommands", compileCommands == null ? CompileCommandsContext.notAvailable("NOT_RESOLVED").summary() : compileCommands);
@@ -700,7 +774,8 @@ public class KbScanRuntimeService {
         context.publish(() -> {
             if (status == TaskStatus.CANCELLED) kbScanRepository.markCancelled(runId, summary);
             else kbScanRepository.markFailed(runId, summary);
-            if (toolId != null) toolRunRepository.finish(toolId, status, null, summary);
+            if (toolId != null) toolRunRepository.finish(toolId, status,
+                    summary.get("exitCode") instanceof Number value ? value.intValue() : null, summary);
             return null;
         });
     }

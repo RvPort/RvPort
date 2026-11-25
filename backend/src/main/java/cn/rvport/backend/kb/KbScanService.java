@@ -1,5 +1,7 @@
 package cn.rvport.backend.kb;
 
+import cn.rvport.backend.artifact.StoredArtifactOwnerType;
+
 import cn.rvport.backend.audit.AuditLogService;
 import cn.rvport.backend.artifact.StoredArtifactResource;
 import cn.rvport.backend.artifact.StoredArtifactService;
@@ -57,6 +59,8 @@ public class KbScanService {
     private final NodeReportInclusionService nodeReportInclusionService;
     @Autowired
     private KbScanContextService scanContextService;
+    @Autowired
+    private cn.rvport.backend.analysis.SourceAnalysisPlanService sourcePlans;
 
     @Autowired
     public KbScanService(
@@ -103,7 +107,7 @@ public class KbScanService {
         scanContextService.lock(projectId);
         SourceRevisionView sourceRevision = resolveSourceRevision(projectId, request == null ? null : request.sourceRevisionId());
         validateWorkingCopy(sourceRevision);
-        KbExecutionContext executionContext = scanContextService.resolve(projectId, sourceRevision.id()).requireReady();
+        KbScanContextService.Selection selection = scanContextService.resolve(projectId, sourceRevision.id());
 
         String language = defaultText(request == null ? null : request.language(), defaultLanguage());
         String targetArch = defaultText(properties.kbScan() == null ? null : properties.kbScan().targetArch(), "riscv64");
@@ -111,6 +115,21 @@ public class KbScanService {
         String ruleVersion = blankToNull(request == null ? null : request.ruleVersion());
         Map<String, Object> scanScope = scanScope(request == null ? null : request.scanScope());
         List<String> excludePaths = excludePaths(request == null ? null : request.excludePaths());
+        var identity = cn.rvport.backend.analysis.AnalysisInputPlan.Identity.of(language,
+                defaultText(request == null ? null : request.sourceArch(), defaultSourceArch()), targetArch,
+                scanScope, excludePaths, rulesDigest());
+        var plan = sourcePlans.createKb(sourceRevision, identity);
+        if (selection.ready()) {
+            var artifact = storedArtifactService.findByOwner(cn.rvport.backend.artifact.StoredArtifactOwnerType.BUILD_VALIDATION,
+                    selection.build().id(), cn.rvport.backend.buildvalidation.BuildValidationArtifacts.COMPILE_COMMANDS_JSON);
+            if (artifact.isPresent() && storedArtifactService.objectExists(artifact.get()))
+                plan = sourcePlans.enhance(plan, selection.build(), List.of(artifact.get()));
+        }
+        KbExecutionContext executionContext = plan.inputOrigin() == cn.rvport.backend.analysis.AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY
+                ? new KbExecutionContext(null, null, null, plan)
+                : new KbExecutionContext(selection.sourceEnvironmentId(), selection.runtimeEnvironmentVersion(), selection.build().id(), plan);
+        language = String.join(",", identity.effectiveLanguages());
+        sourceArch = identity.effectiveSourceArch();
 
         Map<String, Object> inputSnapshot = new LinkedHashMap<>();
         inputSnapshot.put("projectId", projectId);
@@ -145,7 +164,7 @@ public class KbScanService {
         int pageSize = request.normalizedPageSize();
         try {
             KbScanContextService.Selection selection = scanContextService.current(projectId);
-            if (request.effectiveCurrentOnly() && (!selection.ready()
+            if (request.effectiveCurrentOnly() && (selection.sourceRevisionId() == null
                     || (request.sourceRevisionId() != null && !Objects.equals(request.sourceRevisionId(), selection.sourceRevisionId())))) {
                 return PageResponse.of(List.of(), page, pageSize, 0);
             }
@@ -153,17 +172,27 @@ public class KbScanService {
                     ? request.withContext(selection.sourceRevisionId(), selection.executionContext()) : request;
             long total = kbScanRepository.countRuns(projectId, effectiveRequest);
             return PageResponse.of(kbScanRepository.listRuns(projectId, effectiveRequest).stream()
-                    .map(run -> KbScanResponse.from(run, selection))
+                    .map(run -> response(run, selection))
                     .toList(), effectiveRequest.normalizedPage(), effectiveRequest.normalizedPageSize(), total);
         } catch (IllegalArgumentException ex) {
             throw badRequest("KB_SCAN_QUERY_INVALID", "KB 扫描查询参数不正确");
         }
     }
 
+    private String rulesDigest() {
+        String configured = properties.kbScan() == null ? null : properties.kbScan().rulesetPath();
+        Path rules = Path.of(defaultText(configured, "rulesets/riscv-porting"));
+        if (!rules.isAbsolute()) rules = Path.of(defaultText(properties.kbScan() == null ? null : properties.kbScan().scannerRoot(),
+                "./tools/kb-scanner")).resolve(rules);
+        if (!Files.exists(rules) && !rules.isAbsolute() && Files.exists(Path.of("..").resolve(rules))) rules = Path.of("..").resolve(rules);
+        try { return cn.rvport.backend.analysis.AnalysisDirectoryFingerprint.digest(rules.toAbsolutePath().normalize()); }
+        catch (java.io.IOException ex) { throw new ApiException(HttpStatus.CONFLICT, "ANALYSIS_RULES_UNAVAILABLE", "扫描规则不可用 / Scan rules are unavailable"); }
+    }
+
     @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public KbScanResponse get(UUID scanId, UUID actorUserId, boolean superAdmin) {
         KbScanView run = requireAccessibleRun(scanId, actorUserId, superAdmin);
-        return KbScanResponse.from(run, scanContextService.current(run.projectId()));
+        return response(run, scanContextService.current(run.projectId()));
     }
 
     @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
@@ -171,18 +200,31 @@ public class KbScanService {
         projectAccessService.requireProjectAccess(projectId, actorUserId, superAdmin);
         KbScanContextService.Selection selection = scanContextService.current(projectId);
         ProjectContextSnapshot context = selection.snapshot();
-        return scanContextService.latest(selection)
+        KbScanResponse published = kbScanRepository.findLatestPublishedByContext(projectId, selection.sourceRevisionId(), selection.executionContext())
+                .filter(run -> selection.staleReason(run) == null)
+                .map(run -> response(run, selection)).orElse(null);
+        var latest = kbScanRepository.findLatestHistoricalRun(projectId)
                 .map(run -> new DomainLatestResponse<>(
                         context,
-                        DomainLatestFreshness.CURRENT,
+                        selection.staleReason(run) == null ? DomainLatestFreshness.CURRENT : DomainLatestFreshness.STALE,
                         DomainLatestExecutionResponse.from(run.id(), taskRepository.findById(run.taskId()).orElse(null)),
-                        KbScanResponse.from(run, selection)))
-                .orElseGet(() -> kbScanRepository.findLatestHistoricalRun(projectId)
-                        .map(run -> DomainLatestResponse.stale(
-                                context,
-                                DomainLatestExecutionResponse.from(run.id(), taskRepository.findById(run.taskId()).orElse(null)),
-                                KbScanResponse.from(run, selection)))
-                        .orElseGet(() -> DomainLatestResponse.empty(context)));
+                        response(run, selection)))
+                .orElseGet(() -> DomainLatestResponse.empty(context));
+        return new DomainLatestResponse<>(latest.context(), latest.freshness(), latest.execution(), latest.result(), published);
+    }
+
+    private KbScanResponse response(KbScanView run, KbScanContextService.Selection selection) {
+        boolean enhancement = false;
+        if (run.sourceOnly() && selection.ready() && selection.staleReason(run) == null) {
+            var artifact = storedArtifactService.findByOwner(StoredArtifactOwnerType.BUILD_VALIDATION, selection.build().id(),
+                    cn.rvport.backend.buildvalidation.BuildValidationArtifacts.COMPILE_COMMANDS_JSON).orElse(null);
+            if (artifact != null && storedArtifactService.objectExists(artifact)) {
+                var plan = run.effectiveInputPlan() == null ? run.executionContext().inputPlan() : run.effectiveInputPlan();
+                enhancement = sourcePlans.enhance(plan, selection.build(), List.of(artifact)).inputOrigin()
+                        == cn.rvport.backend.analysis.AnalysisInputPlan.InputOrigin.BUILD_ARTIFACTS;
+            }
+        }
+        return KbScanResponse.from(run, selection, enhancement);
     }
 
     @Transactional(readOnly = true)

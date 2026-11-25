@@ -171,6 +171,6 @@
 
 ### KB 扫描工作流一致性
 
-KB 创建必须绑定当前运行环境下选中的成功 `SOURCE_ONLY` 构建；overview、latest、默认当前列表和报告 KB 来源使用完整上下文判定。历史成功不等于当前阶段已完成。字段、原因码、状态矩阵与升级说明见 [KB 扫描上下文与历史结果](kb-scan-workflow-consistency.zh-CN.md)。
+KB 创建以固定源码和扫描器为必需条件，成功 `SOURCE_ONLY` 构建仅用于可信增强；overview、latest 与报告来源按实际消费的输入判定。历史成功不等于当前阶段已完成。字段、原因码、状态矩阵与升级说明见 [KB 扫描上下文与历史结果](kb-scan-workflow-consistency.zh-CN.md)。
 
 结果评估、人工清单及联调约定见[结果报告与待修复清单](report-review.zh-CN.md)。

@@ -22,7 +22,7 @@ class SpecializedAnalysisHandlerTests {
 
         assertThat(handler.taskType()).isEqualTo(RvPortTaskTypes.FLOATING_POINT_ANALYSIS);
         assertThat(handler.handle(context).message()).contains("浮点精度分析完成");
-        verify(runtime).run(input, context);
+        verify(runtime).runTask(input, context);
     }
 
     @Test
@@ -35,7 +35,7 @@ class SpecializedAnalysisHandlerTests {
 
         assertThat(handler.taskType()).isEqualTo(RvPortTaskTypes.MEMORY_ORDER_ANALYSIS);
         assertThat(handler.handle(context).message()).contains("强弱内存序分析完成");
-        verify(runtime).run(input, context);
+        verify(runtime).runTask(input, context);
     }
 
     private SpecializedAnalysisTaskInput input(SpecializedAnalyzerType type) {

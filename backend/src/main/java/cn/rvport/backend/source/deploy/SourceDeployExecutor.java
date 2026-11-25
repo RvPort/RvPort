@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -80,25 +81,28 @@ public class SourceDeployExecutor {
                 input.force(),
                 input.timeoutSeconds()
         );
-        validateRunMatches(run, request);
+        validateReuse(run, request, context, true);
         return deployRun(run, request, context);
     }
 
     public SourceDeployRunView ensureDeployed(SourceDeployExecutionRequest request, TaskExecutionContext context) {
+        validateTask(request, context);
         // 同一任务重试时 task_id 唯一键会与上次（含 FAILED）的 deploy run 冲突——先按任务查回并复用，
         // 重新部署到同一 remote_path 是幂等操作。
         if (!request.force()) {
             var byTask = sourceDeployRepository.findByTaskId(request.taskId());
-            if (byTask.isPresent() && byTask.get().status() != TaskStatus.SUCCEEDED) {
+            if (byTask.isPresent()) {
+                validateReuse(byTask.get(), request, context, true);
+                if (byTask.get().status() == TaskStatus.SUCCEEDED) return byTask.get();
                 context.log(TaskLogType.TOOL, "复用本任务既有部署记录（重试）：" + byTask.get().id());
                 return deployRun(byTask.get(), request, context);
             }
         }
-        if (request.sourceDeploymentId() != null && !request.force()) {
+        if (request.sourceDeploymentId() != null) {
             SourceDeployRunView run = sourceDeployRepository.findById(request.sourceDeploymentId())
                     .orElseThrow(() -> new TaskExecutionException(TaskErrorCode.RESOURCE_NOT_FOUND, "源码部署记录不存在", null));
-            validateRunMatches(run, request);
-            if (run.status() == TaskStatus.SUCCEEDED) {
+            validateReuse(run, request, context, run.status() != TaskStatus.SUCCEEDED);
+            if (!request.force() && run.status() == TaskStatus.SUCCEEDED) {
                 context.log(TaskLogType.TOOL, "复用源码部署记录：" + run.id());
                 return run;
             }
@@ -111,6 +115,7 @@ public class SourceDeployExecutor {
                     request.environmentConfigVersionValue()
             );
             if (reusable.isPresent()) {
+                validateReuse(reusable.get(), request, context, false);
                 context.log(TaskLogType.TOOL, "复用源码部署记录：" + reusable.get().id());
                 return reusable.get();
             }
@@ -129,10 +134,14 @@ public class SourceDeployExecutor {
                 remotePath,
                 request.force()
         ));
-        return deployRun(run, request, context);
+        return deployRun(run, new SourceDeployExecutionRequest(request.projectId(), request.taskId(), run.id(),
+                request.sourceRevisionId(), request.environmentId(), request.environmentConfigVersion(),
+                remotePath, request.force(), request.timeoutSeconds()), context);
     }
 
     private SourceDeployRunView deployRun(SourceDeployRunView run, SourceDeployExecutionRequest request, TaskExecutionContext context) {
+        // 在标记运行、创建工具记录、打包或 SSH 前校验；错误引用不能改写另一条记录。
+        validateReuse(run, request, context, true);
         UUID toolRunId = context.publish(() -> {
         sourceDeployRepository.markRunning(run.id());
         return toolRunRepository.create(
@@ -206,17 +215,47 @@ public class SourceDeployExecutor {
     }
 
     private void validateRunMatches(SourceDeployRunView run, SourceDeployExecutionRequest request) {
-        if (!run.projectId().equals(request.projectId())
-                || !run.sourceRevisionId().equals(request.sourceRevisionId())
-                || !run.environmentId().equals(request.environmentId())) {
+        if (!Objects.equals(run.projectId(), request.projectId())
+                || !Objects.equals(run.sourceRevisionId(), request.sourceRevisionId())
+                || !Objects.equals(run.environmentId(), request.environmentId())
+                || !Objects.equals(run.environmentConfigVersion(), request.environmentConfigVersionValue())
+                || (request.sourceDeploymentId() != null && !request.sourceDeploymentId().equals(run.id()))) {
             throw new TaskExecutionException(TaskErrorCode.PROJECT_MISMATCH, "源码部署记录与当前任务不一致", null);
         }
+    }
+
+    private void validateTask(SourceDeployExecutionRequest request, TaskExecutionContext context) {
+        var task = context.task();
+        if (task == null || !Objects.equals(task.id(), request.taskId())
+                || !Objects.equals(task.projectId(), request.projectId())) {
+            throw new TaskExecutionException(TaskErrorCode.PROJECT_MISMATCH,
+                    "源码部署请求与当前执行任务不一致 / Deployment request does not match the executing task", null);
+        }
+    }
+
+    private void validateReuse(SourceDeployRunView run, SourceDeployExecutionRequest request,
+            TaskExecutionContext context, boolean sameTask) {
+        validateTask(request, context);
+        validateRunMatches(run, request);
+        if (sameTask && !Objects.equals(run.taskId(), request.taskId())) {
+            throw new TaskExecutionException(TaskErrorCode.PROJECT_MISMATCH,
+                    "源码部署任务关联不一致 / Deployment task association does not match", null);
+        }
+        SourceRevisionView source = requireSourceRevision(request);
+        EnvironmentView environment = requireEnvironment(request);
+        String expected = effectiveRemotePath(request, environment, source.id());
+        if (!Objects.equals(run.remotePath(), expected)) {
+            throw new TaskExecutionException("SOURCE_DEPLOY_PATH_MISMATCH",
+                    "源码部署路径不符合当前输入 / Deployment path does not match the current input", null);
+        }
+        // 复用成功缓存也需经过现有租约守卫；不把外部操作放入 publish 事务。
+        context.publish(() -> null);
     }
 
     private SourceRevisionView requireSourceRevision(SourceDeployExecutionRequest request) {
         SourceRevisionView revision = sourceRepository.findById(request.sourceRevisionId())
                 .orElseThrow(() -> new TaskExecutionException(TaskErrorCode.RESOURCE_NOT_FOUND, "源码版本不存在", null));
-        if (!revision.projectId().equals(request.projectId())) {
+        if (!revision.projectId().equals(request.projectId()) || !revision.id().equals(request.sourceRevisionId())) {
             throw new TaskExecutionException(TaskErrorCode.PROJECT_MISMATCH, "源码版本不属于当前项目", null);
         }
         return revision;
@@ -225,7 +264,7 @@ public class SourceDeployExecutor {
     private EnvironmentView requireEnvironment(SourceDeployExecutionRequest request) {
         EnvironmentView environment = environmentRepository.findById(request.environmentId())
                 .orElseThrow(() -> new TaskExecutionException(TaskErrorCode.RESOURCE_NOT_FOUND, "环境不存在", null));
-        if (!environment.projectId().equals(request.projectId())) {
+        if (!environment.projectId().equals(request.projectId()) || !environment.id().equals(request.environmentId())) {
             throw new TaskExecutionException(TaskErrorCode.PROJECT_MISMATCH, "环境不属于当前项目", null);
         }
         if (!environment.enabled()) {
@@ -267,11 +306,21 @@ public class SourceDeployExecutor {
     }
 
     private String effectiveRemotePath(SourceDeployExecutionRequest request, EnvironmentView environment, UUID sourceRevisionId) {
-        if (request.remotePath() != null && !request.remotePath().isBlank()) {
-            return request.remotePath();
-        }
         String root = environment.workingDirectory().replace('\\', '/').replaceAll("/+$", "");
-        return root + "/rvport-sources/" + sourceRevisionId;
+        if ((!root.isEmpty() && !root.startsWith("/")) || root.contains(":")
+                || root.chars().anyMatch(Character::isISOControl)
+                || java.util.Arrays.stream(root.split("/", -1)).skip(1)
+                    .anyMatch(part -> part.isEmpty() || part.equals(".") || part.equals(".."))) {
+            throw new TaskExecutionException("SOURCE_DEPLOY_PATH_INVALID",
+                    "环境部署根目录无效 / Invalid environment deployment root", null);
+        }
+        String expected = root + "/rvport-sources/" + sourceRevisionId;
+        if (request.remotePath() != null && !request.remotePath().isBlank()
+                && !request.remotePath().equals(expected)) {
+            throw new TaskExecutionException("SOURCE_DEPLOY_PATH_MISMATCH",
+                    "源码部署路径不符合当前输入 / Deployment path does not match the current input", null);
+        }
+        return expected;
     }
 
     private SourceArchive createArchive(Path sourceRoot) throws IOException {
