@@ -68,16 +68,19 @@ public class AiMigrationService {
         KbScanView scanRun = resolveScanRun(projectId, sourceRevision, request == null ? null : request.scanRunId());
         AgentModelRuntimeConfig config = resolveStageBinding(actorUserId);
         List<cn.rvport.backend.kb.FindingView> findings = kbScanRepository.listAllFindingViews(scanRun.id());
-        if (AiMigrationProjector.project(scanRun.id(), findings).items().isEmpty()) {
+        if (AiMigrationProjector.project(scanRun.id(), findings).suggestionClass().isEmpty()) {
             throw badRequest("AI_MIGRATION_NO_ENTRIES",
                     "当前扫描没有可迁移条目 / The current scan has no projectable entries");
         }
 
+        ModelExecutionSelection selection = ModelExecutionSelection.from(actorUserId, config);
+        // 运行 ID 先于任务生成：TaskMetadataResolver 从任务输入读取 migrationRunId 填 tasks.resource_id。
+        UUID runId = UUID.randomUUID();
         Map<String, Object> inputSnapshot = new LinkedHashMap<>();
         inputSnapshot.put("projectId", projectId);
         inputSnapshot.put("scanRunId", scanRun.id());
         inputSnapshot.put("sourceRevisionId", sourceRevision.id());
-        ModelExecutionSelection selection = ModelExecutionSelection.from(actorUserId, config);
+        inputSnapshot.put("migrationRunId", runId.toString());
         inputSnapshot.put("selection", Map.of(
                 "configurationUserId", selection.configurationUserId().toString(),
                 "modelProfileId", selection.modelProfileId().toString(),
@@ -90,7 +93,7 @@ public class AiMigrationService {
                 actorUserId,
                 null,
                 "AI 迁移任务已创建"));
-        UUID runId = repository.createRun(projectId, scanRun.id(), sourceRevision.id(), task.id(),
+        repository.createRun(runId, projectId, scanRun.id(), sourceRevision.id(), task.id(),
                 selection.modelProfileId(), selection.agentRuntimeId());
         auditLogService.record(projectId, actorUserId, "kb.migration.create", "ai_migration_run", runId,
                 Map.of("taskId", task.id(), "scanRunId", scanRun.id()), httpRequest);

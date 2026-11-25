@@ -24,6 +24,8 @@ public final class TaskErrorCode {
     public static final String AI_MIGRATION_MODEL_NOT_CONFIGURED = "AI_MIGRATION_MODEL_NOT_CONFIGURED";
     public static final String AI_MIGRATION_NO_ENTRIES = "AI_MIGRATION_NO_ENTRIES";
     public static final String AI_MIGRATION_OUTPUT_INVALID = "AI_MIGRATION_OUTPUT_INVALID";
+    /** 迁移执行遇到重试必然复现的失败（工作区被篡改、执行器配置无效、补丁生成失败等）。 */
+    public static final String AI_MIGRATION_NOT_RETRYABLE = "AI_MIGRATION_NOT_RETRYABLE";
 
     private TaskErrorCode() {
     }

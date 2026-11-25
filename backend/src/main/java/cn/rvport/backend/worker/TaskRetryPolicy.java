@@ -21,7 +21,8 @@ public class TaskRetryPolicy {
             TaskErrorCode.ANALYSIS_NON_RETRYABLE,
             TaskErrorCode.AI_MIGRATION_MODEL_NOT_CONFIGURED,
             TaskErrorCode.AI_MIGRATION_NO_ENTRIES,
-            TaskErrorCode.AI_MIGRATION_OUTPUT_INVALID
+            TaskErrorCode.AI_MIGRATION_OUTPUT_INVALID,
+            TaskErrorCode.AI_MIGRATION_NOT_RETRYABLE
     );
 
     public boolean shouldRetry(String errorCode) {

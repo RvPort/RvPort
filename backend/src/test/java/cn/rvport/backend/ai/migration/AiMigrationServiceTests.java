@@ -3,6 +3,7 @@ package cn.rvport.backend.ai.migration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -92,12 +93,29 @@ class AiMigrationServiceTests {
         var command = ArgumentCaptor.forClass(TaskCreateCommand.class);
         verify(taskService).create(command.capture());
         assertThat(command.getValue().inputSnapshot()).containsKeys("projectId", "scanRunId", "sourceRevisionId",
-                "selection");
+                "selection", "migrationRunId");
         var selection = (Map<?, ?>) command.getValue().inputSnapshot().get("selection");
         assertThat(selection.get("modelProfileId")).isEqualTo(profileId.toString());
         assertThat(selection.get("agentRuntimeId")).isEqualTo(runtimeId.toString());
-        verify(repository).createRun(project, scanRun, revision, task.id(), profileId, runtimeId);
+        // 运行记录以任务输入中的同一个 ID 创建
+        verify(repository).createRun(any(UUID.class), eq(project), eq(scanRun), eq(revision), eq(task.id()),
+                eq(profileId), eq(runtimeId));
         verify(auditLogService).record(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void 任务输入里的运行id与实际创建的运行一致() {
+        // 回归：运行 ID 此前在任务创建之后才生成，从不写入任务输入，
+        // 导致所有 AI_MIGRATION 任务的 tasks.resource_id 恒为 NULL。
+        service.create(project, new AiMigrationRequest(null), actor, false, null);
+
+        var command = ArgumentCaptor.forClass(TaskCreateCommand.class);
+        verify(taskService).create(command.capture());
+        var runId = ArgumentCaptor.forClass(UUID.class);
+        // 预生成 ID 的重载：首参为运行 ID
+        verify(repository).createRun(runId.capture(), eq(project), eq(scanRun), eq(revision), any(),
+                eq(profileId), eq(runtimeId));
+        assertThat(command.getValue().inputSnapshot().get("migrationRunId")).isEqualTo(runId.getValue().toString());
     }
 
     @Test

@@ -144,7 +144,8 @@ class AiMigrationAgentRuntimeTests {
     @Test
     void 空条目集合直接拒绝不触碰模型() {
         assertThatThrownBy(() -> service.run(
-                new AiMigrationProjector.Projection(UUID.randomUUID(), AiMigrationProjector.SCHEMA_VERSION, List.of()),
+                new AiMigrationProjector.Projection("/app/source", 0, 0, List.of(), List.of(),
+                        AiMigrationProjector.SCHEMA_VERSION, UUID.randomUUID()),
                 sourceRoot, selection, context))
                 .isInstanceOf(IOException.class).hasMessage("AI_MIGRATION_NO_ENTRIES");
         verifyNoInteractions(models, registry);
@@ -163,7 +164,10 @@ class AiMigrationAgentRuntimeTests {
             assertThat(Files.exists(request.workspace().resolve(".opencode/agent/migrator.md"))).isTrue();
             assertThat(Files.exists(request.workspace().resolve(".opencode/agent/reviewer.md"))).isTrue();
             assertThat(Files.exists(request.workspace().resolve("baseline/src/a.c"))).isTrue();
-            assertThat(Files.readString(request.workspace().resolve("input/scan_result.json"))).contains("finding:a");
+            String entries = Files.readString(request.workspace().resolve("input/scan_result.json"));
+            assertThat(entries).contains("finding:a").contains("suggestion_class");
+            // 子进程模式的工作目录不是 /app，file_path 必须指向工作区里实际存在的源码副本
+            assertThat(entries).contains(request.workspace().resolve("source").toString() + "/src/a.c");
             Files.writeString(request.workspace().resolve("source/src/a.c"),
                     "__riscv_vadd_vv_i32m1(a, b);\n");
             Files.writeString(request.workspace().resolve("output/migration_result.json"), json.writeValueAsString(
@@ -182,6 +186,198 @@ class AiMigrationAgentRuntimeTests {
         assertThat(new String(executed.diffPatch(), StandardCharsets.UTF_8))
                 .contains("src/a.c").contains("__riscv_vadd_vv_i32m1");
         assertThat(captured.get()).doesNotExist();
+    }
+
+    @Test
+    void 大补丁重复生成时内容始终完整() throws Exception {
+        // 回归：diff 退出后若仍 destroyForcibly，会以小概率扰动仍在读取 stdout 的线程
+        // （JDK 25 实测约 3%），读取线程拿到残缺内容；若再把 IO 异常吞掉，就会返回残缺/空的补丁
+        // 而运行记为成功。让每一行都发生变化以保证补丁本身很大，并重复多次覆盖该竞态。
+        for (int round = 0; round < 12; round++) {
+            Path root = Files.createTempDirectory("rvport-large-patch-");
+            Files.createDirectories(root.resolve("src"));
+            StringBuilder before = new StringBuilder("#include <immintrin.h>\n");
+            StringBuilder after = new StringBuilder("// migrated\n");
+            for (int i = 0; i < 6000; i++) {
+                before.append("_mm256_add_epi32(a").append(i).append(", b);\n");
+                after.append("__riscv_vadd_vv_i32m1(a").append(i).append(", b);\n");
+            }
+            Files.writeString(root.resolve("src/a.c"), before);
+            // 循环内重复打桩必须用 doAnswer：when(adapter.run(any())) 会先触发上一轮的 stub，其 answer 在
+            // 打桩调用里取不到参数而抛 NullPointerException。
+            org.mockito.Mockito.doAnswer(invocation -> {
+                AgentRuntimeExecutionRequest request = invocation.getArgument(0);
+                Files.writeString(request.workspace().resolve("source/src/a.c"), after);
+                Files.writeString(request.workspace().resolve("output/migration_result.json"), json.writeValueAsString(
+                        Map.of("entries", List.of(
+                                Map.of("id", "finding:a", "status", "DONE"),
+                                Map.of("id", "finding:b", "status", "NO_WORK_NEEDED", "reason", "无需处理")))));
+                return new CodexProcessResult(0, false, "DONE", "");
+            }).when(adapter).run(any());
+
+            var executed = service.run(projection(), root, selection, context);
+
+            String patch = new String(executed.diffPatch(), StandardCharsets.UTF_8);
+            assertThat(patch).as("round %d 的补丁首行", round).startsWith("diff -ruN");
+            // 6000 行全部改写：补丁必须同时含首尾两处的删除行与新增行，残缺读取必失其一。
+            assertThat(patch).as("round %d 必须包含首行改动", round)
+                    .contains("-_mm256_add_epi32(a0, b);").contains("+__riscv_vadd_vv_i32m1(a0, b);");
+            assertThat(patch).as("round %d 必须包含末行改动", round)
+                    .contains("-_mm256_add_epi32(a5999, b);").contains("+__riscv_vadd_vv_i32m1(a5999, b);");
+            // 补丁应与改动规模同量级（每行一删一增）；残缺读取会明显小于该值。
+            assertThat(patch.length()).as("round %d 的补丁长度", round).isGreaterThan(after.length());
+        }
+    }
+
+    /** 让假代理正常完成：改 a.c 并写出合法结果。入参为任务工作区。 */
+    private void runSuccessfulAgent(Path workspace) throws Exception {
+        Files.writeString(workspace.resolve("source/src/a.c"), "__riscv_vadd_vv_i32m1(a, b);\n");
+        Files.writeString(workspace.resolve("output/migration_result.json"), json.writeValueAsString(
+                Map.of("entries", List.of(
+                        Map.of("id", "finding:a", "status", "DONE", "changeSummary", "替换为 vadd",
+                                "files", List.of("src/a.c")),
+                        Map.of("id", "finding:b", "status", "NO_WORK_NEEDED", "reason", "已有 __riscv 分支")))));
+    }
+
+    private void prepareSource() throws Exception {
+        Files.createDirectories(sourceRoot.resolve("src"));
+        Files.writeString(sourceRoot.resolve("src/a.c"), "#include <immintrin.h>\n_mm256_add_epi32(a, b);\n");
+        Files.writeString(sourceRoot.resolve("src/b.h"), "#ifdef HAVE_SSE2\nint pad;\n#endif\n");
+    }
+
+    @Test
+    void 基准被代理覆盖时拒绝而非产出空补丁() throws Exception {
+        // 回归：baseline/ 是补丁的比对基准。agent 把它覆盖成与 source 相同，
+        // 真实改动会从补丁里消失而运行仍记为成功。
+        prepareSource();
+        AtomicReference<Path> captured = new AtomicReference<>();
+        when(adapter.run(any())).thenAnswer(invocation -> {
+            AgentRuntimeExecutionRequest request = invocation.getArgument(0);
+            captured.set(request.workspace());
+            runSuccessfulAgent(request.workspace());
+            // 把 baseline 覆盖成已修改的 source
+            Files.copy(request.workspace().resolve("source/src/a.c"),
+                    request.workspace().resolve("baseline/src/a.c"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return new CodexProcessResult(0, false, "DONE", "");
+        });
+
+        assertThatThrownBy(() -> service.run(projection(), sourceRoot, selection, context))
+                .isInstanceOf(IOException.class).hasMessage("AI_MIGRATION_BASELINE_MODIFIED");
+        assertThat(captured.get()).doesNotExist();
+    }
+
+    @Test
+    void 基准新增或删除文件同样被识别() throws Exception {
+        prepareSource();
+        when(adapter.run(any())).thenAnswer(invocation -> {
+            AgentRuntimeExecutionRequest request = invocation.getArgument(0);
+            runSuccessfulAgent(request.workspace());
+            Files.writeString(request.workspace().resolve("baseline/src/injected.c"), "int x;\n");
+            return new CodexProcessResult(0, false, "DONE", "");
+        });
+        assertThatThrownBy(() -> service.run(projection(), sourceRoot, selection, context))
+                .isInstanceOf(IOException.class).hasMessage("AI_MIGRATION_BASELINE_MODIFIED");
+    }
+
+    @Test
+    void 迁移结果里的符号链接被拒绝且不进入补丁() throws Exception {
+        // 回归：diff 运行在 worker 容器内，跟随 source/ 里的符号链接会把 worker 可读的
+        // 任意文件内容写进补丁（其他项目源码等）。物化阶段已拒绝链接，source/ 里的链接
+        // 只可能来自 agent，因此直接判失败。
+        prepareSource();
+        Path outside = Files.createTempFile("rvport-outside-", ".c");
+        Files.writeString(outside, "OUTSIDE-SECRET-CONTENT\nint stolen(){return 1;}\n");
+        try {
+            when(adapter.run(any())).thenAnswer(invocation -> {
+                AgentRuntimeExecutionRequest request = invocation.getArgument(0);
+                runSuccessfulAgent(request.workspace());
+                Files.createSymbolicLink(request.workspace().resolve("source/leak.c"), outside);
+                return new CodexProcessResult(0, false, "DONE", "");
+            });
+
+            assertThatThrownBy(() -> service.run(projection(), sourceRoot, selection, context))
+                    .isInstanceOf(IOException.class).hasMessage("AI_MIGRATION_SOURCE_SYMLINK");
+        } finally {
+            Files.deleteIfExists(outside);
+        }
+    }
+
+    @Test
+    void 子目录内的符号链接同样被拒绝() throws Exception {
+        prepareSource();
+        when(adapter.run(any())).thenAnswer(invocation -> {
+            AgentRuntimeExecutionRequest request = invocation.getArgument(0);
+            runSuccessfulAgent(request.workspace());
+            Path sub = Files.createDirectories(request.workspace().resolve("source/src/sub"));
+            Files.createSymbolicLink(sub.resolve("l.c"), request.workspace().resolve("source/src/a.c"));
+            return new CodexProcessResult(0, false, "DONE", "");
+        });
+
+        assertThatThrownBy(() -> service.run(projection(), sourceRoot, selection, context))
+                .isInstanceOf(IOException.class).hasMessage("AI_MIGRATION_SOURCE_SYMLINK");
+    }
+
+    @Test
+    void 正常改动不产生符号链接时补丁照常生成() throws Exception {
+        // 对照：拒绝符号链接不得误伤普通迁移结果。
+        prepareSource();
+        when(adapter.run(any())).thenAnswer(invocation -> {
+            AgentRuntimeExecutionRequest request = invocation.getArgument(0);
+            runSuccessfulAgent(request.workspace());
+            return new CodexProcessResult(0, false, "DONE", "");
+        });
+
+        var executed = service.run(projection(), sourceRoot, selection, context);
+
+        assertThat(new String(executed.diffPatch(), StandardCharsets.UTF_8))
+                .contains("__riscv_vadd_vv_i32m1");
+    }
+
+    @Test
+    void 符号链接过多时日志只列前若干条但仍然拒绝() throws Exception {
+        prepareSource();
+        Path target = Files.writeString(sourceRoot.resolve("target.c"), "int x;\n");
+        when(adapter.run(any())).thenAnswer(invocation -> {
+            AgentRuntimeExecutionRequest request = invocation.getArgument(0);
+            runSuccessfulAgent(request.workspace());
+            // 超过日志上限（20）数量的符号链接：诊断日志只列前若干条，拒绝行为不变
+            for (int i = 0; i < 25; i++) {
+                Files.createSymbolicLink(request.workspace().resolve("source/link" + i), target);
+            }
+            return new CodexProcessResult(0, false, "DONE", "");
+        });
+
+        assertThatThrownBy(() -> service.run(projection(), sourceRoot, selection, context))
+                .isInstanceOf(IOException.class).hasMessage("AI_MIGRATION_SOURCE_SYMLINK");
+    }
+
+    @Test
+    void 目录树指纹对增删改与类型替换敏感且与遍历顺序无关() throws Exception {
+        Path root = Files.createDirectories(sourceRoot.resolve("tree"));
+        Files.createDirectories(root.resolve("d"));
+        Files.writeString(root.resolve("d/a.c"), "one\n");
+        Files.writeString(root.resolve("b.h"), "two\n");
+        String original = AiMigrationAgentRuntime.treeDigest(root);
+
+        // 未改动 → 指纹稳定
+        assertThat(AiMigrationAgentRuntime.treeDigest(root)).isEqualTo(original);
+
+        // 改内容
+        Files.writeString(root.resolve("d/a.c"), "changed\n");
+        assertThat(AiMigrationAgentRuntime.treeDigest(root)).isNotEqualTo(original);
+        Files.writeString(root.resolve("d/a.c"), "one\n");
+        assertThat(AiMigrationAgentRuntime.treeDigest(root)).isEqualTo(original);
+
+        // 新增文件
+        Files.writeString(root.resolve("c.c"), "three\n");
+        assertThat(AiMigrationAgentRuntime.treeDigest(root)).isNotEqualTo(original);
+        Files.delete(root.resolve("c.c"));
+
+        // 文件替换为指向同内容文件的符号链接：内容相同但类型变了
+        Path target = Files.writeString(root.resolve("target.h"), "two\n");
+        Files.delete(root.resolve("b.h"));
+        Files.createSymbolicLink(root.resolve("b.h"), target);
+        assertThat(AiMigrationAgentRuntime.treeDigest(root)).isNotEqualTo(original);
     }
 
     @Test

@@ -30,8 +30,8 @@ public class ExecutorContainerService {
 
     @org.springframework.beans.factory.annotation.Autowired
     public ExecutorContainerService(AiMigrationExecutorProperties executorProperties) {
-        this(new ExecutorContainerProperties(executorProperties.image(), executorProperties.skillsVolume(),
-                executorProperties.dockerTimeout()), new ProcessDockerCli());
+        this(new ExecutorContainerProperties(executorProperties.image(), executorProperties.dockerTimeout()),
+                new ProcessDockerCli());
     }
 
     ExecutorContainerService(ExecutorContainerProperties properties) {
@@ -59,25 +59,53 @@ public class ExecutorContainerService {
             Path hostWorkspace,
             Map<String, String> environment,
             CancellationToken cancellation) throws IOException, InterruptedException {
+        return execute(taskId, workspace, hostWorkspace, environment, cancellation, null);
+    }
+
+    /**
+     * 同上，并把"终止本次执行器容器"登记为任务的可取消资源。
+     *
+     * <p>用户取消任务时，任务框架先对各可取消资源调用 cancel，再中断 worker 线程；只中断线程
+     * 不会结束 docker run 子进程，容器会带着模型密钥继续运行。register 为 null 时不登记（测试/一次性调用）。
+     */
+    public ExecutorContainerResult execute(
+            UUID taskId,
+            Path workspace,
+            Path hostWorkspace,
+            Map<String, String> environment,
+            CancellationToken cancellation,
+            java.util.function.Consumer<Runnable> registerCancellation) throws IOException, InterruptedException {
         String containerName = ExecutorContainerCommandFactory.containerName(taskId);
         // 重试场景的孤儿容器：--rm 容器异常残留（如 daemon 重启窗口）时先移除。
         cli.runQuiet(ExecutorContainerCommandFactory.removeCommand(containerName));
 
         List<String> command = ExecutorContainerCommandFactory.runCommand(
-                properties.image(), containerName, workspace, hostWorkspace, properties.skillsVolume(), environment, Map.of());
+                properties.image(), containerName, workspace, hostWorkspace, environment, Map.of());
         log.info("executor container starting name={} image={}", containerName, properties.image());
 
         DockerCli.ProcessHandle process = cli.start(command);
         AtomicBoolean killed = new AtomicBoolean(false);
+        Runnable killOnce = () -> {
+            if (killed.compareAndSet(false, true)) {
+                cli.runQuiet(ExecutorContainerCommandFactory.killCommand(containerName));
+                log.info("executor container killed name={}", containerName);
+            }
+        };
+        if (registerCancellation != null) {
+            // 登记失败（任务已失去归属）时 execute 会抛出；此时容器刚启动，必须先终止它。
+            try {
+                registerCancellation.accept(killOnce);
+            } catch (RuntimeException registrationFailed) {
+                killOnce.run();
+                throw registrationFailed;
+            }
+        }
         Thread killer = null;
         if (cancellation != null) {
             killer = new Thread(() -> {
                 try {
                     cancellation.await();
-                    if (killed.compareAndSet(false, true)) {
-                        cli.runQuiet(ExecutorContainerCommandFactory.killCommand(containerName));
-                        log.info("executor container killed on cancellation name={}", containerName);
-                    }
+                    killOnce.run();
                 } catch (InterruptedException ignored) {
                     Thread.currentThread().interrupt();
                 }
@@ -90,8 +118,8 @@ public class ExecutorContainerService {
         boolean timedOut;
         try {
             timedOut = !process.waitFor(properties.dockerTimeout(), stdout, stderr);
-            if (timedOut && killed.compareAndSet(false, true)) {
-                cli.runQuiet(ExecutorContainerCommandFactory.killCommand(containerName));
+            if (timedOut) {
+                killOnce.run();
                 log.warn("executor container timed out name={} timeout={}s", containerName,
                         properties.dockerTimeout().toSeconds());
             }
@@ -107,9 +135,9 @@ public class ExecutorContainerService {
         return new ExecutorContainerResult(exitCode, timedOut, out, err, merge(out, err));
     }
 
+    /** 调用方传入的均为 StringBuilder#toString()，不为 null；超长输出截断到上限，防止刷屏撑爆任务日志。 */
     private static String clip(String text) {
-        return text == null || text.length() <= OUTPUT_LIMIT_CHARS ? text == null ? "" : text
-                : text.substring(0, OUTPUT_LIMIT_CHARS);
+        return text.length() <= OUTPUT_LIMIT_CHARS ? text : text.substring(0, OUTPUT_LIMIT_CHARS);
     }
 
     private static String merge(String out, String err) {
@@ -126,8 +154,21 @@ public class ExecutorContainerService {
     public interface CancellationToken {
         void await() throws InterruptedException;
 
+        /**
+         * 表示"本次执行不提供取消信号"。await 必须一直阻塞到线程被中断：
+         * 若立即返回，killer 线程会在 docker run 启动后立刻下发 docker kill（与容器创建竞态），
+         * 并把 killed 置为 true，使随后真正的超时 kill 被跳过。
+         */
         static CancellationToken none() {
-            return () -> { };
+            return () -> {
+                final Object gate = new Object();
+                // 循环只为吸收 wait 的虚假唤醒；唯一正常出口是被 interrupt（抛 InterruptedException）。
+                synchronized (gate) {
+                    while (true) {
+                        gate.wait();
+                    }
+                }
+            };
         }
     }
 

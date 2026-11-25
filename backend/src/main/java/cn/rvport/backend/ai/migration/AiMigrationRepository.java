@@ -25,7 +25,18 @@ public class AiMigrationRepository {
 
     public UUID createRun(UUID projectId, UUID scanRunId, UUID sourceRevisionId, UUID taskId,
             UUID modelProfileId, UUID agentRuntimeId) {
+        return createRun(UUID.randomUUID(), projectId, scanRunId, sourceRevisionId, taskId, modelProfileId,
+                agentRuntimeId);
+    }
+
+    /**
+     * 以调用方预先生成的 ID 创建运行记录。任务创建时需要把运行 ID 写入任务输入
+     * （TaskMetadataResolver 据此填 tasks.resource_id），因此 ID 必须先于任务存在。
+     */
+    public UUID createRun(UUID runId, UUID projectId, UUID scanRunId, UUID sourceRevisionId, UUID taskId,
+            UUID modelProfileId, UUID agentRuntimeId) {
         var record = dsl.insertInto(AiMigrationRuns.AI_MIGRATION_RUNS)
+                    .set(AiMigrationRuns.AI_MIGRATION_RUNS.ID, runId)
                     .set(AiMigrationRuns.AI_MIGRATION_RUNS.PROJECT_ID, projectId)
                     .set(AiMigrationRuns.AI_MIGRATION_RUNS.SCAN_RUN_ID, scanRunId)
                     .set(AiMigrationRuns.AI_MIGRATION_RUNS.TASK_ID, taskId)

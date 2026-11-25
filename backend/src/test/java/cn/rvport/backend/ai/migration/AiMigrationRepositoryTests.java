@@ -45,6 +45,23 @@ class AiMigrationRepositoryTests {
     }
 
     @Test
+    void 以预生成id创建运行时写入该id() throws Exception {
+        // 任务创建需要先拿到运行 ID（写入任务输入），因此运行必须能以指定 ID 创建。
+        try (var db = new JooqMockDatabase()) {
+            var record = new cn.rvport.backend.jooq.tables.records.AiMigrationRunsRecord();
+            record.setId(runId);
+            db.enqueueRecord(record);
+            var repository = new AiMigrationRepository(db.dsl(), mapper);
+
+            UUID created = repository.createRun(runId, project, scanRun, revision, taskId, profile, runtime);
+
+            assertThat(created).isEqualTo(runId);
+            assertThat(db.lastExecution().bindings()).contains(runId);
+            db.verifyComplete();
+        }
+    }
+
+    @Test
     void 状态推进写入计数与摘要() throws Exception {
         try (var db = new JooqMockDatabase()) {
             var repository = new AiMigrationRepository(db.dsl(), mapper);

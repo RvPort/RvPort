@@ -184,6 +184,46 @@ class AiMigrationRuntimeServiceTests {
     }
 
     @Test
+    void 重试必然复现的失败翻译为不可重试码() throws Exception {
+        // 工作区被篡改、执行器配置无效、补丁生成失败：重跑同一任务结果相同，
+        // 重试只会重复消耗一次完整的代理运行。
+        for (String cause : List.of("AI_MIGRATION_BASELINE_MODIFIED", "AI_MIGRATION_INPUT_MODIFIED",
+                "AI_MIGRATION_EXECUTOR_MODE_INVALID", "AI_MIGRATION_EXECUTOR_UNAVAILABLE",
+                "AI_MIGRATION_SOURCE_PATH_UNSAFE", "AI_MIGRATION_SOURCE_SYMLINK", "AI_MIGRATION_DIFF_FAILED")) {
+            // doAnswer 不会在打桩时调用已有 stub（when(...) 形式会先触发上一轮的抛异常 stub）。
+            String current = cause;
+            org.mockito.Mockito.doAnswer(invocation -> { throw new IOException(current); })
+                    .when(agentRuntime).run(any(), any(), any(), any());
+            assertThatThrownBy(() -> service.migrate(input, context))
+                    .describedAs(current)
+                    .isInstanceOf(TaskExecutionException.class)
+                    .extracting("errorCode").isEqualTo(TaskErrorCode.AI_MIGRATION_NOT_RETRYABLE);
+        }
+    }
+
+    @Test
+    void 偶发性失败保持可重试() throws Exception {
+        // 技能克隆失败、代理超时、代理异常退出可能是瞬时的（网络、模型侧），重试有意义。
+        for (String cause : List.of("AI_MIGRATION_SKILL_CLONE_FAILED: GIT_FAILED(128)",
+                "AI_MIGRATION_AGENT_TIMEOUT", "AI_MIGRATION_AGENT_FAILED")) {
+            String current = cause;
+            org.mockito.Mockito.doAnswer(invocation -> { throw new IOException(current); })
+                    .when(agentRuntime).run(any(), any(), any(), any());
+            assertThatThrownBy(() -> service.migrate(input, context))
+                    .describedAs(current)
+                    .extracting("errorCode").isEqualTo(TaskErrorCode.HANDLER_FAILED);
+        }
+    }
+
+    @Test
+    void 不可重试的失败向用户说明原因() throws Exception {
+        when(agentRuntime.run(any(), any(), any(), any())).thenThrow(new IOException("AI_MIGRATION_BASELINE_MODIFIED"));
+        assertThatThrownBy(() -> service.migrate(input, context))
+                .isInstanceOf(TaskExecutionException.class)
+                .hasMessageContaining("迁移基准在工作区中被改动");
+    }
+
+    @Test
     void 产物写失败时不回写成功() throws Exception {
         when(agentRuntime.run(any(), any(), eq(selection), eq(context)))
                 .thenReturn(new AiMigrationAgentRuntime.Executed(executedResult(), "+ diff".getBytes()));

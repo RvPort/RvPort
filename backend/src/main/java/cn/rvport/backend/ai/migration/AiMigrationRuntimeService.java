@@ -65,7 +65,7 @@ public class AiMigrationRuntimeService {
         });
         List<FindingView> findings = kbScanRepository.listAllFindingViews(input.scanRunId());
         AiMigrationProjector.Projection projection = AiMigrationProjector.project(input.scanRunId(), findings);
-        if (projection.items().isEmpty()) {
+        if (projection.suggestionClass().isEmpty()) {
             throw new TaskExecutionException(TaskErrorCode.AI_MIGRATION_NO_ENTRIES,
                     "当前扫描没有可迁移条目 / No projectable entries", null);
         }
@@ -182,6 +182,10 @@ public class AiMigrationRuntimeService {
         return summary;
     }
 
+    /**
+     * 把运行时的失败翻译为任务错误。只对"重试必然复现"的失败使用不可重试码；
+     * 技能克隆失败、代理超时与代理异常退出可能是偶发的，保留为可重试的 HANDLER_FAILED。
+     */
     private TaskExecutionException translate(IOException ex) {
         String message = ex.getMessage() == null ? "" : ex.getMessage();
         return switch (message) {
@@ -189,8 +193,26 @@ public class AiMigrationRuntimeService {
                     "当前扫描没有可迁移条目 / No projectable entries", null);
             case "AGENT_OUTPUT_INVALID" -> new TaskExecutionException(TaskErrorCode.AI_MIGRATION_OUTPUT_INVALID,
                     "迁移结果非法 / Invalid agent output", null);
+            case "AI_MIGRATION_BASELINE_MODIFIED" -> nonRetryable(
+                    "迁移基准在工作区中被改动，补丁不可信 / Migration baseline was modified in the workspace");
+            case "AI_MIGRATION_INPUT_MODIFIED" -> nonRetryable(
+                    "迁移输入在工作区中被改动 / Migration input was modified in the workspace");
+            case "AI_MIGRATION_EXECUTOR_MODE_INVALID" -> nonRetryable(
+                    "迁移执行器模式配置无效 / Invalid migration executor mode");
+            case "AI_MIGRATION_EXECUTOR_UNAVAILABLE" -> nonRetryable(
+                    "迁移执行器未配置 / Migration executor is not configured");
+            case "AI_MIGRATION_SOURCE_PATH_UNSAFE" -> nonRetryable(
+                    "迁移条目指向了源码目录之外的路径 / Migration entry points outside the source tree");
+            case "AI_MIGRATION_SOURCE_SYMLINK" -> nonRetryable(
+                    "迁移结果包含符号链接，补丁不可信 / Migration result contains symbolic links");
+            case "AI_MIGRATION_DIFF_FAILED" -> nonRetryable(
+                    "迁移补丁生成失败 / Failed to generate the migration patch");
             default -> new TaskExecutionException(TaskErrorCode.HANDLER_FAILED,
                     "迁移执行失败 / Migration execution failed: " + message, null);
         };
+    }
+
+    private static TaskExecutionException nonRetryable(String message) {
+        return new TaskExecutionException(TaskErrorCode.AI_MIGRATION_NOT_RETRYABLE, message, null);
     }
 }
