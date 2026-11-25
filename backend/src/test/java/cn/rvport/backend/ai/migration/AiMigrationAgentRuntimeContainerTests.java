@@ -94,7 +94,7 @@ class AiMigrationAgentRuntimeContainerTests {
         Files.createDirectories(sourceRoot.resolve("src"));
         Files.writeString(sourceRoot.resolve("src/a.c"), "x");
         var captured = new java.util.concurrent.atomic.AtomicReference<Path>();
-        when(containers.execute(eq(taskId), any(Path.class), any(Path.class), any(), any()))
+        when(containers.execute(eq(taskId), any(Path.class), any(Path.class), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     Path workerWs = invocation.getArgument(1);
                     Path hostWs = invocation.getArgument(2);
@@ -111,6 +111,15 @@ class AiMigrationAgentRuntimeContainerTests {
                             .containsEntry("WXAI_BASE_URL", "http://mock.invalid/v1");
                     // manifest 的 sourceRoot 为相对路径（容器内 /app 语义）
                     assertThat(Files.readString(workerWs.resolve("input/manifest.json"))).contains("\"sourceRoot\" : \"source\"");
+                    // 写出的条目文件按技能协议组织，路径是执行器容器内能直接打开的位置（工作区挂载在 /app）
+                    var written = new ObjectMapper().findAndRegisterModules()
+                            .readTree(Files.readString(workerWs.resolve("input/scan_result.json")));
+                    assertThat(written.get("target").asText()).isEqualTo("/app/source");
+                    assertThat(written.get("suggestion_class")).hasSize(1);
+                    assertThat(written.get("suggestion_class").get(0).get("file_path").asText())
+                            .isEqualTo("/app/source/src/a.c");
+                    assertThat(written.get("suggestion_class").get(0).get("solver_type").isIntegralNumber()).isTrue();
+                    assertThat(written.has("items")).isFalse();
                     // 容器模式不释放 opencode agent md
                     assertThat(Files.exists(workerWs.resolve(".opencode"))).isFalse();
                     Files.writeString(workerWs.resolve("output/migration_result.json"),
@@ -122,15 +131,44 @@ class AiMigrationAgentRuntimeContainerTests {
 
         assertThat(executed.result().doneCount()).isEqualTo(1);
         verifyNoInteractions(registry);
-        verify(skillRepository).ensureCloned();
         assertThat(captured.get()).doesNotExist();
+    }
+
+    @Test
+    void 容器启动后把终止容器登记为任务的可取消资源() throws Exception {
+        // 回归：只中断 worker 线程不会结束 docker run 子进程，用户取消后执行器容器会继续运行。
+        Files.createDirectories(sourceRoot.resolve("src"));
+        Files.writeString(sourceRoot.resolve("src/a.c"), "x");
+        var registered = new java.util.concurrent.atomic.AtomicReference<cn.rvport.backend.worker.CancellableResource>();
+        when(containers.execute(eq(taskId), any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+            // 模拟 ExecutorContainerService：容器启动后把"杀容器"交给调用方登记
+            @SuppressWarnings("unchecked")
+            java.util.function.Consumer<Runnable> register = invocation.getArgument(5);
+            assertThat(register).isNotNull();
+            register.accept(() -> { });
+            Path workerWs = invocation.getArgument(1);
+            Files.writeString(workerWs.resolve("output/migration_result.json"),
+                    "{\"entries\":[{\"id\":\"finding:a\",\"status\":\"DONE\"}]}");
+            return new ExecutorContainerResult(0, false, "DONE", "", "DONE");
+        });
+        // 任务上下文：抓住被登记的资源，断言它不是 null（即确实登记了可取消资源）
+        org.mockito.Mockito.doAnswer(invocation -> {
+                    registered.set(invocation.getArgument(0));
+                    return null;
+                })
+                .when(context).registerCancellableResource(any());
+
+        service("container").run(projection(), sourceRoot, selection, context);
+
+        org.mockito.Mockito.verify(context).registerCancellableResource(any());
+        assertThat(registered.get()).isNotNull();
     }
 
     @Test
     void 容器失败与超时语义透传() throws Exception {
         Files.createDirectories(sourceRoot.resolve("src"));
         Files.writeString(sourceRoot.resolve("src/a.c"), "x");
-        when(containers.execute(eq(taskId), any(), any(), any(), any()))
+        when(containers.execute(eq(taskId), any(), any(), any(), any(), any()))
                 .thenReturn(new ExecutorContainerResult(1, false, "", "boom", "boom"));
         assertThatThrownBy(() -> service("container").run(projection(), sourceRoot, selection, context))
                 .isInstanceOf(IOException.class).hasMessage("AI_MIGRATION_AGENT_FAILED");
@@ -142,18 +180,25 @@ class AiMigrationAgentRuntimeContainerTests {
     void 容器超时映射() throws Exception {
         Files.createDirectories(sourceRoot.resolve("src"));
         Files.writeString(sourceRoot.resolve("src/a.c"), "x");
-        when(containers.execute(eq(taskId), any(), any(), any(), any()))
+        when(containers.execute(eq(taskId), any(), any(), any(), any(), any()))
                 .thenReturn(new ExecutorContainerResult(-1, true, "", "", ""));
         assertThatThrownBy(() -> service("container").run(projection(), sourceRoot, selection, context))
                 .hasMessage("AI_MIGRATION_AGENT_TIMEOUT");
     }
 
     @Test
-    void 技能克隆失败映射为明确错误() {
-        org.mockito.Mockito.doThrow(new IllegalStateException("GIT_FAILED(128): no route"))
-                .when(skillRepository).ensureCloned();
-        assertThatThrownBy(() -> service("container").run(projection(), sourceRoot, selection, context))
-                .hasMessageContaining("AI_MIGRATION_SKILL_CLONE_FAILED");
+    void 容器模式不触发技能克隆() throws Exception {
+        // 技能由宿主侧 git 卷提供（管理端更新），容器路径不得在每次运行时克隆仓库
+        Files.createDirectories(sourceRoot.resolve("src"));
+        Files.writeString(sourceRoot.resolve("src/a.c"), "x");
+        when(containers.execute(eq(taskId), any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+            Path workerWs = invocation.getArgument(1);
+            Files.writeString(workerWs.resolve("output/migration_result.json"),
+                    "{\"entries\":[{\"id\":\"finding:a\",\"status\":\"DONE\"}]}");
+            return new ExecutorContainerResult(0, false, "DONE", "", "DONE");
+        });
+        service("container").run(projection(), sourceRoot, selection, context);
+        org.mockito.Mockito.verifyNoInteractions(skillRepository);
     }
 
     @Test
@@ -169,7 +214,7 @@ class AiMigrationAgentRuntimeContainerTests {
         var same = new AiMigrationAgentRuntime(models, registry, json, props, containers, skillRepository);
         Files.createDirectories(sourceRoot.resolve("src"));
         Files.writeString(sourceRoot.resolve("src/a.c"), "x");
-        when(containers.execute(eq(taskId), any(), any(), any(), any())).thenAnswer(invocation -> {
+        when(containers.execute(eq(taskId), any(), any(), any(), any(), any())).thenAnswer(invocation -> {
             Path workerWs = invocation.getArgument(1);
             Path hostWs = invocation.getArgument(2);
             assertThat(hostWs).isEqualTo(workerWs.toAbsolutePath().normalize());
