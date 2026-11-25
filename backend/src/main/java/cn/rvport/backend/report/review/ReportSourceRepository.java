@@ -27,10 +27,12 @@ public class ReportSourceRepository {
             UUID sourceSnapshot, UUID targetSnapshot) {
         return dsl.fetchOptional("""
                 select id,status,finished_at,target_environment_id,environment_config_version,source_build_run_id,
-                    summary->>'sourceSnapshotId' as source_snapshot_id,summary->>'targetSnapshotId' as target_snapshot_id,
+                    summary->'environmentRefresh'->>'sourceSnapshotId' as source_snapshot_id,
+                    summary->'environmentRefresh'->>'targetSnapshotId' as target_snapshot_id,
                     'dependency-analysis.v1' as result_schema_version from dependency_analysis_runs where project_id=? and source_revision_id=?
                   and target_environment_id=? and environment_config_version=? and source_build_run_id=?
-                  and summary->>'sourceSnapshotId'=? and summary->>'targetSnapshotId'=?
+                  and summary->'environmentRefresh'->>'sourceSnapshotId'=?
+                  and summary->'environmentRefresh'->>'targetSnapshotId'=?
                 order by (status='SUCCEEDED') desc,finished_at desc nulls last,created_at desc,id desc limit 1
                 """,project,source,target,version,build,sourceSnapshot.toString(),targetSnapshot.toString()).map(json::map);
     }

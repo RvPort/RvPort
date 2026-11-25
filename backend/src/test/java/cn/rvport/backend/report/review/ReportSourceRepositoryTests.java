@@ -17,7 +17,10 @@ class ReportSourceRepositoryTests {
             assertThat(db.lastExecution().bindings()).containsExactly(project,source,env,7L,build);
             ReviewWorkspaceRepositoryTests.enqueue(db,Map.of("id",build));
             assertThat(repo.dependency(project,source,env,7,build,snapshot,snapshot)).isPresent();
-            assertThat(db.lastExecution().sql()).contains("sourceSnapshotId","targetSnapshotId","source_build_run_id=?");
+            // 快照 id 由 DependencyAnalysisHandler 写在 summary.environmentRefresh 下，谓词必须同路径取值。
+            assertThat(db.lastExecution().sql())
+                    .contains("summary->'environmentRefresh'->>'sourceSnapshotId'","summary->'environmentRefresh'->>'targetSnapshotId'","source_build_run_id=?")
+                    .doesNotContain("summary->>'sourceSnapshotId'");
             assertThat(db.lastExecution().bindings()).containsExactly(project,source,env,7L,build,snapshot.toString(),snapshot.toString());
             ReviewWorkspaceRepositoryTests.enqueue(db,Map.of("id",build));
             assertThat(repo.specialized(project,source,"FLOATING_POINT",build,7L,"AST_ONLY",null)).isPresent();
