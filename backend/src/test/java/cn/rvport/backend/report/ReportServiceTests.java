@@ -42,6 +42,22 @@ class ReportServiceTests {
     @Mock private ReportComparisonRepository reportComparisonRepository;
 
     @Mock private cn.rvport.backend.report.review.ReviewWorkspaceService reviews;
+    @Test void mixedHistoryUsesOneRevisionBatchAndKeepsMissingReviewReadable() {
+        UUID project=UUID.randomUUID(),actor=UUID.randomUUID(),source=UUID.randomUUID();
+        var old=report(UUID.randomUUID(),project,source,UUID.randomUUID());
+        var current=report(UUID.randomUUID(),project,source,UUID.randomUUID());
+        var query=new ReportListRequest(1,20,null,null,null,null,null,null,null);
+        when(reportRepository.count(project,query)).thenReturn(2L);
+        when(reportRepository.list(project,query)).thenReturn(List.of(old,current));
+        when(reportRepository.sourceMetadata(List.of(source))).thenReturn(Map.of(source,SourceVersionMetadata.of("v1","123abc","REVISION_RECORD")));
+        when(reviews.metadata(any())).thenAnswer(invocation->invocation.getArgument(0).equals(current.id())?Map.of("pendingReviewCount",1L):null);
+        var result=service().list(project,query,actor,false);
+        assertThat(result.total()).isEqualTo(2);
+        assertThat(result.items()).extracting(ReportResponse::reviewAvailable).containsExactly(false,true);
+        assertThat(result.items()).extracting(ReportResponse::sourceVersionLabel).containsExactly("v1","v1");
+        verify(reportRepository).sourceMetadata(List.of(source));
+        verify(projectAccessService).requireProjectAccess(project,actor,false);
+    }
 
     @Test
     void reportIdEntrypointsRequireProjectAccessAndDownloadThroughObjectStorage() {

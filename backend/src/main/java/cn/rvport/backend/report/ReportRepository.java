@@ -55,6 +55,20 @@ public class ReportRepository {
                 .where(REPORTS.ID.eq(reportId))
                 .fetchOptional(record -> ReportView.from(record, jsonbToMap(record.getSummary())));
     }
+    public void captureSourceMetadata(UUID reportId,Map<String,Object> metadata) {
+        dsl.execute("update reports set summary=coalesce(summary,'{}'::jsonb) || jsonb_build_object('sourceMetadata',?::jsonb) where id=?",
+                toMetadataJson(metadata),reportId);
+    }
+    private String toMetadataJson(Map<String,Object> metadata) {
+        try { return objectMapper.writeValueAsString(metadata); }
+        catch(JsonProcessingException ex) { throw new IllegalArgumentException("REPORT_METADATA_INVALID",ex); }
+    }
+    public Map<UUID,Map<String,Object>> sourceMetadata(List<UUID> ids) {
+        if(ids.isEmpty()) return Map.of();
+        return dsl.fetch("select id,version_label,git_commit from source_revisions where id=any(?::uuid[])",(Object)ids.toArray(UUID[]::new))
+                .intoMap(row->row.get("id",UUID.class),row->SourceVersionMetadata.of(row.get("version_label",String.class),
+                        row.get("git_commit",String.class),"REVISION_RECORD"));
+    }
 
     public Optional<ReportView> findByTaskId(UUID taskId) {
         return dsl.selectFrom(REPORTS)

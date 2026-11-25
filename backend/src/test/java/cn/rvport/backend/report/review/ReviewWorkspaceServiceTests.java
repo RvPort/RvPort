@@ -27,6 +27,21 @@ class ReviewWorkspaceServiceTests {
     final ObjectMapper mapper=new ObjectMapper();
     final ReviewWorkspaceService service=new ReviewWorkspaceService(repository,access,selection,files,artifacts,mapper);
     ReviewWorkspaceRepository.Draft draft;
+    @Test void missingRunIsReadOnlyAndAuthorizationPrecedesIntegrityDetails() {
+        when(repository.runSummary(report)).thenReturn(Optional.empty());
+        assertThat(service.metadata(report)).isNull();
+        when(repository.draft(report)).thenReturn(Optional.empty());
+        when(repository.reportProject(report)).thenReturn(Optional.of(project));
+        code("REPORT_REVIEW_UNAVAILABLE",()->service.authorized(report,actor,false));
+        verify(access).requireProjectAccess(project,actor,false);
+        doThrow(new ApiException(HttpStatus.FORBIDDEN,"PROJECT_ACCESS_DENIED","无权限")).when(access).requireProjectAccess(project,actor,false);
+        code("PROJECT_ACCESS_DENIED",()->service.authorized(report,actor,false));
+        when(repository.reportProject(report)).thenReturn(Optional.empty());
+        code("REPORT_NOT_FOUND",()->service.authorized(report,actor,false));
+        verify(repository,never()).advanceDraft(any(),anyLong());
+        verify(repository,never()).confirm(any(),any(),anyLong(),anyLong());
+        verifyNoInteractions(artifacts);
+    }
     @BeforeEach void setup() {
         draft=new ReviewWorkspaceRepository.Draft(report,project,source,"ctx","CURRENT",2,2,true,null,null);
         when(repository.draft(report)).thenReturn(Optional.of(draft));

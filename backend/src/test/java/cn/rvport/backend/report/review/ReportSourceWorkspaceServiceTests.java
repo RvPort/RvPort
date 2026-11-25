@@ -62,4 +62,36 @@ class ReportSourceWorkspaceServiceTests {
         doThrow(new ApiException(HttpStatus.NOT_FOUND,"REPORT_NOT_FOUND","test")).when(access).authorized(report,actor,false);
         assertThatThrownBy(()->service.files(report,actor,false,null,null,1,20)).isInstanceOf(ApiException.class);
     }
+    void searchFile(byte[] content) {
+        manifest(new ReportSourceSnapshotService.File("key","src/a.c",SourceSelection.hash(content),null,artifact,true,null));
+        when(artifacts.download(artifact)).thenReturn(new StoredArtifactResource(null,new ByteArrayResource(content)));
+    }
+    @Test void searchUsesFixedArtifactAndDistinguishesEmptyFromUnreadable() {
+        searchFile(("line\n".repeat(501)+"needle").getBytes(StandardCharsets.UTF_8));
+        assertThat(service.search(report,"key",actor,false,"needle",false,1)).containsEntry("available",true).containsEntry("returnedCount",1);
+        assertThat(service.search(report,"key",actor,false,"absent",false,1)).containsEntry("available",true).containsEntry("matches",List.of());
+        verify(artifacts,times(2)).download(artifact);
+        when(artifacts.download(artifact)).thenReturn(new StoredArtifactResource(null,new ByteArrayResource(new byte[0])));
+        assertThat(service.search(report,"key",actor,false,"x",false,1)).containsEntry("available",false).containsEntry("reasonCode","SOURCE_CONTENT_CHANGED");
+        searchFile(new byte[]{(byte)0xff});assertThat(service.search(report,"key",actor,false,"x",false,1)).containsEntry("reasonCode","INVALID_UTF8");
+        searchFile(new byte[]{0});assertThat(service.search(report,"key",actor,false,"x",false,1)).containsEntry("reasonCode","BINARY_FILE");
+        searchFile(new byte[10*1024*1024+1]);assertThat(service.search(report,"key",actor,false,"x",false,1)).containsEntry("reasonCode","FILE_TOO_LARGE");
+    }
+    @Test void searchRejectsUnboundFilesAndDoesNotHideUnrelatedErrors() throws Exception {
+        manifest(new ReportSourceSnapshotService.File("key","a",null,null,null,false,null));
+        assertThat(service.search(report,"key",actor,false,"x",false,1)).containsEntry("reasonCode","SOURCE_CONTEXT_UNAVAILABLE");
+        manifest(new ReportSourceSnapshotService.File("key","a",null,null,null,true,"SOURCE_NOT_CAPTURED"));
+        assertThat(service.search(report,"key",actor,false,"x",false,1)).containsEntry("reasonCode","SOURCE_NOT_CAPTURED");
+        assertThatThrownBy(()->service.search(report,"unknown",actor,false,"x",false,1)).isInstanceOf(ApiException.class);
+        manifest(fixture());
+        for(String code:List.of("ARTIFACT_NOT_FOUND","ARTIFACT_OBJECT_NOT_FOUND")) {
+            reset(artifacts);when(artifacts.download(artifact)).thenThrow(new ApiException(HttpStatus.NOT_FOUND,code,"test"));
+            assertThat(service.search(report,"key",actor,false,"x",false,1)).containsEntry("available",false);
+        }
+        reset(artifacts);when(artifacts.download(artifact)).thenThrow(new ApiException(HttpStatus.FORBIDDEN,"FORBIDDEN","test"));
+        assertThatThrownBy(()->service.search(report,"key",actor,false,"x",false,1)).isInstanceOf(ApiException.class);
+        reset(artifacts);var resource=mock(org.springframework.core.io.Resource.class);when(resource.getInputStream()).thenThrow(new java.io.IOException());
+        when(artifacts.download(artifact)).thenReturn(new StoredArtifactResource(null,resource));
+        assertThat(service.search(report,"key",actor,false,"x",false,1)).containsEntry("reasonCode","SOURCE_CONTEXT_UNAVAILABLE");
+    }
 }

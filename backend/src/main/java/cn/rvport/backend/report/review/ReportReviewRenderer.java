@@ -29,6 +29,9 @@ public class ReportReviewRenderer {
     public Map<String,Object> document(UUID report,ReportReviewManifest manifest,ReportAiReviewRuntime.Reviewed reviewed) {
         Map<String,Object> result=new LinkedHashMap<>(); result.put("schemaVersion","report-review.v2"); result.put("reportId",report);
         result.put("projectId",manifest.projectId()); result.put("sourceRevisionId",manifest.sourceRevisionId());
+        if(manifest.sourceMetadata()!=null) result.putAll(manifest.sourceMetadata());
+        result.put("displayEvidence",manifest.displayEvidence()==null?ReasonDescriptionResolver.snapshot(manifest.items(),manifest.selection()):manifest.displayEvidence());
+        result.put("displayEvidenceOrigin",manifest.displayEvidence()==null?"READ_TIME":"SNAPSHOT");
         result.put("contextHash",manifest.contextHash()); result.put("mode",manifest.mode()); result.put("summary",summary(manifest));
         result.put("sources",sources(manifest));
         // 固定扫描事实与 AI 结论；人工工作台通过自己的版本和确认制品呈现。

@@ -16,6 +16,12 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/reports/{reportId}/source-files")
 public class ReportSourceWorkspaceController {
     private final ReportSourceWorkspaceService service;
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<cn.rvport.backend.common.error.ApiErrorResponse> invalidParameter(HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(new cn.rvport.backend.common.error.ApiErrorResponse("REPORT_REQUEST_INVALID",
+                "源码查询参数不正确",Map.of("messageEn","Invalid source query parameters"),
+                TraceIdFilter.currentTraceId(request),java.time.Instant.now()));
+    }
     public ReportSourceWorkspaceController(ReportSourceWorkspaceService service) { this.service=service; }
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<Map<String,Object>>>> files(@PathVariable UUID reportId,
@@ -31,5 +37,12 @@ public class ReportSourceWorkspaceController {
             @AuthenticationPrincipal RvPortUserPrincipal user,HttpServletRequest request) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(
                 service.context(reportId,fileKey,user.id(),user.superAdmin(),startLine,endLine),TraceIdFilter.currentTraceId(request)));
+    }
+    @GetMapping("/{fileKey}/search")
+    public ResponseEntity<ApiResponse<Map<String,Object>>> search(@PathVariable UUID reportId,@PathVariable String fileKey,
+            @RequestParam(required=false) String keyword,@RequestParam(defaultValue="false") boolean caseSensitive,
+            @RequestParam(defaultValue="100") int limit,@AuthenticationPrincipal RvPortUserPrincipal user,HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(
+                service.search(reportId,fileKey,user.id(),user.superAdmin(),keyword,caseSensitive,limit),TraceIdFilter.currentTraceId(request)));
     }
 }

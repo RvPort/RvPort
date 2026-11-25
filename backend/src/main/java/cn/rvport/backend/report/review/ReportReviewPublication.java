@@ -55,6 +55,7 @@ public class ReportReviewPublication {
                 report,attempt,result.inputId(),result.verdict().name(),reviews.json(result));
         reviews.finish(report,current?"CURRENT":"HISTORICAL_CONTEXT_CHANGED",reviewed.summary());
         var saved=new LinkedHashMap<>(summary); saved.put("aiSummary",reviewed.summary()); saved.put("organizationAvailable",true);
+        if(manifest.sourceMetadata()!=null) saved.put("sourceMetadata",manifest.sourceMetadata());
         saved.put("schemaVersion","report-review.v2"); saved.put("publishState",current?"CURRENT":"HISTORICAL_CONTEXT_CHANGED");
         return reports.markSucceeded(report,saved,risk);
     }

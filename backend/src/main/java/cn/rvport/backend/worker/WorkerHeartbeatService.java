@@ -20,6 +20,7 @@ public class WorkerHeartbeatService {
     private final WorkerInstanceRepository workerInstanceRepository;
     private final WorkerConcurrencyController workerConcurrencyController;
     private final TaskExecutionRegistry taskExecutionRegistry;
+    private final ReportWorkerCapabilityService capabilities;
     private boolean registered;
 
     public WorkerHeartbeatService(
@@ -27,13 +28,15 @@ public class WorkerHeartbeatService {
             WorkerInstanceIdProvider workerInstanceIdProvider,
             WorkerInstanceRepository workerInstanceRepository,
             WorkerConcurrencyController workerConcurrencyController,
-            TaskExecutionRegistry taskExecutionRegistry
+            TaskExecutionRegistry taskExecutionRegistry,
+            ReportWorkerCapabilityService capabilities
     ) {
         this.properties = properties;
         this.workerInstanceIdProvider = workerInstanceIdProvider;
         this.workerInstanceRepository = workerInstanceRepository;
         this.workerConcurrencyController = workerConcurrencyController;
         this.taskExecutionRegistry = taskExecutionRegistry;
+        this.capabilities=capabilities;
     }
 
     @Scheduled(initialDelay = 0, fixedDelayString = "${rvport.worker.heartbeat-interval-seconds:10}000")
@@ -56,6 +59,8 @@ public class WorkerHeartbeatService {
                 activeConcurrency,
                 taskExecutionRegistry.activeCount()
         );
+        try { capabilities.heartbeat(workerInstanceIdProvider.workerInstanceId()); }
+        catch(RuntimeException ex) { log.warn("Worker capability observation deferred errorType={}",ex.getClass().getSimpleName()); }
     }
 
     private String hostname() {

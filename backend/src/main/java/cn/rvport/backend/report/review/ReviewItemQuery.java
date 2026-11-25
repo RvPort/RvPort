@@ -20,7 +20,7 @@ public record ReviewItemQuery(Integer page,Integer pageSize,Long draftVersion,St
         int number=page==null?1:page, size=pageSize==null?50:pageSize;
         String order=sortOrder==null?"asc":sortOrder;
         String field=sortBy==null?"createdAt":sortBy;
-        if(number<1 || size<1 || size>200 || !List.of("asc","desc").contains(order)
+        if(number<1 || size<1 || size>200 || keyword!=null && keyword.trim().length()>256 || !List.of("asc","desc").contains(order)
                 || !List.of("createdAt","path","line","riskLevel","reviewState","title").contains(field)) throw invalid();
         Comparator<Map<String,Object>> comparator=comparator(field);
         if(order.equals("desc")) comparator=comparator.reversed();
@@ -42,8 +42,8 @@ public record ReviewItemQuery(Integer page,Integer pageSize,Long draftVersion,St
             if(!entry.getValue().isEmpty() && !entry.getValue().equals(text(value(item,entry.getKey())))) return false;
         }
         if(keyword==null || keyword.isBlank()) return true;
-        String search=keyword.toLowerCase(Locale.ROOT);
-        return List.of("title","titleEn","relativePath").stream().anyMatch(k->text(item.get(k)).toLowerCase(Locale.ROOT).contains(search));
+        String search=keyword.trim().toLowerCase(Locale.ROOT);
+        return ReviewDisplayTextExtractor.text(item).anyMatch(value->value.toLowerCase(Locale.ROOT).contains(search));
     }
     private Comparator<Map<String,Object>> comparator(String field) {
         if(field.equals("line")) return Comparator.comparingLong(v->v.get("startLine") instanceof Number n?n.longValue():Long.MAX_VALUE);

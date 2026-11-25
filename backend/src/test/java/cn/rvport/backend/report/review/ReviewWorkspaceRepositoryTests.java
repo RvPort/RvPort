@@ -15,6 +15,23 @@ import org.junit.jupiter.api.Test;
 class ReviewWorkspaceRepositoryTests {
     final UUID report=UUID.randomUUID(),project=UUID.randomUUID(),source=UUID.randomUUID(),actor=UUID.randomUUID(),item=UUID.randomUUID();
     final ObjectMapper mapper=new ObjectMapper();
+    @Test void absentRunHasExplicitUnavailableAndNeverWritesDuringReads() throws Exception {
+        try(var db=new JooqMockDatabase()) {
+            var repo=new ReviewWorkspaceRepository(db.dsl(),mapper);
+            db.enqueueResult(db.result(new Field<?>[]{DSL.field("manifest",JSONB.class)}));
+            assertThatThrownBy(()->repo.manifest(report)).isInstanceOfSatisfying(cn.rvport.backend.common.error.ApiException.class,
+                    ex->assertThat(ex.code()).isEqualTo("REPORT_REVIEW_UNAVAILABLE"));
+            enqueue(db,Map.of("project_id",project));assertThat(repo.reportProject(report)).contains(project);
+            enqueue(db,Map.of("manifest",JSONB.valueOf("{bad")));
+            assertThatThrownBy(()->repo.manifest(report)).hasMessage("REPORT_MANIFEST_INVALID");
+            enqueue(db,Map.of("original_snapshot",JSONB.valueOf("{\"reason\":\"input-or-relation-unknown\"}"),"source_type","KB_FINDING"));
+            var item=repo.item(report,this.item).orElseThrow();
+            assertThat(item).containsEntry("displayEvidenceOrigin","READ_TIME");
+            assertThat(item.get("displayEvidence").toString()).contains("输入信息或关联关系","input-or-relation-unknown");
+            assertThat(db.executions()).allSatisfy(ex->assertThat(ex.sql().stripLeading()).startsWith("select"));
+            db.verifyComplete();
+        }
+    }
     @Test void initializesDraftFromValidatedVerdictAndPreservesHumanDisposition() throws Exception {
         try (var db = new JooqMockDatabase()) {
             var repository = new ReviewWorkspaceRepository(db.dsl(), mapper);
@@ -104,10 +121,13 @@ class ReviewWorkspaceRepositoryTests {
             enqueue(db,Map.of("total",2L,"pending",0L,"to_fix",1L,"excluded",1L,"manual",1L));
             assertThat(repo.summary(report)).containsEntry("toFixCount",1L).containsEntry("excludedCount",1L).containsEntry("total",2L);
             var draft=new ReviewWorkspaceRepository.Draft(report,project,source,"hash","CURRENT",2,3,true,null,null);
-            db.enqueueRows(1).enqueueRows(2).enqueueRows(1);
+            db.enqueueRows(1);
+            enqueue(db,Map.of("id",item,"display_evidence",JSONB.valueOf("[]"),"original_snapshot",JSONB.valueOf("{}")));
+            db.enqueueRows(2).enqueueRows(1);
             UUID id=repo.confirm(draft,actor,2,1);
             assertThat(db.executions().get(1).bindings()).containsExactly(id,report,2L,1L,2L,actor);
-            assertThat(db.executions().get(2).sql()).contains("to_jsonb(report_review_items)").doesNotContain("review_state='TO_FIX'");
+            assertThat(db.executions().get(3).sql()).contains("to_jsonb(report_review_items)").doesNotContain("review_state='TO_FIX'");
+            assertThat(db.executions().get(3).bindings()[1].toString()).contains("displayEvidence","SNAPSHOT");
             assertThat(db.lastExecution().sql()).contains("review_revision=review_revision+1");
             db.verifyComplete();
         }

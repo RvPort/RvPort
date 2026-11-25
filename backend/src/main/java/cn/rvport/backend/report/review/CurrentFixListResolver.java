@@ -17,7 +17,8 @@ public class CurrentFixListResolver {
     public Current current(UUID project) {
         UUID report=reviews.currentReport(project).orElse(null);
         if(report==null) return new Current(false,null,null,null,0,"REPORT_NOT_GENERATED");
-        var draft=reviews.draft(report).orElseThrow();
+        var draft=reviews.draft(report).orElse(null);
+        if(draft==null) return new Current(false,report,null,null,0,"REPORT_REVIEW_UNAVAILABLE");
         if(!draft.contextHash().equals(policy.current(project).contextHash())) return new Current(false,report,null,draft.version(),0,"REPORT_CONTEXT_CHANGED");
         if(!draft.writable() || !"CURRENT".equals(draft.publishState())) return new Current(false,report,null,draft.version(),0,"REPORT_READ_ONLY");
         if(draft.currentConfirmationId()==null) return new Current(false,report,null,draft.version(),0,

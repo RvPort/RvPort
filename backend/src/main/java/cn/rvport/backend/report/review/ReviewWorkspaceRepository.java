@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.UUID;
 import org.jooq.DSLContext;
 import org.jooq.JSONB;
@@ -77,9 +78,13 @@ public class ReviewWorkspaceRepository {
     }
 
     public ReportReviewManifest manifest(UUID reportId) {
-        var row=dsl.fetchOptional("select manifest from report_review_runs where report_id=?",reportId).orElseThrow();
+        var row=dsl.fetchOptional("select manifest from report_review_runs where report_id=?",reportId)
+                .orElseThrow(ReviewWorkspaceService::unavailable);
         try { return mapper.readValue(row.get("manifest",JSONB.class).data(),ReportReviewManifest.class); }
         catch(java.io.IOException ex) { throw new IllegalStateException("REPORT_MANIFEST_INVALID",ex); }
+    }
+    public Optional<UUID> reportProject(UUID reportId) {
+        return dsl.fetchOptional("select project_id from reports where id=?",reportId).map(row->row.get("project_id",UUID.class));
     }
     public void finish(UUID reportId,String publishState,Map<String,?> aiSummary) {
         dsl.execute("update report_review_runs set active=false,publish_state=?,ai_summary=?::jsonb where report_id=?",publishState,json(aiSummary),reportId);
@@ -129,11 +134,12 @@ public class ReviewWorkspaceRepository {
 
     // 自动分流不产生人工事件。人工处置、显式确认或上次可靠继承才可作为下一版的人工决定。
     private static final String SELECT_ITEMS = """
-            select i.*, (i.origin='MANUAL' or i.inheritance @> '{"manualDecision":true}'::jsonb
+            select i.*, r.manifest->'displayEvidence'->'items'->(i.id::text) as display_evidence,
+                (i.origin='MANUAL' or i.inheritance @> '{"manualDecision":true}'::jsonb
                 or exists (select 1 from report_review_events e where e.report_id=i.report_id and e.item_id=i.id)
                 or exists (select 1 from report_fix_list_items f where f.report_id=i.report_id and f.item_id=i.id
                            and f.review_state=i.review_state)) as has_manual_decision
-            from report_review_items i where i.report_id=?
+            from report_review_items i left join report_review_runs r on r.report_id=i.report_id where i.report_id=?
             """;
 
     public Optional<Map<String,Object>> item(UUID reportId, UUID itemId) {
@@ -239,11 +245,16 @@ public class ReviewWorkspaceRepository {
                 insert into report_fix_list_confirmations(id,report_id,draft_version,item_count,reviewed_item_count,confirmed_by)
                 values(?,?,?,?,?,?)
                 """,id,draft.reportId(),draft.version(),toFix,total,actorId);
+        Map<String,Object> display=new LinkedHashMap<>();
+        for(var item:items(draft.reportId())) display.put(item.get("id").toString(),Map.of(
+                "displayEvidence",item.getOrDefault("displayEvidence",List.of()),
+                "displayEvidenceOrigin",item.getOrDefault("displayEvidenceOrigin","READ_TIME")));
+        // 保留已发布的 snake_case 快照契约，仅附加独立展示字段，不改原始事实。
         dsl.execute("""
                 insert into report_fix_list_items(confirmation_id,report_id,item_id,review_state,snapshot)
-                select ?,report_id,id,review_state,to_jsonb(report_review_items)
+                select ?,report_id,id,review_state,to_jsonb(report_review_items) || coalesce(?::jsonb->(id::text),'{}'::jsonb)
                 from report_review_items where report_id=?
-                """,id,draft.reportId());
+                """,id,json(display),draft.reportId());
         dsl.execute("""
                 update report_review_drafts set current_confirmation_id=?,review_revision=review_revision+1,updated_at=now()
                 where report_id=?
@@ -270,6 +281,14 @@ public class ReviewWorkspaceRepository {
     Map<String,Object> map(Record row) {
         Map<String,Object> result=new LinkedHashMap<>();
         row.intoMap().forEach((key,value) -> result.put(camel(key),decode(value)));
+        if(result.containsKey("originalSnapshot")) {
+            boolean fixed=result.get("displayEvidence")!=null;
+            if(!fixed) {
+                var facts=new LinkedHashMap<String,Object>();facts.put("evidence",result.get("originalSnapshot"));facts.put("inheritance",result.get("inheritance"));
+                result.put("displayEvidence",ReasonDescriptionResolver.evidence(Objects.toString(result.get("sourceType"),""),facts));
+            }
+            result.put("displayEvidenceOrigin",fixed?"SNAPSHOT":"READ_TIME");
+        }
         return result;
     }
 

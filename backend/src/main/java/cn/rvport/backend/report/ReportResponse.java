@@ -23,8 +23,19 @@ public record ReportResponse(
         boolean organizationAvailable,
         String organizationSchemaVersion,
         OffsetDateTime generatedAt,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        String sourceVersionLabel,
+        String sourceGitCommit,
+        String sourceMetadataOrigin
 ) {
+    @com.fasterxml.jackson.annotation.JsonProperty
+    public boolean reviewAvailable() { return review!=null; }
+    @com.fasterxml.jackson.annotation.JsonProperty
+    public String reviewUnavailableReasonCode() { return review==null?"REPORT_REVIEW_UNAVAILABLE":null; }
+    @com.fasterxml.jackson.annotation.JsonProperty
+    public String reviewUnavailableMessage() { return review==null?"该报告缺少可用的复核数据":null; }
+    @com.fasterxml.jackson.annotation.JsonProperty
+    public String reviewUnavailableMessageEn() { return review==null?"Review data is unavailable for this report":null; }
     static ReportResponse from(
             ReportView view,
             List<ReportArtifactSummaryResponse> artifacts,
@@ -32,6 +43,12 @@ public record ReportResponse(
             ReportComparisonSummaryResponse latestComparison,
             Map<String,Object> review
     ) {
+        return from(view,artifacts,latestComparableReport,latestComparison,review,null);
+    }
+    static ReportResponse from(ReportView view,List<ReportArtifactSummaryResponse> artifacts,
+            LatestComparableReportResponse latestComparableReport,ReportComparisonSummaryResponse latestComparison,
+            Map<String,Object> review,Map<String,Object> fallback) {
+        var metadata=SourceVersionMetadata.resolve(view,fallback);
         return new ReportResponse(
                 view.id(),
                 view.projectId(),
@@ -49,7 +66,10 @@ public record ReportResponse(
                 Boolean.TRUE.equals(view.summary().get("organizationAvailable")),
                 view.summary().get("schemaVersion") == null ? null : String.valueOf(view.summary().get("schemaVersion")),
                 view.generatedAt(),
-                view.createdAt()
+                view.createdAt(),
+                (String)metadata.get("sourceVersionLabel"),
+                (String)metadata.get("sourceGitCommit"),
+                (String)metadata.get("sourceMetadataOrigin")
         );
     }
 }

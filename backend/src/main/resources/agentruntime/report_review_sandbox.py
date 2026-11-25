@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 import stat
 import sys
+import subprocess
+import tempfile
 
 READ = (1 << 0) | (1 << 2) | (1 << 3)
 WRITE = sum(1 << bit for bit in [1, 4, 5, 6, 7, 8, 9, 10, 11, 12])
@@ -83,6 +85,8 @@ def restrict(workspace):
 
 
 def main(argv):
+    if argv == ["--self-test"]:
+        return self_test()
     if not argv or not os.environ.get("RVPORT_REPORT_REVIEW_SANDBOX"):
         return 126
     # 不向 Agent 继承 worker 的数据库、对象存储、凭据加密等环境变量。
@@ -100,6 +104,34 @@ def main(argv):
     except (OSError, ValueError, RuntimeError):
         print("REPORT_AI_SANDBOX_UNAVAILABLE", file=sys.stderr)
         return 126
+
+
+def self_test():
+    """只在独立临时目录验证真实隔离，不继承模型或 Worker 凭据。"""
+    try:
+        with tempfile.TemporaryDirectory(prefix="rvport-sandbox-check-") as root:
+            workspace = Path(root)
+            (workspace / "input").mkdir()
+            (workspace / "source").mkdir()
+            (workspace / "source/probe").write_text("fixed")
+            code = """
+from pathlib import Path
+p=Path('source/probe')
+assert p.read_text()=='fixed'
+try:
+    p.write_text('changed')
+except PermissionError:
+    pass
+else:
+    raise RuntimeError('read-only enforcement failed')
+Path('output/probe').write_text('writable')
+"""
+            result = subprocess.run([sys.executable, str(Path(__file__).resolve()), sys.executable, "-c", code],
+                                    cwd=root, env={"PATH": "/usr/local/bin:/usr/bin:/bin", "RVPORT_REPORT_REVIEW_SANDBOX": root},
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8, check=False)
+            return 0 if result.returncode == 0 else 126 if result.returncode == 126 else 125
+    except (OSError, subprocess.TimeoutExpired):
+        return 125
 
 
 if __name__ == "__main__":
