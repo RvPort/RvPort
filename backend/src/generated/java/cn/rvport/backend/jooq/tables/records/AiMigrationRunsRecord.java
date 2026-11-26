@@ -232,6 +232,34 @@ public class AiMigrationRunsRecord extends UpdatableRecordImpl<AiMigrationRunsRe
         return (OffsetDateTime) get(14);
     }
 
+    /**
+     * Setter for <code>public.ai_migration_runs.report_id</code>.
+     */
+    public void setReportId(UUID value) {
+        set(15, value);
+    }
+
+    /**
+     * Getter for <code>public.ai_migration_runs.report_id</code>.
+     */
+    public UUID getReportId() {
+        return (UUID) get(15);
+    }
+
+    /**
+     * Setter for <code>public.ai_migration_runs.report_context_hash</code>.
+     */
+    public void setReportContextHash(String value) {
+        set(16, value);
+    }
+
+    /**
+     * Getter for <code>public.ai_migration_runs.report_context_hash</code>.
+     */
+    public String getReportContextHash() {
+        return (String) get(16);
+    }
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -255,7 +283,7 @@ public class AiMigrationRunsRecord extends UpdatableRecordImpl<AiMigrationRunsRe
     /**
      * Create a detached, initialised AiMigrationRunsRecord
      */
-    public AiMigrationRunsRecord(UUID id, UUID projectId, UUID taskId, UUID scanRunId, String status, JSONB summary, Integer itemCount, Integer doneCount, Integer falsePositiveCount, Integer pendingCount, UUID modelProfileId, UUID agentRuntimeId, OffsetDateTime createdAt, OffsetDateTime startedAt, OffsetDateTime finishedAt) {
+    public AiMigrationRunsRecord(UUID id, UUID projectId, UUID taskId, UUID scanRunId, String status, JSONB summary, Integer itemCount, Integer doneCount, Integer falsePositiveCount, Integer pendingCount, UUID modelProfileId, UUID agentRuntimeId, OffsetDateTime createdAt, OffsetDateTime startedAt, OffsetDateTime finishedAt, UUID reportId, String reportContextHash) {
         super(AiMigrationRuns.AI_MIGRATION_RUNS);
 
         setId(id);
@@ -273,6 +301,8 @@ public class AiMigrationRunsRecord extends UpdatableRecordImpl<AiMigrationRunsRe
         setCreatedAt(createdAt);
         setStartedAt(startedAt);
         setFinishedAt(finishedAt);
+        setReportId(reportId);
+        setReportContextHash(reportContextHash);
         resetTouchedOnNotNull();
     }
 }

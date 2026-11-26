@@ -54,8 +54,11 @@ class AiMigrationRuntimeServiceTests {
     final StoredArtifactService storedArtifactService = mock(StoredArtifactService.class);
     final ArchiveCandidateRegistrar archiveCandidateRegistrar = mock(ArchiveCandidateRegistrar.class);
     final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+    final AiMigrationReportSource reportSource = mock(AiMigrationReportSource.class);
+    final MigrationStatusWriter statusWriter = mock(MigrationStatusWriter.class);
     final AiMigrationRuntimeService service = new AiMigrationRuntimeService(repository, kbScanRepository,
-            sourceRepository, agentRuntime, storedArtifactService, archiveCandidateRegistrar, mapper);
+            sourceRepository, reportSource, statusWriter, agentRuntime, storedArtifactService,
+            archiveCandidateRegistrar, mapper);
     final ModelExecutionSelection selection = new ModelExecutionSelection(actor, profileId, runtimeId);
     final TaskExecutionContext context = mock(TaskExecutionContext.class);
     final AiMigrationInput input = new AiMigrationInput(project, runId, scanRun, revision, selection, Map.of());
@@ -94,14 +97,14 @@ class AiMigrationRuntimeServiceTests {
 
     @Test
     void 运行时空条目翻译与任务异常透传() throws Exception {
-        when(agentRuntime.run(any(), any(), any(), any())).thenThrow(new IOException("AI_MIGRATION_NO_ENTRIES"));
+        when(agentRuntime.run(any(), any(), any(), any(), any())).thenThrow(new IOException("AI_MIGRATION_NO_ENTRIES"));
         assertThatThrownBy(() -> service.migrate(input, context))
                 .extracting("errorCode").isEqualTo(TaskErrorCode.AI_MIGRATION_NO_ENTRIES);
     }
 
     @Test
     void 任务级异常透传() throws Exception {
-        when(agentRuntime.run(any(), any(), any(), any()))
+        when(agentRuntime.run(any(), any(), any(), any(), any()))
                 .thenThrow(new TaskExecutionException(TaskErrorCode.INPUT_INVALID, "x", null));
         assertThatThrownBy(() -> service.migrate(input, context))
                 .extracting("errorCode").isEqualTo(TaskErrorCode.INPUT_INVALID);
@@ -116,7 +119,7 @@ class AiMigrationRuntimeServiceTests {
 
     @Test
     void 执行中断恢复中断标志() throws Exception {
-        when(agentRuntime.run(any(), any(), any(), any())).thenThrow(new InterruptedException());
+        when(agentRuntime.run(any(), any(), any(), any(), any())).thenThrow(new InterruptedException());
         assertThatThrownBy(() -> service.migrate(input, context))
                 .hasMessageContaining("被中断");
         assertThat(Thread.currentThread().isInterrupted()).isTrue();
@@ -126,7 +129,7 @@ class AiMigrationRuntimeServiceTests {
     @Test
     void 完整链推进状态入库产物并登记归档() throws Exception {
         var executed = new AiMigrationAgentRuntime.Executed(executedResult(), "+ diff".getBytes());
-        when(agentRuntime.run(any(), any(), eq(selection), eq(context))).thenReturn(executed);
+        when(agentRuntime.run(any(), any(), eq(selection), eq(context), any())).thenReturn(executed);
 
         service.migrate(input, context);
 
@@ -164,28 +167,68 @@ class AiMigrationRuntimeServiceTests {
 
     @Test
     void 输出非法翻译为不可重试码() throws Exception {
-        when(agentRuntime.run(any(), any(), any(), any())).thenThrow(new IOException("AGENT_OUTPUT_INVALID"));
+        when(agentRuntime.run(any(), any(), any(), any(), any())).thenThrow(new IOException("AGENT_OUTPUT_INVALID"));
         assertThatThrownBy(() -> service.migrate(input, context))
                 .extracting("errorCode").isEqualTo(TaskErrorCode.AI_MIGRATION_OUTPUT_INVALID);
     }
 
     @Test
     void 模型身份缺失翻译为未配置码() throws Exception {
-        when(agentRuntime.run(any(), any(), any(), any())).thenThrow(ModelExecutionSelection.missing());
+        when(agentRuntime.run(any(), any(), any(), any(), any())).thenThrow(ModelExecutionSelection.missing());
         assertThatThrownBy(() -> service.migrate(input, context))
                 .extracting("errorCode").isEqualTo(TaskErrorCode.AI_MIGRATION_MODEL_NOT_CONFIGURED);
     }
 
     @Test
     void 其余执行失败翻译为通用码() throws Exception {
-        when(agentRuntime.run(any(), any(), any(), any())).thenThrow(new IOException("AI_MIGRATION_AGENT_TIMEOUT"));
+        when(agentRuntime.run(any(), any(), any(), any(), any())).thenThrow(new IOException("AI_MIGRATION_AGENT_TIMEOUT"));
         assertThatThrownBy(() -> service.migrate(input, context))
                 .extracting("errorCode").isEqualTo(TaskErrorCode.HANDLER_FAILED);
     }
 
     @Test
+    void 重试必然复现的失败翻译为不可重试码() throws Exception {
+        // 工作区被篡改、执行器配置无效、补丁生成失败：重跑同一任务结果相同，
+        // 重试只会重复消耗一次完整的代理运行。
+        for (String cause : List.of("AI_MIGRATION_BASELINE_MODIFIED", "AI_MIGRATION_INPUT_MODIFIED",
+                "AI_MIGRATION_EXECUTOR_MODE_INVALID", "AI_MIGRATION_EXECUTOR_UNAVAILABLE",
+                "AI_MIGRATION_SOURCE_PATH_UNSAFE", "AI_MIGRATION_SOURCE_SYMLINK", "AI_MIGRATION_DIFF_FAILED")) {
+            // doAnswer 不会在打桩时调用已有 stub（when(...) 形式会先触发上一轮的抛异常 stub）。
+            String current = cause;
+            org.mockito.Mockito.doAnswer(invocation -> { throw new IOException(current); })
+                    .when(agentRuntime).run(any(), any(), any(), any(), any());
+            assertThatThrownBy(() -> service.migrate(input, context))
+                    .describedAs(current)
+                    .isInstanceOf(TaskExecutionException.class)
+                    .extracting("errorCode").isEqualTo(TaskErrorCode.AI_MIGRATION_NOT_RETRYABLE);
+        }
+    }
+
+    @Test
+    void 偶发性失败保持可重试() throws Exception {
+        // 技能克隆失败、代理超时、代理异常退出可能是瞬时的（网络、模型侧），重试有意义。
+        for (String cause : List.of("AI_MIGRATION_SKILL_CLONE_FAILED: GIT_FAILED(128)",
+                "AI_MIGRATION_AGENT_TIMEOUT", "AI_MIGRATION_AGENT_FAILED")) {
+            String current = cause;
+            org.mockito.Mockito.doAnswer(invocation -> { throw new IOException(current); })
+                    .when(agentRuntime).run(any(), any(), any(), any(), any());
+            assertThatThrownBy(() -> service.migrate(input, context))
+                    .describedAs(current)
+                    .extracting("errorCode").isEqualTo(TaskErrorCode.HANDLER_FAILED);
+        }
+    }
+
+    @Test
+    void 不可重试的失败向用户说明原因() throws Exception {
+        when(agentRuntime.run(any(), any(), any(), any(), any())).thenThrow(new IOException("AI_MIGRATION_BASELINE_MODIFIED"));
+        assertThatThrownBy(() -> service.migrate(input, context))
+                .isInstanceOf(TaskExecutionException.class)
+                .hasMessageContaining("迁移基准在工作区中被改动");
+    }
+
+    @Test
     void 产物写失败时不回写成功() throws Exception {
-        when(agentRuntime.run(any(), any(), eq(selection), eq(context)))
+        when(agentRuntime.run(any(), any(), eq(selection), eq(context), any()))
                 .thenReturn(new AiMigrationAgentRuntime.Executed(executedResult(), "+ diff".getBytes()));
         when(storedArtifactService.storeFile(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new IOException("disk full"));

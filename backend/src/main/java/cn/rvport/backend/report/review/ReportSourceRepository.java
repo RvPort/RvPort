@@ -14,6 +14,17 @@ public class ReportSourceRepository {
     private final ReviewWorkspaceRepository json;
     public ReportSourceRepository(DSLContext dsl, ReviewWorkspaceRepository json) { this.dsl=dsl; this.json=json; }
 
+    /** 最新成功迁移运行（loop change：AI_MIGRATION_RESULT 来源；sourceRevision 经 kb_scan_runs join 取）。 */
+    public Optional<Map<String,Object>> migration(UUID project, UUID source) {
+        return dsl.fetchOptional("""
+                select r.id,r.status,r.finished_at,r.scan_run_id,r.item_count,r.done_count,r.pending_count,
+                    r.summary,'ai-migration-result.v1' as result_schema_version
+                  from ai_migration_runs r join kb_scan_runs k on k.id=r.scan_run_id
+                  where r.project_id=? and k.source_revision_id=? and r.status='SUCCEEDED'
+                  order by r.finished_at desc nulls last,r.id desc limit 1
+                """,project,source).map(json::map);
+    }
+
     public Optional<Map<String,Object>> kb(UUID project, UUID source, UUID environment, long version, UUID build) {
         return dsl.fetchOptional("""
                 select id,status,finished_at,kb_version,source_environment_id,runtime_environment_version,build_run_id,
@@ -27,10 +38,12 @@ public class ReportSourceRepository {
             UUID sourceSnapshot, UUID targetSnapshot) {
         return dsl.fetchOptional("""
                 select id,status,finished_at,target_environment_id,environment_config_version,source_build_run_id,
-                    summary->>'sourceSnapshotId' as source_snapshot_id,summary->>'targetSnapshotId' as target_snapshot_id,
+                    summary->'environmentRefresh'->>'sourceSnapshotId' as source_snapshot_id,
+                    summary->'environmentRefresh'->>'targetSnapshotId' as target_snapshot_id,
                     'dependency-analysis.v1' as result_schema_version from dependency_analysis_runs where project_id=? and source_revision_id=?
                   and target_environment_id=? and environment_config_version=? and source_build_run_id=?
-                  and summary->>'sourceSnapshotId'=? and summary->>'targetSnapshotId'=?
+                  and summary->'environmentRefresh'->>'sourceSnapshotId'=?
+                  and summary->'environmentRefresh'->>'targetSnapshotId'=?
                 order by (status='SUCCEEDED') desc,finished_at desc nulls last,created_at desc,id desc limit 1
                 """,project,source,target,version,build,sourceSnapshot.toString(),targetSnapshot.toString()).map(json::map);
     }
@@ -53,6 +66,7 @@ public class ReportSourceRepository {
             case "DEPENDENCY_RESULT" -> "select * from dependency_analysis_result_items where dependency_analysis_run_id=? order by id";
             case "FLOATING_POINT_FINDING" -> "select * from specialized_analysis_findings where run_id=? order by id";
             case "MEMORY_ORDER_FINDING" -> "select * from specialized_analysis_findings where run_id=? and finding_kind in ('FINDING','SOURCE_CANDIDATE','INCONCLUSIVE') order by id";
+            case "AI_MIGRATION_RESULT" -> "select * from ai_migration_runs where id=?";
             default -> throw new IllegalArgumentException("Unknown report source type");
         };
         return dsl.fetch(sql,runId).map(json::map);

@@ -10,8 +10,15 @@ public record AiMigrationInput(
         UUID migrationRunId,
         UUID scanRunId,
         UUID sourceRevisionId,
+        UUID reportId,
+        String reportContextHash,
         ModelExecutionSelection selection,
         Map<String, Object> executionContext) {
+
+    public AiMigrationInput(UUID projectId, UUID migrationRunId, UUID scanRunId, UUID sourceRevisionId,
+            ModelExecutionSelection selection, Map<String, Object> executionContext) {
+        this(projectId, migrationRunId, scanRunId, sourceRevisionId, null, null, selection, executionContext);
+    }
 
     public AiMigrationInput {
         executionContext = executionContext == null ? Map.of() : Map.copyOf(executionContext);

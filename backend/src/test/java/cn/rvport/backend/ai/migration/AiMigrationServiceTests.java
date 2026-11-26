@@ -3,6 +3,7 @@ package cn.rvport.backend.ai.migration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -58,11 +59,15 @@ class AiMigrationServiceTests {
             mock(cn.rvport.backend.artifact.StoredArtifactRepository.class);
     final cn.rvport.backend.artifact.StoredArtifactService storedArtifactService =
             mock(cn.rvport.backend.artifact.StoredArtifactService.class);
+    final AiMigrationReportSource reportSource = mock(AiMigrationReportSource.class);
     final AiMigrationService service = new AiMigrationService(repository, kbScanRepository, sourceRepository,
-            projectAccessService, taskService, models, auditLogService, storedArtifactRepository, storedArtifactService);
+            projectAccessService, taskService, models, auditLogService, storedArtifactRepository, storedArtifactService,
+            reportSource);
 
     @BeforeEach
     void setup() {
+        when(reportSource.eligible(project)).thenReturn(Optional.of(
+                new AiMigrationReportSource.CurrentReport(UUID.randomUUID(), "ctx-report", 3)));
         when(sourceRepository.findActive(project)).thenReturn(Optional.of(revision(
                 "/tmp/working-copy")));
         when(kbScanRepository.findLatestSucceededRunBySourceRevision(project, revision))
@@ -92,24 +97,42 @@ class AiMigrationServiceTests {
         var command = ArgumentCaptor.forClass(TaskCreateCommand.class);
         verify(taskService).create(command.capture());
         assertThat(command.getValue().inputSnapshot()).containsKeys("projectId", "scanRunId", "sourceRevisionId",
-                "selection");
+                "selection", "migrationRunId");
         var selection = (Map<?, ?>) command.getValue().inputSnapshot().get("selection");
         assertThat(selection.get("modelProfileId")).isEqualTo(profileId.toString());
         assertThat(selection.get("agentRuntimeId")).isEqualTo(runtimeId.toString());
-        verify(repository).createRun(project, scanRun, revision, task.id(), profileId, runtimeId);
+        // 运行记录以任务输入中的同一个 ID 创建
+        verify(repository).createRun(any(UUID.class), eq(project), eq(scanRun), eq(revision), eq(task.id()),
+                eq(profileId), eq(runtimeId), any(), any());
         verify(auditLogService).record(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
-    void 无成功扫描与零可投影条目拒绝() {
-        when(kbScanRepository.findLatestSucceededRunBySourceRevision(project, revision)).thenReturn(Optional.empty());
+    void 任务输入里的运行id与实际创建的运行一致() {
+        // 回归：运行 ID 此前在任务创建之后才生成，从不写入任务输入，
+        // 导致所有 AI_MIGRATION 任务的 tasks.resource_id 恒为 NULL。
+        service.create(project, new AiMigrationRequest(null), actor, false, null);
+
+        var command = ArgumentCaptor.forClass(TaskCreateCommand.class);
+        verify(taskService).create(command.capture());
+        var runId = ArgumentCaptor.forClass(UUID.class);
+        // 预生成 ID 的重载：首参为运行 ID
+        verify(repository).createRun(runId.capture(), eq(project), eq(scanRun), eq(revision), any(),
+                eq(profileId), eq(runtimeId), any(), any());
+        assertThat(command.getValue().inputSnapshot().get("migrationRunId")).isEqualTo(runId.getValue().toString());
+    }
+
+    @Test
+    void 无报告与零可投影条目拒绝() {
+        // 输入源切换（loop change）：报告是唯一权威输入源，无报告优先拒绝
+        when(reportSource.eligible(project)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.create(project, null, actor, false, null))
                 .isInstanceOf(ApiException.class)
-                .extracting("code").isEqualTo("AI_MIGRATION_SCAN_NOT_SUCCEEDED");
+                .extracting("code").isEqualTo("AI_MIGRATION_REPORT_REQUIRED");
 
-        when(kbScanRepository.findLatestSucceededRunBySourceRevision(project, revision))
-                .thenReturn(Optional.of(scanView(cn.rvport.backend.task.TaskStatus.SUCCEEDED)));
-        when(kbScanRepository.listAllFindingViews(scanRun)).thenReturn(List.of(finding("finding:x", "test_asset")));
+        // 有报告但可投影条目为零
+        when(reportSource.eligible(project)).thenReturn(Optional.of(
+                new AiMigrationReportSource.CurrentReport(UUID.randomUUID(), "ctx", 0)));
         assertThatThrownBy(() -> service.create(project, null, actor, false, null))
                 .isInstanceOf(ApiException.class)
                 .extracting("code").isEqualTo("AI_MIGRATION_NO_ENTRIES");
@@ -117,7 +140,7 @@ class AiMigrationServiceTests {
     }
 
     @Test
-    void 阶段未绑定与非法指定扫描拒绝() {
+    void 阶段未绑定拒绝() {
         when(models.resolveAgentForStage(ModelProfileStage.AI_MIGRATION, actor))
                 .thenThrow(new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST,
                         "MODEL_STAGE_NOT_BOUND", "未绑定"));
@@ -125,15 +148,6 @@ class AiMigrationServiceTests {
                 .isInstanceOf(ApiException.class)
                 .extracting("code").isEqualTo("AI_MIGRATION_MODEL_NOT_CONFIGURED");
 
-        var foreign = new KbScanView(scanRun, UUID.randomUUID(), UUID.randomUUID(), revision, null, null,
-                cn.rvport.backend.task.TaskStatus.SUCCEEDED, null, null, null);
-        when(kbScanRepository.findById(scanRun)).thenReturn(Optional.of(foreign));
-        assertThatThrownBy(() -> service.create(project, new AiMigrationRequest(scanRun), actor, false, null))
-                .isInstanceOf(ApiException.class);
-
-        when(kbScanRepository.findById(scanRun)).thenReturn(Optional.of(scanView(cn.rvport.backend.task.TaskStatus.FAILED)));
-        assertThatThrownBy(() -> service.create(project, new AiMigrationRequest(scanRun), actor, false, null))
-                .extracting("code").isEqualTo("AI_MIGRATION_SCAN_NOT_SUCCEEDED");
     }
 
     @Test

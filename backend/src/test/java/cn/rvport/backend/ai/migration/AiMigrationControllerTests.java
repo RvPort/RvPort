@@ -22,7 +22,8 @@ import org.junit.jupiter.api.Test;
 class AiMigrationControllerTests {
 
     final AiMigrationService service = mock(AiMigrationService.class);
-    final AiMigrationController controller = new AiMigrationController(service);
+    final AiMigrationHistoryService historyService = mock(AiMigrationHistoryService.class);
+    final AiMigrationController controller = new AiMigrationController(service, historyService);
     final UUID project = UUID.randomUUID();
     final UUID runId = UUID.randomUUID();
     final UUID actor = UUID.randomUUID();

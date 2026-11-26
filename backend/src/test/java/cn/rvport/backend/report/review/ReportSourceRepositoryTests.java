@@ -17,7 +17,10 @@ class ReportSourceRepositoryTests {
             assertThat(db.lastExecution().bindings()).containsExactly(project,source,env,7L,build);
             ReviewWorkspaceRepositoryTests.enqueue(db,Map.of("id",build));
             assertThat(repo.dependency(project,source,env,7,build,snapshot,snapshot)).isPresent();
-            assertThat(db.lastExecution().sql()).contains("sourceSnapshotId","targetSnapshotId","source_build_run_id=?");
+            // 快照 id 由 DependencyAnalysisHandler 写在 summary.environmentRefresh 下，谓词必须同路径取值。
+            assertThat(db.lastExecution().sql())
+                    .contains("summary->'environmentRefresh'->>'sourceSnapshotId'","summary->'environmentRefresh'->>'targetSnapshotId'","source_build_run_id=?")
+                    .doesNotContain("summary->>'sourceSnapshotId'");
             assertThat(db.lastExecution().bindings()).containsExactly(project,source,env,7L,build,snapshot.toString(),snapshot.toString());
             ReviewWorkspaceRepositoryTests.enqueue(db,Map.of("id",build));
             assertThat(repo.specialized(project,source,"FLOATING_POINT",build,7L,"AST_ONLY",null)).isPresent();
@@ -29,6 +32,20 @@ class ReportSourceRepositoryTests {
             }
             assertThat(db.lastExecution().sql()).contains("'SOURCE_CANDIDATE'","'INCONCLUSIVE'").doesNotContain("'DISCHARGED'");
             assertThatThrownBy(()->repo.findings("unknown",build)).isInstanceOf(IllegalArgumentException.class);
+            db.verifyComplete();
+        }
+    }
+    @Test void migrationJoinsScanRunsForRevisionAndBindsProject() throws Exception {
+        // loop change：AI_MIGRATION_RESULT 查询经 kb_scan_runs join 取 sourceRevision（表无该列）
+        UUID project=UUID.randomUUID(),source=UUID.randomUUID();
+        try(var db=new JooqMockDatabase()) {
+            var repo=new ReportSourceRepository(db.dsl(),new ReviewWorkspaceRepository(db.dsl(),new ObjectMapper()));
+            ReviewWorkspaceRepositoryTests.enqueue(db,Map.of("id",source));
+            assertThat(repo.migration(project,source)).isPresent();
+            assertThat(db.lastExecution().sql())
+                    .contains("join kb_scan_runs","k.source_revision_id=?","status='SUCCEEDED'")
+                    .doesNotContain("ai_migration_runs where project_id=? and source_revision_id");
+            assertThat(db.lastExecution().bindings()).containsExactly(project,source);
             db.verifyComplete();
         }
     }

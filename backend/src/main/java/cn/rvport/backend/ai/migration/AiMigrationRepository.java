@@ -4,6 +4,7 @@ import cn.rvport.backend.jooq.tables.AiMigrationRuns;
 import cn.rvport.backend.jooq.tables.KbScanRuns;
 import cn.rvport.backend.jooq.tables.records.AiMigrationRunsRecord;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,9 +26,29 @@ public class AiMigrationRepository {
 
     public UUID createRun(UUID projectId, UUID scanRunId, UUID sourceRevisionId, UUID taskId,
             UUID modelProfileId, UUID agentRuntimeId) {
+        return createRun(UUID.randomUUID(), projectId, scanRunId, sourceRevisionId, taskId, modelProfileId,
+                agentRuntimeId);
+    }
+
+    /**
+     * 以调用方预先生成的 ID 创建运行记录。任务创建时需要把运行 ID 写入任务输入
+     * （TaskMetadataResolver 据此填 tasks.resource_id），因此 ID 必须先于任务存在。
+     */
+    public UUID createRun(UUID runId, UUID projectId, UUID scanRunId, UUID sourceRevisionId, UUID taskId,
+            UUID modelProfileId, UUID agentRuntimeId) {
+        return createRun(runId, projectId, scanRunId, sourceRevisionId, taskId, modelProfileId, agentRuntimeId,
+                null, null);
+    }
+
+    /** 报告输入版（change add-migration-report-loop）：记录 reportId 与冻结的报告上下文哈希。 */
+    public UUID createRun(UUID runId, UUID projectId, UUID scanRunId, UUID sourceRevisionId, UUID taskId,
+            UUID modelProfileId, UUID agentRuntimeId, UUID reportId, String reportContextHash) {
         var record = dsl.insertInto(AiMigrationRuns.AI_MIGRATION_RUNS)
+                    .set(AiMigrationRuns.AI_MIGRATION_RUNS.ID, runId)
                     .set(AiMigrationRuns.AI_MIGRATION_RUNS.PROJECT_ID, projectId)
                     .set(AiMigrationRuns.AI_MIGRATION_RUNS.SCAN_RUN_ID, scanRunId)
+                    .set(AiMigrationRuns.AI_MIGRATION_RUNS.REPORT_ID, reportId)
+                    .set(AiMigrationRuns.AI_MIGRATION_RUNS.REPORT_CONTEXT_HASH, reportContextHash)
                     .set(AiMigrationRuns.AI_MIGRATION_RUNS.TASK_ID, taskId)
                     .set(AiMigrationRuns.AI_MIGRATION_RUNS.STATUS, "PENDING")
                     .set(AiMigrationRuns.AI_MIGRATION_RUNS.MODEL_PROFILE_ID, modelProfileId)
@@ -62,6 +83,30 @@ public class AiMigrationRepository {
                 .where(AiMigrationRuns.AI_MIGRATION_RUNS.ID.eq(runId)
                         .and(AiMigrationRuns.AI_MIGRATION_RUNS.STATUS.eq("RUNNING")))
                 .execute();
+    }
+
+    /** 运行的报告输入（loop change）：无报告输入（旧运行）为空。 */
+    public Optional<UUID> reportIdOf(UUID runId) {
+        return dsl.fetchOptional("select report_id from ai_migration_runs where id=?", runId)
+                .map(row -> row.get("report_id", UUID.class));
+    }
+
+    /** 报告复核工作台条目（供回滚状态重算；evidence 在 original_snapshot）。 */
+    public List<Map<String, Object>> reportItemsFor(UUID reportId) {
+        return dsl.fetch("select original_snapshot from report_review_items where report_id=?",
+                reportId).map(record -> {
+            Map<String, Object> merged = new LinkedHashMap<>();
+            Object original = record.get("original_snapshot");
+            if (original instanceof org.jooq.JSONB json) {
+                try {
+                    merged.put("originalSnapshot",
+                            mapper.readValue(json.data(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}));
+                } catch (java.io.IOException ex) {
+                    throw new IllegalStateException("REPORT_REVIEW_STORED_JSON_INVALID", ex);
+                }
+            }
+            return merged;
+        });
     }
 
     public Optional<AiMigrationRunView> findRun(UUID runId) {

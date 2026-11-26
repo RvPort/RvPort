@@ -46,6 +46,16 @@ public class ReviewSnapshotFactory {
                     || (type.equals("DEPENDENCY_RESULT")?!text(raw.get("dependencyName")).isBlank():file!=null && line!=null);
             Map<String,Object> old=!ambiguous && anchored && matches.size()==1 && digest.equals(matches.getFirst().get("evidenceHash"))
                     ?matches.getFirst():null;
+            // 迁移状态继承（loop change）：证据未变的同源条目把迁移状态带进新报告快照
+            //（迁移状态不属于"证据变化"，不触发 EVIDENCE_CHANGED 丢弃继承）。
+            if(old!=null&&old.get("originalSnapshot") instanceof Map<?,?> previousOriginal){
+                Object state=previousOriginal.get("migrationState");
+                if(state!=null){
+                    original.put("migrationState",state);
+                    Object previousRun=previousOriginal.get("migrationRunId");
+                    if(previousRun!=null) original.put("migrationRunId",previousRun);
+                }
+            }
             boolean automatic = old != null && (!Boolean.TRUE.equals(old.get("hasManualDecision"))
                     || ReviewState.PENDING_REVIEW.name().equals(old.get("reviewState")));
             if (automatic) old = null;

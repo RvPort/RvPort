@@ -11,6 +11,7 @@ import cn.rvport.backend.jooq.tables.AgentRuntimes.AgentRuntimesPath;
 import cn.rvport.backend.jooq.tables.KbScanRuns.KbScanRunsPath;
 import cn.rvport.backend.jooq.tables.ModelProfiles.ModelProfilesPath;
 import cn.rvport.backend.jooq.tables.Projects.ProjectsPath;
+import cn.rvport.backend.jooq.tables.ReportReviewRuns.ReportReviewRunsPath;
 import cn.rvport.backend.jooq.tables.Tasks.TasksPath;
 import cn.rvport.backend.jooq.tables.records.AiMigrationRunsRecord;
 
@@ -142,6 +143,16 @@ public class AiMigrationRuns extends TableImpl<AiMigrationRunsRecord> {
      */
     public final TableField<AiMigrationRunsRecord, OffsetDateTime> FINISHED_AT = createField(DSL.name("finished_at"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "");
 
+    /**
+     * The column <code>public.ai_migration_runs.report_id</code>.
+     */
+    public final TableField<AiMigrationRunsRecord, UUID> REPORT_ID = createField(DSL.name("report_id"), SQLDataType.UUID, this, "");
+
+    /**
+     * The column <code>public.ai_migration_runs.report_context_hash</code>.
+     */
+    public final TableField<AiMigrationRunsRecord, String> REPORT_CONTEXT_HASH = createField(DSL.name("report_context_hash"), SQLDataType.CLOB, this, "");
+
     private AiMigrationRuns(Name alias, Table<AiMigrationRunsRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
     }
@@ -226,7 +237,7 @@ public class AiMigrationRuns extends TableImpl<AiMigrationRunsRecord> {
 
     @Override
     public List<ForeignKey<AiMigrationRunsRecord, ?>> getReferences() {
-        return Arrays.asList(Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_AGENT_RUNTIME_ID_FKEY, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_MODEL_PROFILE_ID_FKEY, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_PROJECT_ID_FKEY, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_SCAN_RUN_ID_FKEY, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_TASK_ID_FKEY);
+        return Arrays.asList(Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_AGENT_RUNTIME_ID_FKEY, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_MODEL_PROFILE_ID_FKEY, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_PROJECT_ID_FKEY, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_REPORT_ID_FKEY, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_SCAN_RUN_ID_FKEY, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_TASK_ID_FKEY);
     }
 
     private transient AgentRuntimesPath _agentRuntimes;
@@ -265,6 +276,19 @@ public class AiMigrationRuns extends TableImpl<AiMigrationRunsRecord> {
             _projects = new ProjectsPath(this, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_PROJECT_ID_FKEY, null);
 
         return _projects;
+    }
+
+    private transient ReportReviewRunsPath _reportReviewRuns;
+
+    /**
+     * Get the implicit join path to the <code>public.report_review_runs</code>
+     * table.
+     */
+    public ReportReviewRunsPath reportReviewRuns() {
+        if (_reportReviewRuns == null)
+            _reportReviewRuns = new ReportReviewRunsPath(this, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_REPORT_ID_FKEY, null);
+
+        return _reportReviewRuns;
     }
 
     private transient KbScanRunsPath _kbScanRuns;

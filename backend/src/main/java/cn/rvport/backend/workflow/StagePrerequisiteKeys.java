@@ -10,6 +10,7 @@ public final class StagePrerequisiteKeys {
     public static final String KB_SCAN = "KB_SCAN";
     public static final String DEPENDENCY_ANALYSIS = "DEPENDENCY_ANALYSIS";
     public static final String INCLUDED_FINDINGS = "INCLUDED_FINDINGS";
+    public static final String REPORT = "REPORT";
     public static final String COMPARABLE_REPORT = "COMPARABLE_REPORT";
     public static final String BUILD_VALIDATION = "BUILD_VALIDATION";
     public static final String ARCHIVE_CANDIDATES = "ARCHIVE_CANDIDATES";

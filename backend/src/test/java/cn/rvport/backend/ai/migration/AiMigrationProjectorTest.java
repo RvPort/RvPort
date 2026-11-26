@@ -28,41 +28,34 @@ class AiMigrationProjectorTest {
 
         assertThat(projection.schemaVersion()).isEqualTo("ai-migration.v1");
         assertThat(projection.scanRunId()).isEqualTo(SCAN_RUN);
-        assertThat(projection.items()).hasSize(1);
-        AiMigrationProjector.Item item = projection.items().get(0);
+        assertThat(projection.suggestionClass()).hasSize(1);
+        AiMigrationProjector.Item item = projection.suggestionClass().get(0);
         assertThat(item.id()).isEqualTo("finding:abc");
         assertThat(item.sourceFindingIds()).containsExactly(finding.id());
         assertThat(item.id()).isNotEqualTo(finding.id().toString());
         assertThat(item.status()).isEqualTo("TODO");
-        assertThat(item.solverType()).isEqualTo("intrinsics");
+        assertThat(item.solverType()).isEqualTo(1);
         assertThat(item.file()).isEqualTo("src/sse.c");
-        assertThat(item.line()).isEqualTo(56);
+        assertThat(item.startLine()).isEqualTo(56);
         assertThat(item.symbol()).isEqualTo("_mm256_add_epi32");
         assertThat(item.matchedText()).isEqualTo("_mm256_add_epi32");
         assertThat(item.severity()).isEqualTo("high");
         assertThat(item.blocking()).isTrue();
         assertThat(item.uncertain()).isFalse();
         assertThat(item.description()).isEqualTo("标题：原因");
-        assertThat(item.suggestion()).isEqualTo("建议");
+        assertThat(item.migrationSuggestion()).isEqualTo("建议");
         assertThat(item.evidence()).containsExactly(new AiMigrationProjector.EvidenceRef("src/sse.c", 56, "sym-f1"));
     }
 
     @Test
     void 白名单判定的分支覆盖() {
-        assertThat(AiMigrationProjector.architectureUncertain(null)).isFalse();
-        assertThat(AiMigrationProjector.architectureUncertain("x86_comment_hint")).isFalse();
-        assertThat(AiMigrationProjector.architectureUncertain("hint")).isFalse();
-        assertThat(AiMigrationProjector.architectureUncertain("x86_intrinsic_reference")).isTrue();
-        assertThat(AiMigrationProjector.architectureUncertain("x86_anything")).isTrue();
-        assertThat(AiMigrationProjector.architectureUncertain("target_attribute_candidate")).isTrue();
-        assertThat(AiMigrationProjector.architectureUncertain("inline_asm_candidate")).isTrue();
-        assertThat(AiMigrationProjector.architectureUncertain("architecture_candidate")).isTrue();
-        assertThat(AiMigrationProjector.architectureUncertain("enum_architecture_candidate")).isTrue();
-        assertThat(AiMigrationProjector.architectureUncertain("fixed_vector_width_candidate")).isTrue();
-        assertThat(AiMigrationProjector.architectureUncertain("build_selection_unknown")).isTrue();
-        assertThat(AiMigrationProjector.architectureUncertain("test_selection_unknown")).isTrue();
-        assertThat(AiMigrationProjector.architectureUncertain("some_other_type")).isFalse();
-        assertThat(AiMigrationProjector.architectureUncertain("")).isFalse();
+        assertThat(AiMigrationProjector.UNCERTAIN_FINDING_TYPES).contains("x86_intrinsic_reference",
+                "x86_builtin_reference", "x86_vector_type_reference", "x86_header_reference",
+                "x86_assembly_instruction", "x86_register_reference", "x86_cpu_platform_api",
+                "x86_compiler_flag", "x86_platform_macro_reference", "x86_target_feature",
+                "x86_architecture_alias");
+        assertThat(AiMigrationProjector.UNCERTAIN_FINDING_TYPES).doesNotContain("x86_comment_hint",
+                "hint", "some_other_type", "inline_asm_candidate");
     }
 
     @Test
@@ -72,17 +65,19 @@ class AiMigrationProjectorTest {
                 "factKind", "intrinsic_call",
                 "findingType", "x86_intrinsic_reference",
                 "actionable", false,
+                "archReachability", "unknown",
                 "conclusionStatus", "unknown")), "src/u.c", 1, "high");
         FindingView targetAttr = finding("u2", evidence(Map.of(
                 "scannerFindingId", "finding:ta",
                 "factKind", "architecture_probe",
-                "findingType", "target_attribute_candidate",
-                "actionable", false)), "src/t.c", 2, "medium");
+                "findingType", "x86_target_feature",
+                "actionable", false,
+                "archReachability", "not_selected")), "src/t.c", 2, "medium");
 
         AiMigrationProjector.Projection projection = AiMigrationProjector.project(SCAN_RUN, List.of(uncertainIntrinsic, targetAttr));
 
-        assertThat(projection.items()).hasSize(2);
-        assertThat(projection.items()).allSatisfy(item -> assertThat(item.uncertain()).isTrue());
+        assertThat(projection.suggestionClass()).hasSize(2);
+        assertThat(projection.suggestionClass()).allSatisfy(item -> assertThat(item.uncertain()).isTrue());
     }
 
     @Test
@@ -99,7 +94,7 @@ class AiMigrationProjectorTest {
 
         AiMigrationProjector.Projection projection = AiMigrationProjector.project(SCAN_RUN, List.of(commentHint, unknownKind));
 
-        assertThat(projection.items()).isEmpty();
+        assertThat(projection.suggestionClass()).isEmpty();
     }
 
     @Test
@@ -124,7 +119,7 @@ class AiMigrationProjectorTest {
         AiMigrationProjector.Projection projection = AiMigrationProjector.project(SCAN_RUN,
                 List.of(notActionable, inactive, hint, testAsset));
 
-        assertThat(projection.items()).isEmpty();
+        assertThat(projection.suggestionClass()).isEmpty();
     }
 
     @Test
@@ -140,25 +135,54 @@ class AiMigrationProjectorTest {
 
         AiMigrationProjector.Projection projection = AiMigrationProjector.project(SCAN_RUN, List.of(first, second));
 
-        assertThat(projection.items()).hasSize(1);
-        assertThat(projection.items().get(0).sourceFindingIds())
+        assertThat(projection.suggestionClass()).hasSize(1);
+        assertThat(projection.suggestionClass().get(0).sourceFindingIds())
                 .containsExactlyInAnyOrder(first.id(), second.id());
     }
 
     @Test
-    void solverType映射含汇编文件与构建文件分流() {
-        assertThat(solverFor("architecture_probe", "src/kern.S", "high")).isEqualTo("asm_file");
-        assertThat(solverFor("architecture_probe", "src/kern.asm", "high")).isEqualTo("asm_file");
-        assertThat(solverFor("architecture_probe", "src/inline.c", "high")).isEqualTo("inline_asm");
-        assertThat(solverFor("vector_type", "src/v.c", "high")).isEqualTo("intrinsics");
-        assertThat(solverFor("macro_replacement", "src/m.h", "medium")).isEqualTo("macros");
-        assertThat(solverFor("compiler_flag", "CMakeLists.txt", "medium")).isEqualTo("build_cmake");
-        assertThat(solverFor("compiler_flag", "cmake/toolchain.cmake", "medium")).isEqualTo("build_cmake");
-        assertThat(solverFor("build_argument", "Makefile", "medium")).isEqualTo("build_makefile");
-        assertThat(solverFor("build_argument", "GNUmakefile", "medium")).isEqualTo("build_makefile");
-        assertThat(solverFor("header_include", "src/h.h", "low")).isEqualTo("headers");
-        assertThat(solverFor("totally_unknown_kind", "src/u.c", "high")).isEqualTo("inline_asm");
-        assertThat(solverFor(null, "src/u.c", "high")).isEqualTo("inline_asm");
+    void solverType按技能协议输出整数() {
+        // 1 内联函数 / 3 宏 / 4 内联汇编 / 5 汇编文件 / 0 Makefile / 10 构建脚本
+        assertThat(solverFor("vector_type", "src/v.c", "high")).isEqualTo(1);
+        assertThat(solverFor("intrinsic_call", "src/i.c", "high")).isEqualTo(1);
+        assertThat(solverFor("macro_replacement", "src/m.h", "medium")).isEqualTo(3);
+        // 头文件包含只动预处理行，归宏类（技能协议没有独立的头文件类型）
+        assertThat(solverFor("header_include", "src/h.h", "low")).isEqualTo(14);
+        assertThat(solverFor("compiler_flag", "CMakeLists.txt", "medium")).isEqualTo(10);
+        assertThat(solverFor("compiler_flag", "cmake/toolchain.cmake", "medium")).isEqualTo(10);
+        assertThat(solverFor("build_argument", "Makefile", "medium")).isEqualTo(0);
+        assertThat(solverFor("build_argument", "GNUmakefile", "medium")).isEqualTo(0);
+        // 汇编文件后缀（含大写 .S）
+        assertThat(solverFor("architecture_probe", "src/kern.S", "high", "x86_assembly_instruction")).isEqualTo(5);
+        assertThat(solverFor("architecture_probe", "src/kern.asm", "high", "x86_assembly_instruction")).isEqualTo(5);
+        // 未识别的类型不套用最重的汇编流程
+        assertThat(solverFor("totally_unknown_kind", "src/u.c", "high")).isEqualTo(4);
+        assertThat(solverFor(null, "src/u.c", "high")).isEqualTo(4);
+    }
+
+    @Test
+    void 探测类的汇编文件按后缀分流() {
+        assertThat(solverFor("architecture_probe", "src/kern.S", "high")).isEqualTo(5);
+        assertThat(solverFor("architecture_probe", "src/kern.asm", "high")).isEqualTo(5);
+        // 非汇编后缀的探测类当前归内联汇编（factKind 粒度，findingType 细分待技能协议确认后跟进）
+        assertThat(solverFor("architecture_probe", "src/inline.c", "high")).isEqualTo(4);
+    }
+
+    @Test
+    void solver名称与说明跟整数一致且未知值回落到宏() {
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 0 && e.solverName.equals("MakefileSolver"));
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 1 && e.solverName.equals("IntrinsicsSolver"));
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 3 && e.solverName.equals("MacrosSolver"));
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 4 && e.solverName.equals("InlineAsmSolver"));
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 5 && e.solverName.equals("AsmFileSolver"));
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 10 && e.solverName.equals("CMakeSolver"));
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 0 && e.description.equals("Makefile 架构编译参数"));
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 1 && e.description.equals("内联函数"));
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 3 && e.description.equals("宏定义"));
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 4 && e.description.equals("内联汇编"));
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 5 && e.description.equals("汇编文件"));
+        assertThat(AiMigrationProjector.Solver.values()).anyMatch(e -> e.type == 10 && e.description.equals("CMake 构建系统架构分支"));
+
     }
 
     @Test
@@ -170,9 +194,9 @@ class AiMigrationProjectorTest {
         AiMigrationProjector.Projection first = AiMigrationProjector.project(SCAN_RUN, List.of(finding));
         AiMigrationProjector.Projection second = AiMigrationProjector.project(SCAN_RUN, List.of(finding));
 
-        assertThat(first.items()).hasSize(1);
-        assertThat(first.items().get(0).id()).startsWith("finding:").doesNotContain("|");
-        assertThat(first.items().get(0).id()).isEqualTo(second.items().get(0).id());
+        assertThat(first.suggestionClass()).hasSize(1);
+        assertThat(first.suggestionClass().get(0).id()).startsWith("finding:").doesNotContain("|");
+        assertThat(first.suggestionClass().get(0).id()).isEqualTo(second.suggestionClass().get(0).id());
     }
 
     @Test
@@ -195,9 +219,9 @@ class AiMigrationProjectorTest {
 
         AiMigrationProjector.Projection projection = AiMigrationProjector.project(SCAN_RUN, findings);
 
-        assertThat(projection.items()).hasSize(5);
-        assertThat(projection.items()).allSatisfy(item -> assertThat(item.status()).isEqualTo("TODO"));
-        List<String> ids = projection.items().stream().map(AiMigrationProjector.Item::id).toList();
+        assertThat(projection.suggestionClass()).hasSize(5);
+        assertThat(projection.suggestionClass()).allSatisfy(item -> assertThat(item.status()).isEqualTo("TODO"));
+        List<String> ids = projection.suggestionClass().stream().map(AiMigrationProjector.Item::id).toList();
         assertThat(ids).doesNotHaveDuplicates();
     }
 
@@ -206,8 +230,8 @@ class AiMigrationProjectorTest {
         Map<String, Object> evidence = new HashMap<>();
         evidence.put("scannerFindingId", "   ");
         evidence.put("factKind", "compiler_flag");
-        evidence.put("actionable", "true");
-        evidence.put("blocking", "false");
+        evidence.put("actionable", true);
+        evidence.put("blocking", false);
         FindingView nullDescription = new FindingView(
                 UUID.randomUUID(), UUID.randomUUID(), SCAN_RUN, UUID.randomUUID(),
                 "r1", "c1", "info", "只有标题", null, null, null, null, null,
@@ -225,17 +249,17 @@ class AiMigrationProjectorTest {
         AiMigrationProjector.Projection projection = AiMigrationProjector.project(SCAN_RUN,
                 List.of(nullDescription, symbolFallback));
 
-        assertThat(projection.items()).hasSize(2);
-        var first = projection.items().stream()
+        assertThat(projection.suggestionClass()).hasSize(2);
+        var first = projection.suggestionClass().stream()
                 .filter(i -> "info".equals(i.severity())).findFirst().orElseThrow();
-        assertThat(first.solverType()).isEqualTo("build_makefile");
+        assertThat(first.solverType()).isEqualTo(0);
         assertThat(first.description()).isEqualTo("只有标题");
-        assertThat(first.suggestion()).isNull();
+        assertThat(first.migrationSuggestion()).isNull();
         assertThat(first.blocking()).isFalse();
         assertThat(first.symbol()).isNull();
         assertThat(first.id()).startsWith("finding:").isNotEqualTo("   ");
-        var second = projection.items().stream()
-                .filter(i -> i.solverType().equals("inline_asm")).findFirst().orElseThrow();
+        var second = projection.suggestionClass().stream()
+                .filter(i -> i.solverType() == 4).findFirst().orElseThrow();
         assertThat(second.symbol()).isEqualTo("fallback-sym");
     }
 
@@ -258,22 +282,29 @@ class AiMigrationProjectorTest {
 
         AiMigrationProjector.Projection projection = AiMigrationProjector.project(SCAN_RUN, List.of(nullEvidence, odd));
 
-        // null 证据（无 findingType）不属于架构不确定白名单，仍被过滤
-        assertThat(projection.items()).hasSize(1);
-        var only = projection.items().stream()
+        // null 证据不触发任何过滤分支（actionable 缺失、非 info 级），两个条目都保留
+        assertThat(projection.suggestionClass()).hasSize(2);
+        var only = projection.suggestionClass().stream()
                 .filter(i -> "finding:odd".equals(i.id())).findFirst().orElseThrow();
-        assertThat(only.solverType()).isEqualTo("headers");
+        assertThat(only.solverType()).isEqualTo(14);
         assertThat(only.blocking()).isNull();
         assertThat(only.description()).isEqualTo("t4：d4");
     }
 
-    private String solverFor(String factKind, String file, String severity) {
+    private int solverFor(String factKind, String file, String severity) {
+        return solverFor(factKind, file, severity, null);
+    }
+
+    private int solverFor(String factKind, String file, String severity, String findingType) {
         Map<String, Object> evidence = new HashMap<>();
         if (factKind != null) {
             evidence.put("factKind", factKind);
         }
+        if (findingType != null) {
+            evidence.put("findingType", findingType);
+        }
         evidence.put("actionable", true);
-        return AiMigrationProjector.solverType(finding("fx", evidence(evidence), file, 1, severity));
+        return AiMigrationProjector.solver(finding("fx", evidence(evidence), file, 1, severity)).type;
     }
 
     private Map<String, Object> evidence(Map<String, Object> values) {

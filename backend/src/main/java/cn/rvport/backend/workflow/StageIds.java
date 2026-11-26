@@ -12,6 +12,7 @@ public final class StageIds {
     public static final String ARCHIVE = "archive";
     public static final String FLOATING_POINT_ANALYSIS = "floating-point-analysis";
     public static final String MEMORY_ORDER_ANALYSIS = "memory-order-analysis";
+    public static final String AI_MIGRATION = "ai-migration";
 
     private StageIds() {
     }

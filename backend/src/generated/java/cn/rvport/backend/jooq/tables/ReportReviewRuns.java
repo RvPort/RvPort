@@ -8,6 +8,7 @@ import cn.rvport.backend.jooq.Indexes;
 import cn.rvport.backend.jooq.Keys;
 import cn.rvport.backend.jooq.Public;
 import cn.rvport.backend.jooq.tables.AgentRuntimes.AgentRuntimesPath;
+import cn.rvport.backend.jooq.tables.AiMigrationRuns.AiMigrationRunsPath;
 import cn.rvport.backend.jooq.tables.ModelProfiles.ModelProfilesPath;
 import cn.rvport.backend.jooq.tables.RecheckRuns.RecheckRunsPath;
 import cn.rvport.backend.jooq.tables.ReportAiReviewResults.ReportAiReviewResultsPath;
@@ -342,6 +343,19 @@ public class ReportReviewRuns extends TableImpl<ReportReviewRunsRecord> {
             _reportReviewRunsReportIdFkey = new ReportsPath(this, Keys.REPORT_REVIEW_RUNS__REPORT_REVIEW_RUNS_REPORT_ID_FKEY, null);
 
         return _reportReviewRunsReportIdFkey;
+    }
+
+    private transient AiMigrationRunsPath _aiMigrationRuns;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.ai_migration_runs</code> table
+     */
+    public AiMigrationRunsPath aiMigrationRuns() {
+        if (_aiMigrationRuns == null)
+            _aiMigrationRuns = new AiMigrationRunsPath(this, null, Keys.AI_MIGRATION_RUNS__AI_MIGRATION_RUNS_REPORT_ID_FKEY.getInverseKey());
+
+        return _aiMigrationRuns;
     }
 
     private transient RecheckRunsPath _recheckRunsProjectIdBaseSourceRevisionIdBaseReporFkey;

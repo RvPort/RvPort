@@ -143,6 +143,7 @@ public class StageReadinessService {
                     SpecializedAnalyzerType.FLOATING_POINT);
             case StageIds.MEMORY_ORDER_ANALYSIS -> specializedAnalysis(projectId, context, runtimeView,
                     SpecializedAnalyzerType.MEMORY_ORDER);
+            case StageIds.AI_MIGRATION -> aiMigration(projectId, context);
             default -> throw new ApiException(HttpStatus.BAD_REQUEST, "STAGE_ID_INVALID", "阶段标识不正确");
         };
         return new StageReadinessResponse(normalizedStageId, context, prerequisites);
@@ -262,6 +263,18 @@ public class StageReadinessService {
                 selected.canGenerate()?StagePrerequisiteStatus.SATISFIED:StagePrerequisiteStatus.MISSING,null,
                 selected.canGenerate()?"INCLUDED_FINDINGS_READY":"REPORT_ANALYSIS_NOT_READY",Map.of("count",(long)selected.candidates().size())));
         return List.copyOf(result);
+    }
+
+    /** 迁移前置（loop change）：报告已生成（REPORT 就绪 = 存在 current 报告且输入可聚合）。 */
+    private List<StagePrerequisiteResponse> aiMigration(UUID projectId, ProjectContextSnapshot context) {
+        if(context.sourceRevisionId()==null) return List.of(StagePrerequisiteResponse.of(
+                StagePrerequisiteKeys.REPORT,StagePrerequisiteStatus.MISSING,null,"ACTIVE_SOURCE_MISSING"));
+        var selected=reportInputs.current(projectId);
+        boolean reportReady=selected.canGenerate();
+        return List.of(StagePrerequisiteResponse.of(StagePrerequisiteKeys.REPORT,
+                reportReady?StagePrerequisiteStatus.SATISFIED:StagePrerequisiteStatus.MISSING,null,
+                reportReady?"REPORT_READY":"REPORT_NOT_GENERATED",
+                Map.of("sourceCount",(long)selected.sources().stream().filter(cn.rvport.backend.report.review.ReportInputSelectionPolicy.Source::available).count())));
     }
 
     private List<StagePrerequisiteResponse> build(UUID projectId, ProjectRuntimeEnvironmentView runtime) {

@@ -73,6 +73,8 @@ public class ReportInputSelectionPolicy {
                     analyzer,specializedBuild.id(),analyzer.equals("FLOATING_POINT")?runtime.version():null,
                     capability.mode().name(),capability.artifactSetId())));
         }
+        // 迁移结果作为第五类来源（loop change）：最新 SUCCEEDED 运行（无则 unavailable，不阻塞报告生成）
+        selected.add(source("AI_MIGRATION_RESULT",revision==null?Optional.empty():sources.migration(project,revision)));
         String identity=POLICY_VERSION+"|"+project+"|"+revision+"|"+runtime.sourceEnvironmentId()+"|"+runtime.targetEnvironmentId()
                 +"|"+runtime.version()+"|"+(kb.build()==null?null:kb.build().id())+"|"+sourceSnapshot+"|"+targetSnapshot
                 +"|"+(dependencyBuild==null?null:dependencyBuild.id())+"|"+(specializedBuild==null?null:specializedBuild.id())

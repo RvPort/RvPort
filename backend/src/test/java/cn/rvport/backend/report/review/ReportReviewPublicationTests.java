@@ -59,13 +59,29 @@ class ReportReviewPublicationTests {
                 List.of(raw,candidate,item("MANUAL","b.c",1)),null,null);
         var renderer = new ReportReviewRenderer(mapper);
         assertThat(renderer.overallRisk(manifest)).isEqualTo("LOW");
-        assertThat(renderer.summary(manifest)).containsEntry("formalRiskCount",1L).containsEntry("unverifiedCandidateCount",1L);
+        assertThat(renderer.summary(manifest)).containsEntry("formalRiskCount",1L).containsEntry("unverifiedCandidateCount",1L)
+                // 展示契约字段：KB 条目计代码问题，目录段计模块，非 KB 条目不混入
+                .containsEntry("codeFindingCount",1).containsEntry("codeModuleCount",1L)
+                .containsEntry("codeFileCount",1L).containsEntry("dependencyAnalysisInputCount",0L)
+                .containsEntry("highRiskIssueCount",0L);
         var result = new AiReviewValidator.Result(candidate.id(),AiReviewValidator.Verdict.CONFIRMED_ISSUE,"源码证据",
                 "Source evidence",null,null,List.of("source:key"));
         var document = renderer.document(report,manifest,new ReportAiReviewRuntime.Reviewed(List.of(result),Map.of("valid",1)));
         assertThat(document).containsEntry("aiReviews",List.of(result)).doesNotContainKeys("confirmationId","fixItems");
         assertThat((List<?>)document.get("findings")).hasSize(2);
         assertThat(((Map<?,?>)((List<?>)document.get("sources")).get(1)).get("dischargedCount")).isEqualTo(1);
+    }
+    @Test void lowerCaseRiskLevelsAreNormalizedForCountsAndOverallRisk() {
+        var lowercase = new ReviewItemSnapshot(UUID.randomUUID(),"SCANNER","KB_FINDING",UUID.randomUUID(),UUID.randomUUID(),
+                "fingerprint","digest",Map.of("riskLevel","high"),"标题","Title","key","src/a.c",3,1,3,1,
+                "hash",null,null,new ReviewDecision(ReviewState.PENDING_REVIEW,null,null),null,Map.of(),actor);
+        var selection=new ReportInputSelectionPolicy.Selection(project,source,"ctx",List.of());
+        var manifest=new ReportReviewManifest(project,source,"ctx",ReportMode.STANDARD,selection,
+                new ReportSourceSnapshotService.Manifest(source,"digest",List.of(file),null),List.of(lowercase),null,null);
+        var renderer=new ReportReviewRenderer(mapper);
+        assertThat(renderer.overallRisk(manifest)).isEqualTo("HIGH");
+        assertThat(renderer.summary(manifest)).containsEntry("riskCounts",new TreeMap<>(Map.of("HIGH",1L)))
+                .containsEntry("highRiskIssueCount",1L);
     }
     @Test void changedContextProducesReadOnlyHistoryAndKeepsCurrentReport() throws Exception {
         try(var db=new JooqMockDatabase()) {

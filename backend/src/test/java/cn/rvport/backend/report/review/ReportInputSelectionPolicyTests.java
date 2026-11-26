@@ -35,7 +35,7 @@ class ReportInputSelectionPolicyTests {
         when(contexts.current(project)).thenReturn(new KbScanContextService.Selection(project,null,null,1,null));
         when(environments.find(project)).thenReturn(Optional.empty());
         var selected=policy.current(project);
-        assertThat(selected.canGenerate()).isFalse(); assertThat(selected.sources()).hasSize(4);
+        assertThat(selected.canGenerate()).isFalse(); assertThat(selected.sources()).hasSize(5);
         assertThat(selected.sources()).allMatch(s->!s.available() && s.reasonCode().equals("ANALYSIS_NOT_READY"));
         verifyNoInteractions(builds,dependencies,capabilities,sources);
     }
