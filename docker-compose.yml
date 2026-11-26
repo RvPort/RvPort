@@ -210,6 +210,8 @@ services:
     volumes:
       - rvport-backend-runtime:/app/backend/runtime
       - rvport-ai-skills:/var/lib/rvport/ai-skills
+      # 迁移历史/文件/回滚 API 在本服务执行，需与 worker 共享任务级 git 仓库（runs/{runId}）
+      - ${RVPORT_AI_WORKSPACE_HOST_DIR:-/var/lib/rvport/ai-workspaces}:/var/lib/rvport/ai-workspaces
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/actuator/health', timeout=5).read()\""]
       interval: 10s

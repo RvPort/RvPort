@@ -28,9 +28,47 @@ import org.springframework.web.bind.annotation.RestController;
 public class AiMigrationController {
 
     private final AiMigrationService aiMigrationService;
+    private final AiMigrationHistoryService historyService;
 
-    public AiMigrationController(AiMigrationService aiMigrationService) {
+    public AiMigrationController(AiMigrationService aiMigrationService, AiMigrationHistoryService historyService) {
         this.aiMigrationService = aiMigrationService;
+        this.historyService = historyService;
+    }
+
+    @GetMapping("/api/ai-migrations/{runId}/history")
+    public ApiResponse<java.util.List<AiMigrationHistoryService.HistoryResponse>> history(
+            @AuthenticationPrincipal RvPortUserPrincipal principal,
+            @PathVariable UUID runId,
+            HttpServletRequest request
+    ) {
+        return ApiResponse.ok(
+                historyService.history(runId, principal.id(), principal.superAdmin()),
+                TraceIdFilter.currentTraceId(request));
+    }
+
+    @GetMapping("/api/ai-migrations/{runId}/repo-file")
+    public ApiResponse<String> repoFile(
+            @AuthenticationPrincipal RvPortUserPrincipal principal,
+            @PathVariable UUID runId,
+            @RequestParam String path,
+            @RequestParam(required = false) String ref,
+            HttpServletRequest request
+    ) {
+        return ApiResponse.ok(
+                historyService.repoFile(runId, path, ref, principal.id(), principal.superAdmin()),
+                TraceIdFilter.currentTraceId(request));
+    }
+
+    @PostMapping("/api/ai-migrations/{runId}/rollback")
+    public ApiResponse<AiMigrationHistoryService.RollbackResponse> rollback(
+            @AuthenticationPrincipal RvPortUserPrincipal principal,
+            @PathVariable UUID runId,
+            @RequestBody(required = false) AiMigrationHistoryService.RollbackRequest body,
+            HttpServletRequest request
+    ) {
+        return ApiResponse.ok(
+                historyService.rollback(runId, body, principal.id(), principal.superAdmin()),
+                TraceIdFilter.currentTraceId(request));
     }
 
     @PostMapping("/api/projects/{projectId}/ai-migrations")
