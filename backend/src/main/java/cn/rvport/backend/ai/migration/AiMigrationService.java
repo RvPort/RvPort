@@ -42,11 +42,13 @@ public class AiMigrationService {
     private final AuditLogService auditLogService;
     private final StoredArtifactRepository storedArtifactRepository;
     private final StoredArtifactService storedArtifactService;
+    private final AiMigrationReportSource reportSource;
 
     public AiMigrationService(AiMigrationRepository repository, KbScanRepository kbScanRepository,
             SourceRepository sourceRepository, ProjectAccessService projectAccessService, TaskService taskService,
             ModelProfileService models, AuditLogService auditLogService,
-            StoredArtifactRepository storedArtifactRepository, StoredArtifactService storedArtifactService) {
+            StoredArtifactRepository storedArtifactRepository, StoredArtifactService storedArtifactService,
+            AiMigrationReportSource reportSource) {
         this.repository = repository;
         this.kbScanRepository = kbScanRepository;
         this.sourceRepository = sourceRepository;
@@ -56,6 +58,7 @@ public class AiMigrationService {
         this.auditLogService = auditLogService;
         this.storedArtifactRepository = storedArtifactRepository;
         this.storedArtifactService = storedArtifactService;
+        this.reportSource = reportSource;
     }
 
     @Transactional
@@ -65,19 +68,30 @@ public class AiMigrationService {
         SourceRevisionView sourceRevision = sourceRepository.findActive(projectId)
                 .orElseThrow(() -> badRequest("SOURCE_REVISION_ACTIVE_NOT_FOUND",
                         "项目没有可用的 active source revision / No active source revision"));
-        KbScanView scanRun = resolveScanRun(projectId, sourceRevision, request == null ? null : request.scanRunId());
-        AgentModelRuntimeConfig config = resolveStageBinding(actorUserId);
-        List<cn.rvport.backend.kb.FindingView> findings = kbScanRepository.listAllFindingViews(scanRun.id());
-        if (AiMigrationProjector.project(scanRun.id(), findings).items().isEmpty()) {
-            throw badRequest("AI_MIGRATION_NO_ENTRIES",
-                    "当前扫描没有可迁移条目 / The current scan has no projectable entries");
+        // 输入源（change add-migration-report-loop）：报告是迁移的唯一权威输入源。
+        var currentReport = reportSource.eligible(projectId).orElse(null);
+        if (currentReport == null) {
+            throw badRequest("AI_MIGRATION_REPORT_REQUIRED",
+                    "请先生成评估报告 / Generate the assessment report first");
         }
+        if (currentReport.projectableCount() == 0) {
+            throw badRequest("AI_MIGRATION_NO_ENTRIES",
+                    "当前报告没有可迁移条目 / The current report has no projectable entries");
+        }
+        // scanRunId 仍随运行记录（追溯与历史运行合同），来源取当前报告条目的扫描运行
+        KbScanView scanRun = resolveScanRun(projectId, sourceRevision, null);
+        AgentModelRuntimeConfig config = resolveStageBinding(actorUserId);
 
+        ModelExecutionSelection selection = ModelExecutionSelection.from(actorUserId, config);
+        // 运行 ID 先于任务生成：TaskMetadataResolver 从任务输入读取 migrationRunId 填 tasks.resource_id。
+        UUID runId = UUID.randomUUID();
         Map<String, Object> inputSnapshot = new LinkedHashMap<>();
         inputSnapshot.put("projectId", projectId);
         inputSnapshot.put("scanRunId", scanRun.id());
+        inputSnapshot.put("reportId", currentReport.reportId().toString());
+        inputSnapshot.put("reportContextHash", currentReport.contextHash());
         inputSnapshot.put("sourceRevisionId", sourceRevision.id());
-        ModelExecutionSelection selection = ModelExecutionSelection.from(actorUserId, config);
+        inputSnapshot.put("migrationRunId", runId.toString());
         inputSnapshot.put("selection", Map.of(
                 "configurationUserId", selection.configurationUserId().toString(),
                 "modelProfileId", selection.modelProfileId().toString(),
@@ -90,8 +104,9 @@ public class AiMigrationService {
                 actorUserId,
                 null,
                 "AI 迁移任务已创建"));
-        UUID runId = repository.createRun(projectId, scanRun.id(), sourceRevision.id(), task.id(),
-                selection.modelProfileId(), selection.agentRuntimeId());
+        repository.createRun(runId, projectId, scanRun.id(), sourceRevision.id(), task.id(),
+                selection.modelProfileId(), selection.agentRuntimeId(), currentReport.reportId(),
+                currentReport.contextHash());
         auditLogService.record(projectId, actorUserId, "kb.migration.create", "ai_migration_run", runId,
                 Map.of("taskId", task.id(), "scanRunId", scanRun.id()), httpRequest);
         return task;
@@ -125,7 +140,9 @@ public class AiMigrationService {
     /** 迁移产物类型；artifactType 与 AiMigrationRuntimeService 入库时使用的值一致。 */
     public enum ArtifactKind {
         DIFF(AiMigrationRuntimeService.ARTIFACT_TYPE_DIFF, "migration-diff.patch", "text/x-diff"),
-        RESULT(AiMigrationRuntimeService.ARTIFACT_TYPE_RESULT, "migration-result.json", "application/json");
+        RESULT(AiMigrationRuntimeService.ARTIFACT_TYPE_RESULT, "migration-result.json", "application/json"),
+        SOURCE(AiMigrationRuntimeService.ARTIFACT_TYPE_SOURCE, "migration-source.tar.gz", "application/gzip"),
+        PATCH_SERIES(AiMigrationRuntimeService.ARTIFACT_TYPE_PATCH_SERIES, "migration-patch-series.patch", "text/x-diff");
 
         private final String artifactType;
         private final String filename;
@@ -159,6 +176,12 @@ public class AiMigrationService {
             }
             if (normalized.equals("result")) {
                 return RESULT;
+            }
+            if (normalized.equals("source") || normalized.equals("snapshot")) {
+                return SOURCE;
+            }
+            if (normalized.equals("series") || normalized.equals("patch-series")) {
+                return PATCH_SERIES;
             }
             return null;
         }

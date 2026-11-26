@@ -8,6 +8,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>execution-mode：container（默认，一次性执行器容器）或 process（一期 worker 子进程回退）。
  * 两模式产出同一套产物合同，切换不涉及数据迁移。
+ *
+ * <p>技能仓库经 git 卷管理（skills-volume / skills-repo-url / skills-branch / skills-root），
+ * 管理端更新接口见 {@link SkillAdminController}。
  */
 @ConfigurationProperties(prefix = "rvport.ai-migration.executor")
 public record AiMigrationExecutorProperties(
@@ -19,9 +22,9 @@ public record AiMigrationExecutorProperties(
         String skillRepoUrl,
         String skillBranch,
         String skillsRoot,
+        String skillsProxy,
         String workspaceRoot,
-        String workspaceHostRoot,
-        String skillRepoProxy) {
+        String workspaceHostRoot) {
 
     public AiMigrationExecutorProperties {
         executionMode = executionMode == null || executionMode.isBlank() ? "container" : executionMode.trim();
@@ -35,9 +38,8 @@ public record AiMigrationExecutorProperties(
                 ? "https://github.com/zte-riscv/rvport-skills.git"
                 : skillRepoUrl;
         skillBranch = skillBranch == null || skillBranch.isBlank() ? "master" : skillBranch;
-        skillsRoot = skillsRoot == null || skillsRoot.isBlank()
-                ? "/var/lib/rvport/ai-skills"
-                : skillsRoot;
+        skillsRoot = skillsRoot == null || skillsRoot.isBlank() ? "/var/lib/rvport/ai-skills" : skillsRoot;
+        skillsProxy = skillsProxy == null ? "" : skillsProxy.trim();
         workspaceRoot = workspaceRoot == null || workspaceRoot.isBlank()
                 ? "/var/lib/rvport/ai-workspaces"
                 : workspaceRoot;
@@ -46,9 +48,6 @@ public record AiMigrationExecutorProperties(
         workspaceHostRoot = workspaceHostRoot == null || workspaceHostRoot.isBlank()
                 ? workspaceRoot
                 : workspaceHostRoot;
-        // 技能仓库专用代理：容器内不继承宿主机代理（清空以免内部服务被代理劫持），
-        // 因此访问 GitHub 的 git 命令需单独指定。仅作用于技能仓库的 git 操作，留空则直连。
-        skillRepoProxy = skillRepoProxy == null ? "" : skillRepoProxy.trim();
     }
 
     public boolean containerMode() {
@@ -57,8 +56,7 @@ public record AiMigrationExecutorProperties(
 
     /** 测试与回退场景的便捷构造：仅指定模式与 workspace 根（宿主根缺省同 workspace 根）。 */
     public static AiMigrationExecutorProperties forMode(String mode, String workspaceRoot, String workspaceHostRoot) {
-        return new AiMigrationExecutorProperties(mode, null, null, null, null, null, null, null,
-                workspaceRoot, workspaceHostRoot, null);
+        return new AiMigrationExecutorProperties(mode, null, null, null, null, null, null, null, null, workspaceRoot, workspaceHostRoot);
     }
 
     public boolean validMode() {

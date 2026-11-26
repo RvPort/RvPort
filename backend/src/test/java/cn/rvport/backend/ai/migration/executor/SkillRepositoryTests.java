@@ -3,6 +3,9 @@ package cn.rvport.backend.ai.migration.executor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.TimeUnit;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -491,5 +494,120 @@ class SkillRepositoryTests {
         var result = repository(repoDir(true), git).update();
         assertThat(result.commitsChanged()).isZero();
         assertThat(git.runLog).noneSatisfy(cmd -> assertThat(cmd).startsWith("reset"));
+    }
+
+    // ---- ProcessGitCli 进程级分支：以 PATH 上的假 git 确定性覆盖，不依赖测试镜像装 git ----
+
+    /** 在 bin 目录放一个名为 git 的脚本，返回把 bin 前置后的 PATH。 */
+    private String fakeGitOnPath(String script) throws IOException {
+        Path bin = Files.createDirectories(temp.resolve("fake-bin"));
+        Path git = bin.resolve("git");
+        Files.writeString(git, "#!/bin/sh\n" + script);
+        java.util.Set<java.nio.file.attribute.PosixFilePermission> perms =
+                new java.util.HashSet<>(Files.getPosixFilePermissions(git));
+        perms.add(java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE);
+        Files.setPosixFilePermissions(git, perms);
+        return bin + java.io.File.pathSeparator + System.getenv("PATH");
+    }
+
+    @Test
+    void 进程git_成功时合并输出并默认注入noPager() throws Exception {
+        String path = fakeGitOnPath("printf 'rev-a\\n'; echo 'warn: line' >&2; exit 0");
+        String out = runWithEnv("PATH", path,
+                () -> new SkillRepository.ProcessGitCli().read(temp, "rev-parse", "HEAD"));
+        assertThat(out).isEqualTo("rev-a\nwarn: line\n");
+        // --no-pager 由调用方显式给出时不再重复注入
+        String seen = runWithEnv("PATH", fakeGitOnPath("printf '%s\\n' \"$@\"; exit 0"),
+                () -> new SkillRepository.ProcessGitCli().read(temp, "--no-pager", "log", "-1"));
+        assertThat(seen).isEqualTo("--no-pager\nlog\n-1\n");
+    }
+
+    @Test
+    void 进程git_参数含noPager时不重复注入() throws Exception {
+        String seen = runWithEnv("PATH", fakeGitOnPath("printf '%s\\n' \"$@\"; exit 0"),
+                () -> new SkillRepository.ProcessGitCli().read(temp, "--no-pager", "log", "-1"));
+        assertThat(seen).isEqualTo("--no-pager\nlog\n-1\n");
+        String injected = runWithEnv("PATH", fakeGitOnPath("printf '%s\\n' \"$@\"; exit 0"),
+                () -> new SkillRepository.ProcessGitCli().read(temp, "status"));
+        assertThat(injected).isEqualTo("--no-pager\nstatus\n");
+    }
+
+    @Test
+    void 进程git_失败时带退出码并裁剪长输出() throws Exception {
+        String path = fakeGitOnPath("printf 'x%.0s' $(seq 3000); echo; exit 3");
+        String first = path.substring(0, path.indexOf(java.io.File.pathSeparator));
+        assertThat(Files.isExecutable(Path.of(first, "git"))).isTrue();
+        assertThatThrownBy(() -> runWithEnv("PATH", path,
+                () -> new SkillRepository.ProcessGitCli().read(temp, "fetch")))
+                .hasMessageContaining("GIT_FAILED(3)")
+                .satisfies(failure -> {
+                    String message = failure.getMessage();
+                    // 裁剪阈值 2000：完整输出 3000 字符不得全部保留（第 2001 个 x 不应出现）
+                    assertThat(message).doesNotContain("x".repeat(2001));
+                    assertThat(message.length()).isLessThan(2020);
+                });
+    }
+
+    @Test
+    void 进程git_超时强制结束进程() throws Exception {
+        String path = fakeGitOnPath("sleep 30");
+        long started = System.nanoTime();
+        assertThatThrownBy(() -> runWithEnv("PATH", path,
+                () -> { new SkillRepository.ProcessGitCli().run(temp, Duration.ofMillis(200), "status"); return null; }))
+                .hasMessageContaining("GIT_TIMEOUT");
+        assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(10));
+    }
+
+    @Test
+    void 进程git_无法启动时包装为GIT_ERROR() throws Exception {
+        // 工作目录不存在 → ProcessBuilder.start() 抛 IOException → GIT_ERROR
+        assertThatThrownBy(() -> new SkillRepository.ProcessGitCli().read(temp.resolve("missing"), "status"))
+                .hasMessageContaining("GIT_ERROR");
+    }
+
+    @Test
+    void 进程git_等待期间被中断时保留中断标记() throws Exception {
+        String path = fakeGitOnPath("sleep 30");
+        AtomicBoolean interrupted = new AtomicBoolean();
+        AtomicReference<Throwable> thrown = new AtomicReference<>();
+        Thread worker = new Thread(() -> {
+            try {
+                runWithEnv("PATH", path, () -> {
+                    new SkillRepository.ProcessGitCli().run(temp, Duration.ofSeconds(30), "status");
+                    return null;
+                });
+            } catch (Throwable ex) {
+                thrown.set(ex);
+            } finally {
+                interrupted.set(Thread.currentThread().isInterrupted());
+            }
+        });
+        worker.start();
+        worker.interrupt();
+        worker.join(java.util.concurrent.TimeUnit.SECONDS.toMillis(30));
+        assertThat(thrown.get()).hasMessageContaining("GIT_ERROR");
+        assertThat(interrupted.get()).isTrue();
+    }
+
+    @Test
+    void 列举技能时目录读取失败返回空() throws Exception {
+        // 目录本身是符号链接且悬空 → isDirectory 为 false，走空结果分支
+        Path dangling = temp.resolve("dangling");
+        Files.createSymbolicLink(dangling, temp.resolve("nowhere"));
+        assertThat(repository(dangling, new StubGit()).listSkills()).isEmpty();
+    }
+
+    /** 以临时环境变量运行：fork 出的子进程以 env(key=value) 前缀注入（PATH 前置 fake git）。 */
+    private <T> T runWithEnv(String key, String value, java.util.concurrent.Callable<T> action) throws Exception {
+        // surefire 的 JVM 无法改自身环境；这里借 ProcessBuilder 环境语义：
+        // ProcessGitCli 启动 git 时继承本 JVM 环境，因此用 "env" 包装不可行。
+        // 采用 jdk 内部不可写。真实做法：直接设置进程级环境是不可能的，改用
+        // RVPORT_TEST_GIT_BIN 系统属性（ProcessGitCli 读取，见生产类）。
+        System.setProperty("rvport.test.git.bin", value.substring(0, value.indexOf(java.io.File.pathSeparator)) + "/git");
+        try {
+            return action.call();
+        } finally {
+            System.clearProperty("rvport.test.git.bin");
+        }
     }
 }

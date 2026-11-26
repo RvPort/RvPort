@@ -33,7 +33,7 @@ public class SkillRepository {
     public SkillRepository(AiMigrationExecutorProperties executorProperties) {
         this(new SkillRepositoryProperties(Path.of(executorProperties.skillsRoot()),
                 executorProperties.skillRepoUrl(), executorProperties.skillBranch(),
-                executorProperties.skillRepoProxy()), new ProcessGitCli());
+                executorProperties.skillsProxy()), new ProcessGitCli());
     }
 
     SkillRepository(SkillRepositoryProperties properties) {
@@ -191,7 +191,8 @@ public class SkillRepository {
         }
 
         private String execute(Path workingDir, Duration timeout, String... args) {
-            List<String> command = new ArrayList<>(List.of("git"));
+            String gitBin = System.getProperty("rvport.test.git.bin", "git");
+            List<String> command = new ArrayList<>(List.of(gitBin));
             if (!List.of(args).contains("--no-pager")) {
                 command.add("--no-pager");
             }
@@ -201,12 +202,25 @@ public class SkillRepository {
                 builder.directory(workingDir.toFile());
                 builder.redirectErrorStream(true);
                 Process process = builder.start();
-                String output = new String(process.getInputStream().readAllBytes(),
-                        java.nio.charset.StandardCharsets.UTF_8);
+                // 输出先经有界读取线程收集，等待与超时判断不依赖输出读完：静默进程（如 sleep）
+                // 不会让超时窗口失效，长输出也不会阻塞等待。
+                java.io.ByteArrayOutputStream buffered = new java.io.ByteArrayOutputStream();
+                Thread drain = new Thread(() -> {
+                    try (java.io.InputStream in = process.getInputStream()) {
+                        buffered.write(in.readAllBytes());
+                    } catch (java.io.IOException ignored) {
+                        // 进程被强制结束时读取线程可能看到流关闭，属正常路径
+                    }
+                }, "git-output-drain");
+                drain.setDaemon(true);
+                drain.start();
                 if (!process.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
                     process.destroyForcibly();
+                    drain.join(1000);
                     throw new IllegalStateException("GIT_TIMEOUT: " + command);
                 }
+                drain.join(1000);
+                String output = buffered.toString(java.nio.charset.StandardCharsets.UTF_8);
                 if (process.exitValue() != 0) {
                     String clipped = output.length() > 2000 ? output.substring(0, 2000) : output;
                     throw new IllegalStateException("GIT_FAILED(" + process.exitValue() + "): " + clipped);

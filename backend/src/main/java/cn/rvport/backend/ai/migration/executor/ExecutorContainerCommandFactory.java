@@ -9,12 +9,11 @@ import java.util.Map;
  * 执行器容器 docker run 命令的纯拼装逻辑（可单测，不触碰 docker）。
  *
  * <p>契约见 add-ai-migration-executor design E2：一次性容器（--rm）、任务唯一命名、
- * workspace bind mount 到 /app、技能 volume 只读挂载、凭据经 -e 显式传值、
- * 代理环境置空（wxai 直连、QEMU/编译不涉外网）。
+ * workspace bind mount 到 /app、凭据经 -e 显式传值、代理环境置空（wxai 直连、QEMU/编译不涉外网）。
+ * 迁移技能随镜像内置，这里不挂载任何技能卷。
  */
 public final class ExecutorContainerCommandFactory {
 
-    static final String SKILL_MOUNT_TARGET = "/root/.pi/agent/skills";
     static final String WORKSPACE_MOUNT_TARGET = "/app";
 
     private ExecutorContainerCommandFactory() {
@@ -24,10 +23,9 @@ public final class ExecutorContainerCommandFactory {
             String image,
             String containerName,
             Path workspace,
-            String skillsVolume,
             Map<String, String> environment,
             Map<String, String> proxyVariables) {
-        return runCommand(image, containerName, workspace, workspace, skillsVolume, environment, proxyVariables);
+        return runCommand(image, containerName, workspace, workspace, environment, proxyVariables);
     }
 
     /**
@@ -39,7 +37,6 @@ public final class ExecutorContainerCommandFactory {
             String containerName,
             Path workspace,
             Path hostWorkspace,
-            String skillsVolume,
             Map<String, String> environment,
             Map<String, String> proxyVariables) {
         List<String> command = new ArrayList<>();
@@ -52,10 +49,6 @@ public final class ExecutorContainerCommandFactory {
         command.add(containerName);
         command.add("-v");
         command.add(hostWorkspace.toAbsolutePath().normalize() + ":" + WORKSPACE_MOUNT_TARGET);
-        if (skillsVolume != null && !skillsVolume.isBlank()) {
-            command.add("-v");
-            command.add(skillsVolume + ":" + SKILL_MOUNT_TARGET + ":ro");
-        }
         for (Map.Entry<String, String> entry : environment.entrySet()) {
             command.add("-e");
             command.add(entry.getKey() + "=" + (entry.getValue() == null ? "" : entry.getValue()));
