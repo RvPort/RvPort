@@ -18,6 +18,8 @@ class CurrentFixListResolverTests {
     }
     @Test void reportsSpecificReasonsForUnusableLists() {
         assertThat(resolver.current(project).reasonCode()).isEqualTo("REPORT_NOT_GENERATED");
+        when(reviews.currentReport(project)).thenReturn(Optional.of(report));
+        assertThat(resolver.current(project).reasonCode()).isEqualTo("REPORT_REVIEW_UNAVAILABLE");
         draft(true,"CURRENT","stale",confirmation,null);
         assertThat(resolver.current(project).reasonCode()).isEqualTo("REPORT_CONTEXT_CHANGED");
         for(boolean writable:List.of(true,false)) {

@@ -48,9 +48,11 @@ public class ReportService {
         int pageSize = request.normalizedPageSize();
         try {
             long total = reportRepository.count(projectId, request);
-            List<ReportResponse> items = reportRepository.list(projectId, request)
+            var rows=reportRepository.list(projectId,request);
+            var metadata=reportRepository.sourceMetadata(rows.stream().map(ReportView::sourceRevisionId).filter(java.util.Objects::nonNull).distinct().toList());
+            List<ReportResponse> items = rows
                     .stream()
-                    .map(this::response)
+                    .map(row->response(row,metadata.get(row.sourceRevisionId())))
                     .toList();
             return PageResponse.of(items, page, pageSize, total);
         } catch (IllegalArgumentException ex) {
@@ -108,6 +110,10 @@ public class ReportService {
     }
 
     private ReportResponse response(ReportView report) {
+        var metadata=report.sourceRevisionId()==null?null:reportRepository.sourceMetadata(List.of(report.sourceRevisionId())).get(report.sourceRevisionId());
+        return response(report,metadata);
+    }
+    private ReportResponse response(ReportView report,java.util.Map<String,Object> metadata) {
         List<ReportArtifactSummaryResponse> artifacts = storedArtifactRepository
                 .listByOwner(StoredArtifactOwnerType.MIGRATION_REPORT, report.id())
                 .stream()
@@ -121,7 +127,7 @@ public class ReportService {
         ReportComparisonSummaryResponse latestComparison = reportComparisonRepository.latestForTargetReport(report.id())
                 .map(ReportComparisonSummaryResponse::from)
                 .orElse(null);
-        return ReportResponse.from(report, artifacts, latestComparable, latestComparison, reviews.metadata(report.id()));
+        return ReportResponse.from(report, artifacts, latestComparable, latestComparison, reviews.metadata(report.id()),metadata);
     }
 
     private ApiException notFound(String code, String message) {

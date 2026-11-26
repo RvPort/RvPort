@@ -9,6 +9,28 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class WorkerHeartbeatServiceTests {
+    @Test void failedInitialRegistrationNeverStartsConsumptionAndCapabilityFailureDoesNotStopRegisteredWorker() {
+        var properties=properties(1,2);var id=new WorkerInstanceIdProvider(properties);
+        var repository=org.mockito.Mockito.mock(WorkerInstanceRepository.class);
+        var concurrency=org.mockito.Mockito.mock(WorkerConcurrencyController.class);
+        var registry=org.mockito.Mockito.mock(TaskExecutionRegistry.class);
+        var capabilities=org.mockito.Mockito.mock(ReportWorkerCapabilityService.class);
+        var service=new WorkerHeartbeatService(properties,id,repository,concurrency,registry,capabilities);
+        org.mockito.Mockito.doThrow(new IllegalStateException("database offline")).when(repository).upsertHeartbeat(
+                org.mockito.Mockito.anyString(),org.mockito.Mockito.anyString(),org.mockito.Mockito.anyLong(),org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyInt(),org.mockito.Mockito.anyInt(),org.mockito.Mockito.anyInt());
+        org.assertj.core.api.Assertions.assertThatThrownBy(service::heartbeat).hasMessage("database offline");
+        org.mockito.Mockito.verifyNoInteractions(concurrency,capabilities);
+        org.mockito.Mockito.reset(repository);when(concurrency.apply(1)).thenReturn(1);
+        org.mockito.Mockito.doThrow(new IllegalStateException("capability unavailable")).when(capabilities).heartbeat(id.workerInstanceId());
+        service.heartbeat();service.heartbeat();
+        var order=org.mockito.Mockito.inOrder(repository,concurrency);
+        order.verify(repository).findConcurrencyLimit(id.workerInstanceId());
+        order.verify(repository).upsertHeartbeat(org.mockito.Mockito.eq(id.workerInstanceId()),org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyLong(),org.mockito.Mockito.anyString(),org.mockito.Mockito.eq(1),org.mockito.Mockito.eq(0),org.mockito.Mockito.eq(0));
+        order.verify(concurrency).apply(1);
+        verify(capabilities,org.mockito.Mockito.times(2)).heartbeat(id.workerInstanceId());
+    }
 
     @Test
     void heartbeatRegistersWorkerAndUsesConfiguredConcurrencyWhenNoDatabaseOverrideExists() {
@@ -25,7 +47,7 @@ class WorkerHeartbeatServiceTests {
                 idProvider,
                 repository,
                 concurrencyController,
-                registry
+                registry, org.mockito.Mockito.mock(ReportWorkerCapabilityService.class)
         );
 
         service.heartbeat();
@@ -62,7 +84,7 @@ class WorkerHeartbeatServiceTests {
                 idProvider,
                 repository,
                 concurrencyController,
-                registry
+                registry, org.mockito.Mockito.mock(ReportWorkerCapabilityService.class)
         );
 
         service.heartbeat();

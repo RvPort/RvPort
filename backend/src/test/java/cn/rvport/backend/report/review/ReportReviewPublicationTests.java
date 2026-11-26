@@ -19,6 +19,23 @@ class ReportReviewPublicationTests {
     final ObjectMapper mapper=new ObjectMapper();
     final ReportAiReviewRuntime.Reviewed empty=new ReportAiReviewRuntime.Reviewed(List.of(),Map.of("execution","NOT_REQUIRED"));
     final ReportSourceSnapshotService.File file=new ReportSourceSnapshotService.File("key","src/a.c","hash",3,UUID.randomUUID(),true,null);
+    @Test void fixedDisplayAndVersionMetadataAreSharedWithoutMutatingOriginalEvidenceOrRisk() {
+        var fact=item("SCANNER","src/a.c",1);
+        var selection=new ReportInputSelectionPolicy.Selection(project,source,"ctx",List.of());
+        var display=Map.<String,Object>of("catalogVersion","fixed-v0","items",Map.of(fact.id().toString(),
+                List.of(Map.of("code","example","message","生成时说明","messageEn","Frozen explanation","catalogVersion","fixed-v0"))));
+        var manifest=new ReportReviewManifest(project,source,"ctx",ReportMode.STANDARD,selection,
+                new ReportSourceSnapshotService.Manifest(source,"digest",List.of(file),null),List.of(fact),null,null,
+                SourceVersionMetadata.of("版本","abc","SNAPSHOT"),display);
+        var renderer=new ReportReviewRenderer(mapper);
+        var doc=renderer.document(report,manifest,empty);
+        assertThat(doc).containsEntry("displayEvidence",display).containsEntry("displayEvidenceOrigin","SNAPSHOT")
+                .containsEntry("sourceVersionLabel","版本").containsEntry("sourceGitCommit","abc");
+        assertThat(renderer.html(doc)).contains("生成时说明","Frozen explanation","fixed-v0");
+        assertThat(((Map<?,?>)((List<?>)doc.get("findings")).getFirst()).get("original")).isEqualTo(fact.originalSnapshot());
+        assertThat(fact.originalSnapshot()).doesNotContainKey("displayEvidence");
+        assertThat(renderer.overallRisk(manifest)).isEqualTo("LOW");
+    }
 
     ReportReviewManifest manifest(UUID previous, List<ReviewItemSnapshot> items) {
         return new ReportReviewManifest(project,source,"ctx",ReportMode.AI_ENHANCED,null,

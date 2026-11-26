@@ -69,6 +69,9 @@ public class ReportReviewRuntimeService {
                 reviews.finish(report.id(),"NOT_PUBLISHED",Map.of("execution","FAILED","errorCode",code)); return null;
             });
             if(ex instanceof TaskCancelledException cancelled) throw cancelled;
+            if("REPORT_AI_SANDBOX_UNAVAILABLE".equals(code))
+                throw new cn.rvport.backend.task.TaskExecutionException(code,
+                        "报告 AI 执行沙箱不可用 / The report AI execution sandbox is unavailable",ex);
             throw new IllegalStateException(code,ex);
         }
     }

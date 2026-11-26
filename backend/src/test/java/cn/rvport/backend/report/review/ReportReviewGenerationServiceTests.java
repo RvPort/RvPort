@@ -33,8 +33,9 @@ class ReportReviewGenerationServiceTests {
     final ReportRepository reports=mock(ReportRepository.class);
     final ObjectMapper mapper=new ObjectMapper().findAndRegisterModules();
     final PlatformTransactionManager transaction=mock(PlatformTransactionManager.class);
+    final cn.rvport.backend.worker.ReportWorkerCapabilityService capabilities=mock(cn.rvport.backend.worker.ReportWorkerCapabilityService.class);
     final ReportReviewGenerationService service=new ReportReviewGenerationService(access,policy,reviews,sources,sourceSnapshots,
-            new ReviewSnapshotFactory(mapper),models,tasks,reports,mapper,transaction);
+            new ReviewSnapshotFactory(mapper),models,tasks,reports,mapper,transaction,capabilities);
     final ReportInputSelectionPolicy.Selection selection=new ReportInputSelectionPolicy.Selection(project,source,"ctx",List.of(
             new ReportInputSelectionPolicy.Source("KB_FINDING",UUID.randomUUID(),"SUCCEEDED",null,null,Map.of(),List.of(),List.of())));
     @BeforeEach void setup() {
@@ -44,6 +45,29 @@ class ReportReviewGenerationServiceTests {
                 "v1",null,null,null,null,null,null,null,true,actor,null)));
         when(sourceSnapshots.prepare(any())).thenReturn(new ReportSourceSnapshotService.Manifest(source,"digest",List.of(),null));
         when(tasks.create(any())).thenReturn(new TaskResponse(task,project,"REPORT_GENERATE",TaskStatus.PENDING,0,null,null,null,null,null,null,null,Map.of()));
+    }
+    @Test void readinessSeparatesConfigurationFromActualInputExecutionAndRechecksBeforeQueue() {
+        var config=config();when(models.resolveAgentForStage(ModelProfileStage.REPORT_AI_REVIEW,actor)).thenReturn(config);
+        when(capabilities.current(config.runtime(),false)).thenReturn(Map.of("status","NOT_REQUIRED","executionRequired",false));
+        assertThat(service.readiness(project,source,actor,false)).containsEntry("canGenerateAi",true).containsEntry("aiConfigurationReady",true);
+        service.create(project,request(ReportMode.AI_ENHANCED),"empty",actor,false);
+        verify(capabilities,times(2)).current(config.runtime(),false);
+        var finding=Map.<String,Object>of("sourceType","KB_FINDING","sourceRunId",UUID.randomUUID(),"sourceRefId",UUID.randomUUID(),"title","问题","evidence",Map.of("reason","contract-evidence-only"));
+        var selected=new ReportInputSelectionPolicy.Selection(project,source,"ctx",List.of(new ReportInputSelectionPolicy.Source(
+                "KB_FINDING",UUID.randomUUID(),"SUCCEEDED",null,null,Map.of(),List.of(finding),List.of(finding))));
+        when(policy.current(project)).thenReturn(selected);
+        when(capabilities.current(config.runtime(),true)).thenReturn(Map.of("status","UNAVAILABLE","executionRequired",true));
+        var blocked=service.readiness(project,source,actor,false);
+        assertThat(blocked).containsEntry("canGenerateStandard",true).containsEntry("canGenerateAi",false)
+                .containsEntry("aiConfigurationReady",true).containsEntry("recommendedMode","STANDARD");
+        assertThat((List<?>)blocked.get("aiBlockers")).hasSize(1);
+        code("REPORT_AI_SANDBOX_UNAVAILABLE",()->service.create(project,request(ReportMode.AI_ENHANCED),"blocked",actor,false));
+        verify(tasks,times(1)).create(any());verify(transaction).rollback(any());
+        when(capabilities.current(config.runtime(),true)).thenReturn(Map.of("status","UNKNOWN","executionRequired",true));
+        var unknown=service.readiness(project,source,actor,false);
+        assertThat(unknown).containsEntry("canGenerateAi",true);assertThat((List<?>)unknown.get("aiWarnings")).hasSize(1);
+        var query=new ReviewItemQuery(1,10,null,null,null,null,null,null,null,"contract-evidence-only",null,null);
+        assertThat(service.preview(project,source,query,actor,false).total()).isEqualTo(1);
     }
     @Test void standardZeroFindingsDoesNotRequireModelAndPersistsTriggerIdentityAndManifest() {
         var response=service.create(project,request(ReportMode.STANDARD),"key",actor,false);
@@ -74,6 +98,8 @@ class ReportReviewGenerationServiceTests {
         for(var body:Arrays.asList(null,new ReportGenerateRequest(source),new ReportGenerateRequest(source,ReportMode.STANDARD,"",null,null)))
             code("REPORT_REQUEST_INVALID",()->service.create(project,body,"key",actor,false));
         code("REPORT_REQUEST_INVALID",()->service.create(project,request(ReportMode.STANDARD)," ",actor,false));
+        assertThatThrownBy(()->service.create(project,null,"key",actor,false)).isInstanceOfSatisfying(ApiException.class,
+                error->assertThat(error.details()).containsEntry("messageEn","Invalid report request parameters"));
     }
     @Test void callerCannotOverrideThePersonalBindingEvenWithLenientMapper() {
         var httpMapper=mapper.copy().disable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);

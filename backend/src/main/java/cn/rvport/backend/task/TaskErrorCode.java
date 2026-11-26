@@ -19,6 +19,7 @@ public final class TaskErrorCode {
     public static final String REMOTE_COMMAND_FAILED = "TASK_REMOTE_COMMAND_FAILED";
     public static final String REPORT_NO_CONFIRMED_INPUTS = "REPORT_NO_CONFIRMED_INPUTS";
     public static final String WORKER_LOST = "WORKER_LOST";
+    public static final String DELIVERY_EXHAUSTED = "TASK_DELIVERY_EXHAUSTED";
     public static final String ANALYSIS_NON_RETRYABLE = "ANALYSIS_NON_RETRYABLE";
     public static final String ANALYSIS_RETRYABLE_RESOURCE = "ANALYSIS_RETRYABLE_RESOURCE";
 

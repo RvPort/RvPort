@@ -79,6 +79,25 @@ def test_main_preserves_model_configuration_without_proxy_state():
         assert "RVPORT_DATABASE_PASSWORD" not in os.environ
 
 
+def test_self_test_runs_without_credentials_and_classifies_exit_codes():
+    from types import SimpleNamespace
+    for exit_code, expected in [(0, 0), (126, 126), (1, 125)]:
+        with patch.object(sandbox.subprocess, "run", return_value=SimpleNamespace(returncode=exit_code)) as run:
+            assert sandbox.main(["--self-test"]) == expected
+            args, kwargs = run.call_args
+            assert kwargs["timeout"] == 8
+            assert set(kwargs["env"]) == {"PATH", "RVPORT_REPORT_REVIEW_SANDBOX"}
+            assert "--self-test" not in args[0]
+    for failure in [OSError("missing python"), subprocess.TimeoutExpired("probe", 8)]:
+        with patch.object(sandbox.subprocess, "run", side_effect=failure):
+            assert sandbox.self_test() == 125
+
+
+def test_real_self_test_reports_the_same_actual_sandbox_capability():
+    result = subprocess.run([sys.executable, str(SCRIPT), "--self-test"], capture_output=True, timeout=15)
+    assert result.returncode == 0, result.stderr.decode()
+
+
 @pytest.mark.parametrize("abi", [1, 2, 3])
 def test_rules_cover_read_and_write_scopes_for_supported_abis(tmp_path, abi):
     from unittest.mock import Mock

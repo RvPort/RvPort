@@ -26,7 +26,7 @@ public class TaskAttemptService {
     @Transactional
     public Claim claim(UUID taskId, String workerId) {
         if (!workers.lockForClaim(workerId)) {
-            throw new TaskAttemptLostException();
+            throw new TaskRetryableException("TASK_WORKER_NOT_REGISTERED", null);
         }
         TaskView task = tasks.claim(taskId, "任务开始执行");
         if (task == null) {

@@ -164,7 +164,11 @@ public class ReviewWorkspaceService {
         document.put("draftVersion",draft.version()); document.put("decisions",rows);
         document.put("fixItems",rows.stream().filter(row->"TO_FIX".equals(row.get("reviewState"))).toList());
         var renderer=new ReportReviewRenderer(mapper);
-        document.put("sources",renderer.sources(repository.manifest(draft.reportId())));
+        var manifest=repository.manifest(draft.reportId());
+        document.put("sources",renderer.sources(manifest));
+        if(manifest.sourceMetadata()!=null) document.putAll(manifest.sourceMetadata());
+        document.put("displayEvidence",manifest.displayEvidence()==null?ReasonDescriptionResolver.snapshot(manifest.items(),manifest.selection()):manifest.displayEvidence());
+        document.put("displayEvidenceOrigin",manifest.displayEvidence()==null?"READ_TIME":"SNAPSHOT");
         UUID json=store(draft,id,"JSON","application/json",renderer.json(document));
         UUID html=store(draft,id,"HTML","text/html",renderer.html(document).getBytes(StandardCharsets.UTF_8));
         repository.linkDocuments(draft.reportId(),id,html,json);
@@ -218,7 +222,12 @@ public class ReviewWorkspaceService {
     /** 调用方已按报告检查项目权限；历史正文与人工处置事实不从活动扫描重建。 */
     @Transactional(readOnly=true)
     public Map<String,Object> metadata(UUID report) {
-        Map<String,Object> result=new LinkedHashMap<>(repository.runSummary(report).orElseThrow());
+        var run=repository.runSummary(report);
+        if(run.isEmpty()) {
+            org.slf4j.LoggerFactory.getLogger(ReviewWorkspaceService.class).warn("Report review metadata missing reportId={}",report);
+            return null;
+        }
+        Map<String,Object> result=new LinkedHashMap<>(run.get());
         repository.draft(report).ifPresentOrElse(draft->{
             result.putAll(summary(draft));
         },()->result.put("writable",false));
@@ -238,8 +247,17 @@ public class ReviewWorkspaceService {
     }
 
     ReviewWorkspaceRepository.Draft authorized(UUID report,UUID actor,boolean admin) {
-        var draft=repository.draft(report).orElseThrow(()->missing("REPORT_NOT_FOUND"));
+        var draft=repository.draft(report).orElse(null);
+        if(draft==null) {
+            UUID project=repository.reportProject(report).orElseThrow(()->missing("REPORT_NOT_FOUND"));
+            access.requireProjectAccess(project,actor,admin);
+            throw unavailable();
+        }
         access.requireProjectAccess(draft.projectId(),actor,admin); return draft;
+    }
+    static ApiException unavailable() {
+        return new ApiException(HttpStatus.CONFLICT,"REPORT_REVIEW_UNAVAILABLE","该报告缺少可用的复核数据",
+                Map.of("messageEn","Review data is unavailable for this report"));
     }
     private ReviewWorkspaceRepository.Draft lock(UUID report,UUID actor,boolean admin) {
         var draft=authorized(report,actor,admin); repository.lockProject(draft.projectId());

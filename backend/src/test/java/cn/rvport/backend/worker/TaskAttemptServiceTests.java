@@ -20,7 +20,7 @@ class TaskAttemptServiceTests {
 
     @Test
     void claimLocksWorkerAndCreatesDistinctOwnershipOrRollsBack() {
-        assertThatThrownBy(() -> service.claim(id, "worker")).isInstanceOf(TaskAttemptLostException.class);
+        assertThatThrownBy(() -> service.claim(id, "worker")).isInstanceOf(TaskRetryableException.class).hasMessage("TASK_WORKER_NOT_REGISTERED");
         verifyNoInteractions(tasks, handles);
         when(workers.lockForClaim("worker")).thenReturn(true);
         assertThat(service.claim(id, "worker")).isNull();

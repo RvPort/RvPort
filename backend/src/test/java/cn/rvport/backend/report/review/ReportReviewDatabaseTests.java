@@ -38,6 +38,12 @@ class ReportReviewDatabaseTests {
                 for(var type:List.of("KB_FINDING","DEPENDENCY_RESULT","FLOATING_POINT_FINDING","MEMORY_ORDER_FINDING"))
                     assertThat(sourceRepo.findings(type,UUID.randomUUID())).isEmpty();
                 reports.createEvaluation(report,project,source,task,"fixture",actor);
+                reports.captureSourceMetadata(report,SourceVersionMetadata.of("固定版本","abc123","SNAPSHOT"));
+                assertThat(reports.findById(report).orElseThrow().summary().get("sourceMetadata").toString()).contains("固定版本","abc123");
+                assertThat(reports.sourceMetadata(List.of(source))).containsKey(source);
+                assertThat(reviews.reportProject(report)).contains(project);
+                assertThat(reviews.runSummary(report)).isEmpty();
+                assertThatThrownBy(()->reviews.manifest(report)).isInstanceOf(cn.rvport.backend.common.error.ApiException.class);
                 UUID ref=UUID.randomUUID(), run=UUID.randomUUID();
                 Map<String,Object> fact=Map.of("sourceType","KB_FINDING","sourceRunId",run,"sourceRefId",ref,"title","待复核","severity","MEDIUM");
                 var selection=new ReportInputSelectionPolicy.Selection(project,source,"ctx",List.of(new ReportInputSelectionPolicy.Source(
@@ -72,6 +78,10 @@ class ReportReviewDatabaseTests {
                 assertThat(reviews.advanceDraft(report,1)).isTrue();
                 assertThat(resolver.current(project).reasonCode()).isEqualTo("NEEDS_CONFIRMATION");
                 assertThat(reviews.confirmationItems(report,confirmed)).singleElement().satisfies(r->assertThat(r).containsEntry("reviewState","EXCLUDED"));
+                var frozenSnapshot=(Map<?,?>)reviews.confirmationItems(report,confirmed).getFirst().get("snapshot");
+                assertThat((com.fasterxml.jackson.databind.JsonNode)mapper.valueToTree(frozenSnapshot.get("original_snapshot")))
+                        .isEqualTo(mapper.valueToTree(items.getFirst().originalSnapshot()));
+                assertThat(frozenSnapshot.get("displayEvidenceOrigin")).isEqualTo("READ_TIME");
                 assertThat(db.fetchOne("select input_type from report_inputs where report_id=?",report).get(0,String.class)).isEqualTo("SCAN_FINDING");
                 conn.rollback();
                 assertThat(db.fetchCount(db.selectFrom("reports").where("id=?",report))).isZero();

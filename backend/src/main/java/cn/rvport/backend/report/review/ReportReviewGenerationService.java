@@ -31,12 +31,15 @@ public class ReportReviewGenerationService {
     private final ReportRepository reports;
     private final ObjectMapper mapper;
     private final TransactionTemplate transaction;
+    private final cn.rvport.backend.worker.ReportWorkerCapabilityService capabilities;
     public ReportReviewGenerationService(ProjectAccessService access,ReportInputSelectionPolicy policy,ReviewWorkspaceRepository reviews,
             SourceRepository sources,ReportSourceSnapshotService sourceSnapshots,ReviewSnapshotFactory snapshots,ModelProfileService models,
-            TaskService tasks,ReportRepository reports,ObjectMapper mapper,PlatformTransactionManager transactionManager) {
+            TaskService tasks,ReportRepository reports,ObjectMapper mapper,PlatformTransactionManager transactionManager,
+            cn.rvport.backend.worker.ReportWorkerCapabilityService capabilities) {
         this.access=access; this.policy=policy; this.reviews=reviews; this.sources=sources; this.sourceSnapshots=sourceSnapshots;
         this.snapshots=snapshots; this.models=models; this.tasks=tasks; this.reports=reports; this.mapper=mapper;
         this.transaction=new TransactionTemplate(transactionManager);
+        this.capabilities=capabilities;
     }
     public Map<String,Object> create(UUID project,ReportGenerateRequest request,String key,UUID actor,boolean admin) {
         access.requireProjectAccess(project,actor,admin);
@@ -58,17 +61,25 @@ public class ReportReviewGenerationService {
             if(!Objects.equals(baseId,request.baseReportId())) throw conflict("REPORT_REVIEW_BASE_CHANGED");
             if(base!=null && !Objects.equals(request.expectedDraftVersion(),base.version())) throw conflict("REPORT_DRAFT_CONFLICT");
             if(base==null && request.expectedDraftVersion()!=null) throw bad("REPORT_REQUEST_INVALID");
-            ModelExecutionSelection model=request.mode()==ReportMode.AI_ENHANCED?ModelExecutionSelection.from(actor,ai(actor)):null;
+            AgentModelRuntimeConfig configured=request.mode()==ReportMode.AI_ENHANCED?ai(actor):null;
+            ModelExecutionSelection model=configured==null?null:ModelExecutionSelection.from(actor,configured);
             List<Map<String,Object>> previous=base==null?List.of():reviews.items(baseId);
             var items=snapshots.create(current,source,actor,base,previous);
+            boolean executionRequired=items.stream().anyMatch(item->"SCANNER".equals(item.origin()) && item.decision().state()!=ReviewState.EXCLUDED);
+            if(configured!=null && "UNAVAILABLE".equals(capabilities.current(configured.runtime(),executionRequired).get("status")))
+                throw new ApiException(HttpStatus.CONFLICT,"REPORT_AI_SANDBOX_UNAVAILABLE","报告 AI 执行沙箱不可用",
+                        Map.of("messageEn","The report AI execution sandbox is unavailable","recoveryAction","CHECK_WORKER_ENVIRONMENT"));
             var manifest=new ReportReviewManifest(project,current.sourceRevisionId(),current.contextHash(),request.mode(),current,source,
-                    items,baseId,base==null?null:base.reviewRevision());
+                    items,baseId,base==null?null:base.reviewRevision(),
+                    cn.rvport.backend.report.SourceVersionMetadata.of(revision.versionLabel(),revision.gitCommit(),"SNAPSHOT"),
+                    ReasonDescriptionResolver.snapshot(items,current));
             UUID reportId=UUID.randomUUID();
             Map<String,Object> input=new LinkedHashMap<>(); input.put("projectId",project); input.put("sourceRevisionId",current.sourceRevisionId());
             input.put("reportId",reportId); input.put("modelExecution",model);
             input.put("configurationUserId",actor);
             var task=tasks.create(new TaskCreateCommand(project,RvPortTaskTypes.REPORT_GENERATE,input,actor,null,"结果报告任务已创建"));
             reports.createEvaluation(reportId,project,current.sourceRevisionId(),task.id(),"结果评估报告 / Result assessment report",actor);
+            reports.captureSourceMetadata(reportId,manifest.sourceMetadata());
             reviews.createRun(reportId,manifest,actor,model);
             Map<String,Object> response=mapper.convertValue(task,new TypeReference<LinkedHashMap<String,Object>>(){});
             response.put("reportId",reportId);
@@ -82,16 +93,25 @@ public class ReportReviewGenerationService {
         var selected=policy.current(project);
         if(requestedSource!=null && !Objects.equals(requestedSource,selected.sourceRevisionId())) throw conflict("REPORT_CONTEXT_CHANGED");
         boolean aiReady=true; List<Map<String,Object>> blockers=new ArrayList<>();
-        try { ai(actor); } catch(ApiException ex) {
-            aiReady=false; blockers.add(Map.of("code",ex.code(),"message","请配置个人报告复核模型",
+        AgentModelRuntimeConfig configured=null;
+        try { configured=ai(actor); } catch(ApiException ex) {
+            aiReady=false; blockers.add(Map.of("category","CONFIGURATION","code",ex.code(),"message","请配置个人报告复核模型",
                     "messageEn","Configure your personal report review model","recoveryAction","OPEN_PERSONAL_MODEL_CONFIGURATION"));
         }
+        var preview=previewRows(selected,actor);
+        boolean executionRequired=preview.stream().anyMatch(item->!Boolean.TRUE.equals(item.get("inheritedExcluded")));
+        var capability=capabilities.current(configured==null?null:configured.runtime(),executionRequired);
+        boolean executionBlocked="UNAVAILABLE".equals(capability.get("status"));
+        if(executionBlocked) blockers.add(Map.of("category","EXECUTION","code","REPORT_AI_SANDBOX_UNAVAILABLE",
+                "message","报告 AI 执行沙箱不可用","messageEn","The report AI execution sandbox is unavailable","recoveryAction","CHECK_WORKER_ENVIRONMENT"));
         Map<String,Object> result=new LinkedHashMap<>();
         result.put("sourceRevisionId",selected.sourceRevisionId()); result.put("selectionToken",selected.contextHash());
         result.put("canGenerate",selected.canGenerate()); result.put("canGenerateStandard",selected.canGenerate());
-        result.put("canGenerateAi",selected.canGenerate() && aiReady); result.put("recommendedMode",aiReady?"AI_ENHANCED":"STANDARD");
+        result.put("aiConfigurationReady",aiReady);result.put("aiExecutionCapability",capability);
+        result.put("aiWarnings","UNKNOWN".equals(capability.get("status"))?List.of(capability):List.of());
+        result.put("canGenerateAi",selected.canGenerate() && aiReady && !executionBlocked);
+        result.put("recommendedMode",selected.canGenerate() && aiReady && !executionBlocked?"AI_ENHANCED":"STANDARD");
         result.put("aiBlockers",blockers); result.put("generationInProgress",reviews.activeGeneration(project));
-        var preview=previewRows(selected,actor);
         result.put("sources",selected.sources().stream().map(source->{
             Map<String,Object> value=new LinkedHashMap<>(); value.put("type",source.type()); value.put("available",source.available());
             value.put("runId",source.runId()); value.put("status",source.status()); value.put("resultVersion",source.resultVersion());
@@ -148,6 +168,7 @@ public class ReportReviewGenerationService {
             Map<String,Object> row=new LinkedHashMap<>();
             row.put("id",item.sourceRefId()); row.put("sourceType",item.sourceType()); row.put("sourceRunId",item.sourceRunId());
             row.put("title",item.title()); row.put("titleEn",item.titleEn()); row.put("riskLevel",item.originalSnapshot().get("riskLevel"));
+            row.put("originalSnapshot",item.originalSnapshot());
             row.put("relativePath",item.relativePath()); row.put("startLine",item.startLine()); row.put("fileKey",item.fileKey());
             boolean include=item.decision().state()!=ReviewState.EXCLUDED;
             row.put("inheritedExcluded",!include); row.put("aiIncluded",include);
@@ -185,6 +206,7 @@ public class ReportReviewGenerationService {
         try { return SourceSelection.hash(mapper.writeValueAsBytes(request)); }
         catch(java.io.IOException ex) { throw bad("REPORT_REQUEST_INVALID"); }
     }
-    private static ApiException bad(String code) { return new ApiException(HttpStatus.BAD_REQUEST,code,"报告请求参数不正确"); }
+    private static ApiException bad(String code) { return new ApiException(HttpStatus.BAD_REQUEST,code,"报告请求参数不正确",
+            Map.of("messageEn","Invalid report request parameters")); }
     private static ApiException conflict(String code) { return new ApiException(HttpStatus.CONFLICT,code,"报告生成条件已变化，请刷新后重试"); }
 }

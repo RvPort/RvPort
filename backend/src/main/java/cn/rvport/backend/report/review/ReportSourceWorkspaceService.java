@@ -83,6 +83,39 @@ public class ReportSourceWorkspaceService {
         response.put("message","该版本的源码内容不可用"); response.put("messageEn","Source content for this version is unavailable");
         response.put("lines",List.of()); return response;
     }
+    public Map<String,Object> search(UUID report,String fileKey,UUID actor,boolean admin,String keyword,boolean sensitive,int limit) {
+        access.authorized(report,actor,admin);
+        ReportSourceSearch.validate(keyword,limit);
+        var manifest=reviews.manifest(report).source();
+        var file=manifest.files().stream().filter(f->f.fileKey().equals(fileKey)).findFirst().orElseThrow(ReportSourceWorkspaceService::missing);
+        Map<String,Object> response=new LinkedHashMap<>();
+        response.put("fileKey",fileKey); response.put("path",file.path());
+        response.put("sourceRevisionId",manifest.sourceRevisionId()); response.put("contentHash",file.contentHash());
+        if(!file.contextAvailable() || file.artifactId()==null) return searchUnavailable(response,file.reasonCode());
+        try(var input=artifacts.download(file.artifactId()).resource().getInputStream()) {
+            byte[] bytes=input.readNBytes(10*1024*1024+1);
+            if(bytes.length>10*1024*1024) return searchUnavailable(response,"FILE_TOO_LARGE");
+            if(!SourceSelection.hash(bytes).equals(file.contentHash())) return searchUnavailable(response,"SOURCE_CONTENT_CHANGED");
+            String content;
+            try {
+                content=StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                        .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+            } catch(java.nio.charset.CharacterCodingException ex) { return searchUnavailable(response,"INVALID_UTF8"); }
+            if(content.indexOf('\0')>=0) return searchUnavailable(response,"BINARY_FILE");
+            response.put("available",true); response.put("reasonCode",null); response.put("message",null); response.put("messageEn",null);
+            response.putAll(ReportSourceSearch.find(content,keyword,sensitive,limit)); return response;
+        } catch(IOException ex) { return searchUnavailable(response,"SOURCE_CONTEXT_UNAVAILABLE"); }
+        catch(ApiException ex) {
+            if("ARTIFACT_NOT_FOUND".equals(ex.code()) || "ARTIFACT_OBJECT_NOT_FOUND".equals(ex.code()))
+                return searchUnavailable(response,"SOURCE_CONTEXT_UNAVAILABLE");
+            throw ex;
+        }
+    }
+    private Map<String,Object> searchUnavailable(Map<String,Object> response,String reason) {
+        response.put("available",false); response.put("reasonCode",reason==null?"SOURCE_CONTEXT_UNAVAILABLE":reason);
+        response.put("message","该版本的源码内容不可用"); response.put("messageEn","Source content for this version is unavailable");
+        response.put("matches",List.of()); response.put("returnedCount",0); response.put("truncated",false); return response;
+    }
     static String directoryKey(String path) { return "dir-"+SourceSelection.hash(path.getBytes(StandardCharsets.UTF_8)); }
     private long count(List<Map<String,Object>> items,ReviewState state) { return items.stream().filter(item->state.name().equals(item.get("reviewState"))).count(); }
     private void pagination(int page,int size) { if(page<1 || size<1 || size>200) throw invalid(); }

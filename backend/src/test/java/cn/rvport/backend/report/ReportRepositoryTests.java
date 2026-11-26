@@ -24,6 +24,25 @@ import org.mockito.Mockito;
 
 class ReportRepositoryTests {
 
+    @Test void capturesMetadataAndReadsHistoricalRevisionLabelsInOneBatch() throws Exception {
+        try(var db=new JooqMockDatabase()) {
+            var repo=repository(db);
+            assertThat(repo.sourceMetadata(List.of())).isEmpty();assertThat(db.executions()).isEmpty();
+            db.enqueueRows(1);
+            repo.captureSourceMetadata(REPORT_ID,SourceVersionMetadata.of("版本",null,"SNAPSHOT"));
+            assertThat(db.lastExecution().bindings()).contains(REPORT_ID);
+            assertThat(db.lastExecution().bindings()[0].toString()).contains("版本","SNAPSHOT");
+            var fields=new Field<?>[]{DSL.field("id",UUID.class),DSL.field("version_label",String.class),DSL.field("git_commit",String.class)};
+            db.enqueueResult(db.result(fields,new Object[]{REVISION_ID,"版本","aabb"}));
+            assertThat(repo.sourceMetadata(List.of(REVISION_ID))).containsEntry(REVISION_ID,SourceVersionMetadata.of("版本","aabb","REVISION_RECORD"));
+            assertThat(db.lastExecution().sql()).contains("id=any").doesNotContain("current_source");
+            var broken=Mockito.mock(ObjectMapper.class);
+            Mockito.when(broken.writeValueAsString(Mockito.any())).thenThrow(new JsonProcessingException("failure"){});
+            assertThatThrownBy(()->new ReportRepository(db.dsl(),broken).captureSourceMetadata(REPORT_ID,Map.of())).hasMessage("REPORT_METADATA_INVALID");
+            db.verifyComplete();
+        }
+    }
+
     private static final UUID REPORT_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID PROJECT_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID TASK_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");

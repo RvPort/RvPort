@@ -71,6 +71,15 @@ class ReportReviewRuntimeServiceTests {
         assertThatThrownBy(()->service.generate(input,ctx)).isInstanceOf(TaskAttemptLostException.class);
         verify(reviews,never()).finish(any(),any(),any()); verifyNoInteractions(publication,archives);
     }
+    @Test void sandboxLossAfterEnqueuePreservesPublicTaskFailureCode() throws Exception {
+        when(ai.run(manifest,bound,ctx)).thenThrow(new IOException("REPORT_AI_SANDBOX_UNAVAILABLE"));
+        assertThatThrownBy(()->service.generate(input,ctx)).isInstanceOfSatisfying(TaskExecutionException.class,error->{
+            assertThat(error.errorCode()).isEqualTo("REPORT_AI_SANDBOX_UNAVAILABLE");
+            assertThat(error.safeMessage()).contains("沙箱不可用","sandbox is unavailable");
+        });
+        verify(reviews).finish(report,"NOT_PUBLISHED",Map.of("execution","FAILED","errorCode","REPORT_AI_SANDBOX_UNAVAILABLE"));
+        verifyNoInteractions(publication,artifacts,archives);
+    }
     @Test void redeliveryOfAPublishedDraftPreservesManualAdjustments() {
         var published = new ReportView(report,project,task,source,ReportType.EVALUATION,TaskStatus.SUCCEEDED,
                 "报告",Map.of(),null,actor,null,null);
