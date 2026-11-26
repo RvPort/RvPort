@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 import hashlib
+import importlib.util
 import json
+import posixpath
 import shlex
 import shutil
 from pathlib import Path
@@ -25,22 +27,33 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def guarded_path(root: Path, relative: str) -> Path:
+    parts = relative.replace("\\", "/").split("/")
+    if any(part in ("", ".", "..") for part in parts) or ":" in relative or any(ord(c) < 32 for c in relative):
+        raise ValueError(f"不安全的输入路径: {relative}")
+    if root.is_symlink():
+        raise ValueError("不安全的输入根目录")
+    current = root.resolve()
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f"不安全的输入符号链接: {relative}")
+    return current
+
+
 def safe(root: Path, relative: str) -> Path:
-    candidate = (root / relative).resolve()
-    if root.resolve() not in candidate.parents or not candidate.is_file() or candidate.is_symlink():
+    candidate = guarded_path(root, relative)
+    if not candidate.is_file():
         raise ValueError(f"不安全或缺失的 BC 路径: {relative}")
     return candidate
 
 
 def optional_verified_source(root: Path, relative: str, expected_sha256: str) -> Path | None:
     """返回可用于源码辅助的文件；构建生成且未归档的源码允许缺席。"""
-    resolved_root = root.resolve()
-    candidate = (root / relative).resolve()
-    if resolved_root not in candidate.parents:
-        raise ValueError(f"不安全的源码路径: {relative}")
+    candidate = guarded_path(root, relative)
     if not candidate.exists():
         return None
-    if not candidate.is_file() or candidate.is_symlink():
+    if not candidate.is_file():
         raise ValueError(f"不安全的源码路径: {relative}")
     if len(expected_sha256) != 64 or sha256(candidate) != expected_sha256.lower():
         raise ValueError(f"源码摘要不匹配: {relative}")
@@ -83,15 +96,50 @@ def normalized_standard(raw: str | None, language: str) -> dict[str, str | None]
 
 
 def localized_compile_database(args: argparse.Namespace) -> Path:
+    if args.compile_database is None:
+        if args.manifest:
+            raise ValueError("BC 增强必须提供可信编译上下文")
+        spec = importlib.util.spec_from_file_location(
+            "source_analysis_plan", Path(__file__).with_name("source_analysis_plan.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        plan = module.discover(args.source_root)
+        args.remote_source_root = ""
+        args.source_plan = plan
+        (args.cache / "source-analysis-plan.json").write_bytes(canonical(plan) + b"\n")
+        if not plan["translationUnits"]:
+            raise ValueError("ANALYSIS_SOURCE_LANGUAGE_UNSUPPORTED")
+        # 仅作为既有 source-profile 适配器内部输入，不登记构建或编译数据库制品。
+        projection = args.cache / "source-discovery-input.json"
+        projection.write_bytes(canonical(plan["translationUnits"]) + b"\n")
+        return projection
     document = json.loads(args.compile_database.read_text(encoding="utf-8"))
     if not isinstance(document, list):
         raise ValueError("compile_commands.json 顶层必须是数组")
     candidates: Counter[str] = Counter()
     matches: list[tuple[dict[str, object], str, str]] = []
+    unavailable_sources = []
+    pinned_root = getattr(args, "remote_source_root", None)
+    if pinned_root:
+        pinned_root = pinned_root.replace("\\", "/").rstrip("/")
+        if not pinned_root.startswith("/") or not pinned_root or "/../" in pinned_root + "/":
+            raise ValueError("编译数据库源码根目录非法")
     for record in document:
         if not isinstance(record, dict):
             continue
         file_value = str(record.get("file") or "").replace("\\", "/").rstrip("/")
+        if pinned_root:
+            directory = str(record.get("directory") or pinned_root).replace("\\", "/")
+            absolute = posixpath.normpath(posixpath.join(directory, file_value))
+            if not absolute.startswith(pinned_root + "/"):
+                continue
+            relative = absolute[len(pinned_root) + 1:]
+            if guarded_path(args.source_root, relative).is_file():
+                candidates[pinned_root] += 1
+                matches.append(({**record, "file": absolute}, relative, pinned_root))
+            else:
+                unavailable_sources.append({"path": relative, "reasonCode": "SOURCE_NOT_IN_FIXED_SNAPSHOT"})
+            continue
         parts = [part for part in file_value.split("/") if part]
         for start in range(len(parts)):
             relative = "/".join(parts[start:])
@@ -108,7 +156,7 @@ def localized_compile_database(args: argparse.Namespace) -> Path:
 
     def relocate(value: object) -> object:
         if isinstance(value, str):
-            return value.replace(remote_root, local_root)
+            return value.replace(remote_root, local_root) if remote_root else value
         if isinstance(value, list):
             return [relocate(item) for item in value]
         if isinstance(value, dict):
@@ -133,6 +181,25 @@ def localized_compile_database(args: argparse.Namespace) -> Path:
         raise ValueError("编译数据库中没有可映射到本地源码的翻译单元")
     localized = args.cache / "compile_commands.json"
     localized.write_bytes(canonical(selected) + b"\n")
+    spec = importlib.util.spec_from_file_location("source_analysis_plan", Path(__file__).with_name("source_analysis_plan.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    inventory = module.discover(args.source_root)
+    selected_paths = {str((Path(str(item.get("directory") or args.source_root)) / str(item["file"]))
+                         .resolve().relative_to(args.source_root.resolve())).replace("\\", "/")
+                      for item in selected}
+    for entry in inventory["files"]:
+        if entry["status"] == "PLANNED" and entry["path"] not in selected_paths:
+            entry.update(status="OMITTED", reasonCode="NOT_IN_COMPILE_DATABASE")
+    coverage_manifest = {"inputOrigin": "BUILD_ARTIFACTS", "files": inventory["files"], "compileContextCoverage": {
+        "rawCommandCount": len(document), "localizedCommandCount": len(selected),
+        "unavailableSourceCount": len(unavailable_sources), "unavailableSources": unavailable_sources,
+        "excludedCommandCount": len(document) - len(selected) - len(unavailable_sources),
+        "message": "未归档的生成源码不能参与本次源码分析，计数单位为编译条目。",
+        "message_en": "Generated sources absent from the fixed snapshot cannot be analyzed; counts are compile entries."
+    }}
+    coverage_manifest["inputDigest"] = hashlib.sha256(canonical(coverage_manifest)).hexdigest()
+    (args.cache / "source-analysis-plan.json").write_bytes(canonical(coverage_manifest) + b"\n")
     return localized
 
 
@@ -141,8 +208,11 @@ def fp(args: argparse.Namespace) -> None:
 
     platform = json.loads(args.manifest.read_text(encoding="utf-8")) if args.manifest else None
     compile_database = localized_compile_database(args)
+    compilation_input = ({"translation_units": args.source_plan["translationUnits"]}
+                         if args.compile_database is None else
+                         {"compile_commands": str(compile_database.resolve())})
     compilation = load_compilation_plan(SimpleNamespace(
-        input={"compile_commands": str(compile_database.resolve())},
+        input=compilation_input,
         project_root=args.source_root.resolve(),
         budgets={"max_response_depth": 8, "max_files": 32, "max_response_bytes": 1_048_576},
     ))
@@ -199,7 +269,7 @@ def fp(args: argparse.Namespace) -> None:
         "source_profile": "x86_64-linux-gnu-clang21@1.0",
         "target_profile": "riscv64-linux-gnu-lp64d-clang21@1.0",
         "source_revision": args.source_revision,
-        "input": {"compile_commands": str(compile_database.resolve())},
+        "input": compilation_input,
         "cache": {"mode": "read-write", "root": str(args.cache.resolve()), "max_entry_bytes": 268435456},
         "rules": {"disabled": []},
         "budgets": {"wall_seconds": args.timeout, "max_files": 100000,
@@ -290,6 +360,10 @@ def memory(args: argparse.Namespace) -> None:
     compile_records = json.loads(compile_database.read_text(encoding="utf-8"))
     platform = json.loads(args.manifest.read_text(encoding="utf-8")) if args.manifest else synthetic_platform(
         compile_records, args.source_root)
+    if args.compile_database is None:
+        for scope in platform["scopes"]:
+            scope["evidence"] = "SOURCE_DISCOVERY: default parsing assumptions, not build evidence"
+            scope["external_boundaries"].append("compile-context-unavailable")
     compile_by_source: dict[str, list[dict[str, object]]] = {}
     for compile_record in compile_records:
         directory = Path(str(compile_record.get("directory") or args.source_root))
@@ -337,15 +411,21 @@ def memory(args: argparse.Namespace) -> None:
             debug = "unknown"
         source_value = None
         source = item.get("source") or {}
+        compile_candidates = compile_by_source.get(str(source.get("path") or "").replace("\\", "/"), [])
         if source.get("path") and source.get("sha256"):
-            source_path = optional_verified_source(args.source_root, source["path"], source["sha256"])
+            # 未生成 BC 的记录可能在编译器检查前失败，source.sha256 此时只是
+            # producer 的占位身份。源码辅助独立绑定已固定源码和可信编译条目，
+            # 不把占位摘要当源码证据；真正产出的 BC 仍必须严格匹配原摘要。
+            expected_sha = source["sha256"]
+            if not produced and compile_candidates:
+                expected_sha = sha256(safe(args.source_root, source["path"]))
+            source_path = optional_verified_source(args.source_root, source["path"], expected_sha)
             if source_path is not None:
                 suffix = source_path.suffix or ".source"
                 destination_source = args.external_root / "source" / f"{record_id}{suffix}"
                 shutil.copyfile(source_path, destination_source)
                 source_value = {"path": f"source/{destination_source.name}",
                                 "sha256": file_hash(destination_source)}
-                compile_candidates = compile_by_source.get(str(source["path"]).replace("\\", "/").lstrip("./"), [])
                 if compile_candidates:
                     try:
                         path_map = [{"from": str(args.source_root.resolve()), "to": "."}]
@@ -443,11 +523,12 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--manifest", type=Path)
         command.add_argument("--artifact-root", type=Path)
         command.add_argument("--source-root", type=Path, required=True)
-        command.add_argument("--compile-database", type=Path, required=True)
+        command.add_argument("--compile-database", type=Path)
+        command.add_argument("--remote-source-root")
         command.add_argument("--output", type=Path, required=True)
         command.add_argument("--run-id", required=True)
         command.add_argument("--source-revision", required=True)
-        command.add_argument("--build-run", required=True)
+        command.add_argument("--build-run")
         command.add_argument("--cache", type=Path, required=True)
         command.add_argument("--timeout", type=int, default=3600)
         command.add_argument("--max-frontend-output-bytes", type=int, default=536870912)

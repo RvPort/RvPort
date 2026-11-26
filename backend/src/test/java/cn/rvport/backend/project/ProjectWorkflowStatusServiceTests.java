@@ -37,6 +37,59 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectWorkflowStatusServiceTests {
+    @Test void specializedOverviewRequiresTheActuallyConsumedBuildAndProfile() {
+        UUID project=UUID.randomUUID(), source=UUID.randomUUID(), buildId=UUID.randomUUID();
+        var context=new ProjectContextSnapshot(source,1L);
+        var sourceEnv=environment(EnvironmentRole.SOURCE_X86,1L);
+        var runtime=runtime(project,sourceEnv,null,false);
+        var instance=service();
+        var analyses=org.mockito.Mockito.mock(cn.rvport.backend.analysis.SpecializedAnalysisRepository.class);
+        ReflectionTestUtils.setField(instance,"specializedAnalysisRepository",analyses);
+        for (String origin:List.of("SOURCE_DISCOVERY","BUILD_ARTIFACTS")) {
+            var run=new cn.rvport.backend.analysis.SpecializedAnalysisRunView(UUID.randomUUID(),project,null,
+                    cn.rvport.backend.analysis.SpecializedAnalyzerType.FLOATING_POINT,source,buildId,null,1L,"1","1","2",null,
+                    cn.rvport.backend.analysis.SpecializedAnalysisStatus.COMPLETE,null,0,Map.of("inputOrigin",origin),
+                    null,UUID.randomUUID(),null,null,0,0,0,null,null,null,null,null);
+            when(analyses.latest(project,cn.rvport.backend.analysis.SpecializedAnalyzerType.FLOATING_POINT)).thenReturn(Optional.of(run));
+            WorkflowStageResponse result=ReflectionTestUtils.invokeMethod(instance,"specialized",project,context,runtime,
+                    cn.rvport.backend.analysis.SpecializedAnalyzerType.FLOATING_POINT,"floating-point-analysis");
+            assertThat(result.status()).isEqualTo(origin.equals("SOURCE_DISCOVERY")?WorkflowStageStatus.DONE:WorkflowStageStatus.PENDING);
+        }
+        var readiness=org.mockito.Mockito.mock(cn.rvport.backend.workflow.StageReadinessService.class);
+        ReflectionTestUtils.setField(instance,"readiness",readiness);
+        when(readiness.resolve(project,"floating-point-analysis")).thenReturn(new cn.rvport.backend.workflow.StageReadinessResponse(
+                "floating-point-analysis",context,List.of(cn.rvport.backend.workflow.StagePrerequisiteResponse.of("SPECIALIZED_ANALYZER",
+                cn.rvport.backend.workflow.StagePrerequisiteStatus.UNAVAILABLE,null,"ANALYSIS_PROFILE_UNSUPPORTED"))));
+        WorkflowStageResponse changed=ReflectionTestUtils.invokeMethod(instance,"withReadiness",project,
+                new WorkflowStageResponse("floating-point-analysis",WorkflowStageStatus.DONE,"COMPLETE"));
+        assertThat(changed.status()).isEqualTo(WorkflowStageStatus.PENDING);
+        assertThat(changed.canStart()).isFalse();
+        when(readiness.resolve(project,"floating-point-analysis")).thenReturn(new cn.rvport.backend.workflow.StageReadinessResponse(
+                "floating-point-analysis",context,List.of(cn.rvport.backend.workflow.StagePrerequisiteResponse.of("SPECIALIZED_ANALYZER",
+                cn.rvport.backend.workflow.StagePrerequisiteStatus.SATISFIED,null,"READY"))));
+        WorkflowStageResponse ready=ReflectionTestUtils.invokeMethod(instance,"withReadiness",project,
+                new WorkflowStageResponse("floating-point-analysis",WorkflowStageStatus.DONE,"COMPLETE"));
+        assertThat(ready.status()).isEqualTo(WorkflowStageStatus.DONE);
+        assertThat(ready.canStart()).isTrue();
+        WorkflowStageResponse noEnvironment=ReflectionTestUtils.invokeMethod(instance,"specialized",project,context,runtime(project,null,null,false),
+                cn.rvport.backend.analysis.SpecializedAnalyzerType.FLOATING_POINT,"floating-point-analysis");
+        assertThat(noEnvironment.status()).isEqualTo(WorkflowStageStatus.PENDING);
+        for (int mismatch=0;mismatch<4;mismatch++) {
+            var build=new BuildValidationRunView(mismatch==2?UUID.randomUUID():buildId,project,UUID.randomUUID(),source,sourceEnv.id(),
+                    BuildValidationScope.SOURCE_ONLY,null,1L,null,"hash","make","/fixture",60,0,
+                    mismatch==1?TaskStatus.FAILED:TaskStatus.SUCCEEDED,null,null,null,null,null,null,null,Map.of(),Map.of());
+            when(buildValidationRepository.findLatest(project,source,sourceEnv.id(),1L,BuildValidationScope.SOURCE_ONLY))
+                    .thenReturn(Optional.of(build));
+            var run=new cn.rvport.backend.analysis.SpecializedAnalysisRunView(UUID.randomUUID(),project,null,
+                    cn.rvport.backend.analysis.SpecializedAnalyzerType.FLOATING_POINT,source,buildId,null,mismatch==3?2L:1L,"1","1","2",null,
+                    cn.rvport.backend.analysis.SpecializedAnalysisStatus.COMPLETE,null,0,Map.of("inputOrigin","BUILD_ARTIFACTS"),
+                    null,UUID.randomUUID(),null,null,0,0,0,null,null,null,null,null);
+            when(analyses.latest(project,cn.rvport.backend.analysis.SpecializedAnalyzerType.FLOATING_POINT)).thenReturn(Optional.of(run));
+            WorkflowStageResponse result=ReflectionTestUtils.invokeMethod(instance,"specialized",project,context,runtime,
+                    cn.rvport.backend.analysis.SpecializedAnalyzerType.FLOATING_POINT,"floating-point-analysis");
+            assertThat(result.status()).isEqualTo(mismatch==0?WorkflowStageStatus.DONE:WorkflowStageStatus.PENDING);
+        }
+    }
     @Test
     void memoryOrderExecutionStatesKeepExistingDependencySemantics() {
         for (var status : cn.rvport.backend.analysis.SpecializedAnalysisStatus.values()) {
@@ -65,7 +118,9 @@ class ProjectWorkflowStatusServiceTests {
         assertThat(partial.messageEn()).isNotBlank();
         WorkflowStageResponse floating = ReflectionTestUtils.invokeMethod(service(), "fromSpecializedStatus",
                 "floating-point-analysis", cn.rvport.backend.analysis.SpecializedAnalysisStatus.PARTIAL, "FLOATING_POINT");
-        assertThat(floating.reasonCode()).isEqualTo("FLOATING_POINT_READY");
+        assertThat(floating.reasonCode()).isEqualTo("FLOATING_POINT_PARTIAL");
+        assertThat(floating.analysisComplete()).isFalse();
+        assertThat(floating.analysisStatus()).isEqualTo("PARTIAL");
     }
 
     @Mock private TaskRepository taskRepository;
@@ -125,15 +180,28 @@ class ProjectWorkflowStatusServiceTests {
     }
 
     @Test
-    void readyEnvironmentAndSourceRecommendX86BeforeKb() {
+    void sourceAnalysisIsRecommendedWithoutRequiringOptionalBuildOrEnvironment() {
         UUID project = UUID.randomUUID();
         UUID source = UUID.randomUUID();
         var revision = new SourceRevisionResponse(source, project, SourceRevisionType.GIT, "main", null, null, null, null, null, true, null, null);
-        var response = service().aggregate(project, revision,
-                runtime(project, environment(EnvironmentRole.SOURCE_X86, 7L), environment(EnvironmentRole.TARGET_RISCV, 7L), true),
+        var service = service();
+        var readiness = org.mockito.Mockito.mock(cn.rvport.backend.workflow.StageReadinessService.class);
+        ReflectionTestUtils.setField(service, "readiness", readiness);
+        when(readiness.resolve(org.mockito.ArgumentMatchers.eq(project), org.mockito.ArgumentMatchers.anyString())).thenAnswer(call -> {
+            String stage = call.getArgument(1);
+            boolean available = List.of("kb", "floating-point-analysis", "memory-order-analysis").contains(stage);
+            return new cn.rvport.backend.workflow.StageReadinessResponse(stage, new ProjectContextSnapshot(source, 7L),
+                    List.of(cn.rvport.backend.workflow.StagePrerequisiteResponse.of("INPUT",
+                            available ? cn.rvport.backend.workflow.StagePrerequisiteStatus.SATISFIED
+                                    : cn.rvport.backend.workflow.StagePrerequisiteStatus.MISSING, null, "FIXTURE")));
+        });
+        var response = service.aggregate(project, revision,
+                runtime(project, null, null, false),
                 new ProjectContextSnapshot(source, 7L));
-        assertThat(response.recommendedStageId()).isEqualTo("x86-build");
-        assertStage(response, "kb", WorkflowStageStatus.PENDING, "KB_SCAN_MISSING");
+        assertThat(response.recommendedStageId()).isEqualTo("kb");
+        assertThat(response.stages().stream().filter(stage -> stage.id().equals("kb")).findFirst().orElseThrow().reasonCode()).isEqualTo("KB_SCAN_MISSING");
+        assertThat(response.stages().stream().filter(stage -> stage.id().equals("x86-build")).findFirst().orElseThrow().optional()).isTrue();
+        assertThat(response.stages().stream().filter(stage -> stage.id().equals("kb")).findFirst().orElseThrow().canStart()).isTrue();
     }
 
     @Test
@@ -322,6 +390,23 @@ class ProjectWorkflowStatusServiceTests {
         assertThat((String) ReflectionTestUtils.invokeMethod(service, "recommended", stages.subList(0, 3))).isEqualTo("blocked");
         assertThat((String) ReflectionTestUtils.invokeMethod(service, "recommended", stages.subList(0, 2))).isEqualTo("pending");
         assertThat((String) ReflectionTestUtils.invokeMethod(service, "recommended", stages.subList(0, 1))).isEqualTo("archive");
+    }
+
+    @Test void recommendationPrefersExecutableAnalysisToOptionalBuildAndTerminalNodes() {
+        var service = service();
+        var stages = new java.util.ArrayList<WorkflowStageResponse>();
+        stages.add(new WorkflowStageResponse("x86-build",WorkflowStageStatus.PENDING,"missing",null,null,null,null,true,true));
+        stages.add(new WorkflowStageResponse("kb",WorkflowStageStatus.DONE,"ready",null,true,null,null,false,true));
+        stages.add(new WorkflowStageResponse("optimize",WorkflowStageStatus.PENDING,"ready",null,null,null,null,false,true));
+        stages.add(new WorkflowStageResponse("archive",WorkflowStageStatus.PENDING,"ready",null,null,null,null,false,true));
+        stages.add(new WorkflowStageResponse("floating-point-analysis",WorkflowStageStatus.PENDING,"ready",null,null,null,null,false,true));
+        assertThat((String)ReflectionTestUtils.invokeMethod(service,"recommended",stages)).isEqualTo("floating-point-analysis");
+        var readiness = org.mockito.Mockito.mock(cn.rvport.backend.workflow.StageReadinessService.class);
+        ReflectionTestUtils.setField(service,"readiness",readiness);
+        var running = new WorkflowStageResponse("kb",WorkflowStageStatus.RUNNING,"running");
+        WorkflowStageResponse response = ReflectionTestUtils.invokeMethod(service,"withReadiness",UUID.randomUUID(),running);
+        assertThat(response.canStart()).isFalse();
+        org.mockito.Mockito.verifyNoInteractions(readiness);
     }
 
     @Test

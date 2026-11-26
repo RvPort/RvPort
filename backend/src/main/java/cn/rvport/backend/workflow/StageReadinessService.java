@@ -9,6 +9,7 @@ import cn.rvport.backend.automatedtest.AutomatedTestRepository;
 import cn.rvport.backend.buildvalidation.BuildValidationRepository;
 import cn.rvport.backend.buildvalidation.BuildValidationRunView;
 import cn.rvport.backend.buildvalidation.BuildValidationScope;
+import cn.rvport.backend.buildvalidation.BuildValidationPair;
 import cn.rvport.backend.common.error.ApiException;
 import cn.rvport.backend.dependency.DependencyAnalysisRepository;
 import cn.rvport.backend.kb.KbScanRepository;
@@ -37,6 +38,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class StageReadinessService {
     @Autowired
     private cn.rvport.backend.kb.KbScanContextService scanContextService;
+    @Autowired
+    private cn.rvport.backend.project.ProjectRepository analysisProjects;
 
     private final ProjectAccessService projectAccessService;
     private final ProjectContextService contextService;
@@ -127,6 +130,12 @@ public class StageReadinessService {
     @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public StageReadinessResponse readiness(UUID projectId, String stageId, UUID actorUserId, boolean superAdmin) {
         projectAccessService.requireProjectAccess(projectId, actorUserId, superAdmin);
+        return resolve(projectId, stageId);
+    }
+
+    /** 内部供已完成项目权限校验的 overview 共用；此方法不映射独立 API。 */
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public StageReadinessResponse resolve(UUID projectId, String stageId) {
         String normalizedStageId = normalizeStageId(stageId);
         ProjectContextSnapshot context = contextService.snapshot(projectId);
         ProjectRuntimeEnvironmentView runtimeView = currentRuntime(projectId);
@@ -157,7 +166,7 @@ public class StageReadinessService {
                     .filter(item -> item.key().equals(key))
                     .findFirst()
                     .orElse(StagePrerequisiteResponse.of(key, StagePrerequisiteStatus.MISSING, null, key + "_MISSING"));
-            if (prerequisite.status() != StagePrerequisiteStatus.SATISFIED) {
+            if (prerequisite.required() && prerequisite.status() != StagePrerequisiteStatus.SATISFIED) {
                 throw new PrerequisiteNotSatisfiedException(response.stageId(), prerequisite);
             }
         }
@@ -202,7 +211,7 @@ public class StageReadinessService {
     private List<StagePrerequisiteResponse> analysis(UUID projectId, ProjectContextSnapshot context, ProjectRuntimeEnvironmentView runtime) {
         return List.of(
                 activeSource(projectId),
-                scanContextService.resolve(projectId, context.sourceRevisionId()).prerequisite()
+                scanContextService.resolve(projectId, context.sourceRevisionId()).prerequisite().optional()
         );
     }
 
@@ -214,10 +223,14 @@ public class StageReadinessService {
     ) {
         List<StagePrerequisiteResponse> prerequisites = new ArrayList<>();
         prerequisites.add(activeSource(projectId));
-        prerequisites.add(x86BuildRun(projectId, context, runtime));
+        prerequisites.add(x86BuildRun(projectId, context, runtime).optional());
         if (specializedBitcodeCapabilityResolver != null && context.sourceRevisionId() != null && runtime != null) {
-            buildValidationRepository.findLatestSucceededSourceBuildWithCompileDatabase(projectId,
-                    context.sourceRevisionId(), runtime.sourceEnvironmentId(), runtime.version()).ifPresent(build -> {
+            buildValidationRepository.findLatest(projectId,
+                    context.sourceRevisionId(), runtime.sourceEnvironmentId(), runtime.version(), BuildValidationScope.SOURCE_ONLY)
+                    .filter(build -> build.status() == TaskStatus.SUCCEEDED && build.buildScope() == BuildValidationScope.SOURCE_ONLY
+                            && projectId.equals(build.projectId()) && context.sourceRevisionId().equals(build.sourceRevisionId())
+                            && Objects.equals(runtime.sourceEnvironmentId(), build.environmentId())
+                            && Objects.equals(runtime.version(), build.environmentConfigVersion())).ifPresent(build -> {
                 var capability = specializedBitcodeCapabilityResolver.resolve(build.id());
                 prerequisites.add(StagePrerequisiteResponse.of(
                         StagePrerequisiteKeys.SPECIALIZED_ANALYSIS_EVIDENCE,
@@ -228,19 +241,30 @@ public class StageReadinessService {
                                 "plannedCount", capability.plannedCount(), "usableCount", capability.usableCount(),
                                 "failedCount", capability.failedCount(), "astOnlyCount", capability.astOnlyCount(),
                                 "degradationReason", Objects.toString(capability.degradationReason(), ""))
-                ));
+                ).optional());
             });
         }
         if (specializedToolHealthService != null) {
             var health = specializedToolHealthService.health(type);
+            boolean profileSupported = analysisProjects == null || analysisProjects.findById(projectId)
+                    .map(cn.rvport.backend.analysis.SourceAnalysisPlanService::profileSupported).orElse(false);
             prerequisites.add(StagePrerequisiteResponse.of(
                     StagePrerequisiteKeys.SPECIALIZED_ANALYZER,
-                    health.available() ? StagePrerequisiteStatus.SATISFIED : StagePrerequisiteStatus.UNAVAILABLE,
+                    health.available() && profileSupported ? StagePrerequisiteStatus.SATISFIED : StagePrerequisiteStatus.UNAVAILABLE,
                     null,
-                    health.available() ? "SPECIALIZED_ANALYZER_AVAILABLE" : "SPECIALIZED_ANALYZER_UNAVAILABLE",
+                    !health.available() ? "SPECIALIZED_ANALYZER_UNAVAILABLE" : profileSupported
+                            ? "SPECIALIZED_ANALYZER_AVAILABLE" : "ANALYSIS_PROFILE_UNSUPPORTED",
                     Map.of("analyzerType", type.name(), "toolStatus", health.status(), "reasons", health.reasons(),
                             "versions", health.versions())
             ));
+        }
+        if (prerequisites.stream().noneMatch(item -> StagePrerequisiteKeys.SPECIALIZED_ANALYSIS_EVIDENCE.equals(item.key()))) {
+            prerequisites.add(StagePrerequisiteResponse.of(StagePrerequisiteKeys.SPECIALIZED_ANALYSIS_EVIDENCE,
+                    StagePrerequisiteStatus.MISSING, null, "SOURCE_DISCOVERY",
+                    Map.of("inputOrigin", "SOURCE_DISCOVERY", "analysisMode", "AST_ONLY", "bcStatus", "MISSING",
+                            "assumptions", List.of("DEFAULT_ASSUMPTION", "C17_CPP17", "OPEN_SCOPE"),
+                            "missingEvidence", List.of("COMPILE_DATABASE_UNAVAILABLE", "BITCODE_UNAVAILABLE"),
+                            "planFixed", false)).optional());
         }
         return prerequisites;
     }
@@ -257,7 +281,7 @@ public class StageReadinessService {
                 default -> source.type();
             };
             result.add(StagePrerequisiteResponse.of(key,source.available()?StagePrerequisiteStatus.SATISFIED:StagePrerequisiteStatus.MISSING,
-                    source.runId(),source.available()?"ANALYSIS_READY":source.reasonCode(),Map.of("count",source.candidates().size())));
+                    source.runId(),source.available()?"ANALYSIS_READY":source.reasonCode(),Map.of("count",source.candidates().size())).optional());
         }
         result.add(StagePrerequisiteResponse.of(StagePrerequisiteKeys.INCLUDED_FINDINGS,
                 selected.canGenerate()?StagePrerequisiteStatus.SATISFIED:StagePrerequisiteStatus.MISSING,null,
@@ -282,16 +306,12 @@ public class StageReadinessService {
     }
 
     private List<StagePrerequisiteResponse> test(UUID projectId, ProjectContextSnapshot context) {
-        Optional<RunRef> latest = automatedTestRepository.findLatest(projectId, context.sourceRevisionId(), context.runtimeEnvironmentVersion())
-                .map(run -> new RunRef(run.id(), run.status()));
-        if (latest.isPresent()) {
-            RunRef run = latest.get();
-            return List.of(StagePrerequisiteResponse.of(StagePrerequisiteKeys.BUILD_VALIDATION, status(run.status()), run.id(), reason("BUILD_VALIDATION", run.status())));
-        }
         ProjectRuntimeEnvironmentView runtime = currentRuntime(projectId);
-        Optional<BuildValidationRunView> source = buildValidationRepository.findLatest(projectId, context.sourceRevisionId(), runtime.sourceEnvironmentId(), runtime.version(), BuildValidationScope.BOTH);
-        Optional<BuildValidationRunView> target = buildValidationRepository.findLatest(projectId, context.sourceRevisionId(), runtime.targetEnvironmentId(), runtime.version(), BuildValidationScope.BOTH);
-        if (source.isPresent() && target.isPresent() && source.get().status() == TaskStatus.SUCCEEDED && target.get().status() == TaskStatus.SUCCEEDED) {
+        Optional<BuildValidationRunView> source = buildValidationRepository.findLatest(projectId, context.sourceRevisionId(), runtime.sourceEnvironmentId(), runtime.version(), BuildValidationScope.BOTH)
+                .filter(run -> BuildValidationPair.matches(run, projectId, context.sourceRevisionId(), runtime.sourceEnvironmentId(), runtime.version()));
+        Optional<BuildValidationRunView> target = buildValidationRepository.findLatest(projectId, context.sourceRevisionId(), runtime.targetEnvironmentId(), runtime.version(), BuildValidationScope.BOTH)
+                .filter(run -> BuildValidationPair.matches(run, projectId, context.sourceRevisionId(), runtime.targetEnvironmentId(), runtime.version()));
+        if (BuildValidationPair.succeeded(source.orElse(null), target.orElse(null))) {
             return List.of(StagePrerequisiteResponse.of(StagePrerequisiteKeys.BUILD_VALIDATION, StagePrerequisiteStatus.SATISFIED, source.get().id(), "BUILD_VALIDATION_READY",
                     Map.of("sourceBuildRunId", source.get().id(), "targetBuildRunId", target.get().id())));
         }
@@ -299,7 +319,9 @@ public class StageReadinessService {
                 ? (latest(source.get(), target.get()) == source.get() ? source : target)
                 : source.or(() -> target);
         return List.of(latestBuild
-                .map(run -> StagePrerequisiteResponse.of(StagePrerequisiteKeys.BUILD_VALIDATION, status(run.status()), run.id(), reason("BUILD_VALIDATION", run.status())))
+                .map(run -> StagePrerequisiteResponse.of(StagePrerequisiteKeys.BUILD_VALIDATION,
+                        run.status() == TaskStatus.SUCCEEDED ? StagePrerequisiteStatus.MISSING : status(run.status()), run.id(),
+                        run.status() == TaskStatus.SUCCEEDED ? "BUILD_VALIDATION_PAIR_INCOMPLETE" : reason("BUILD_VALIDATION", run.status())))
                 .orElseGet(() -> StagePrerequisiteResponse.of(StagePrerequisiteKeys.BUILD_VALIDATION, StagePrerequisiteStatus.MISSING, null, "BUILD_VALIDATION_MISSING")));
     }
 

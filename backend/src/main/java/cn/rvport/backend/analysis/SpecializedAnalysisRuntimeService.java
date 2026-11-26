@@ -83,6 +83,7 @@ public class SpecializedAnalysisRuntimeService {
     private final ObjectMapper objectMapper;
     private final SpecializedAnalysisProcessRunner processRunner;
     private final SharedBitcodeArtifactVerifier bitcodeArtifactVerifier;
+    private final SourceAnalysisPlanService sourcePlans;
     private final RvPortProperties.SpecializedAnalysis properties;
 
     public SpecializedAnalysisRuntimeService(
@@ -91,7 +92,7 @@ public class SpecializedAnalysisRuntimeService {
             SourceRepository sourceRepository, ProjectRepository projectRepository,
             ObjectMapper objectMapper, RvPortProperties RvPortProperties,
             SpecializedAnalysisProcessRunner processRunner,
-            SharedBitcodeArtifactVerifier bitcodeArtifactVerifier
+            SharedBitcodeArtifactVerifier bitcodeArtifactVerifier, SourceAnalysisPlanService sourcePlans
     ) {
         this.repository = repository;
         this.completionService = completionService;
@@ -102,6 +103,21 @@ public class SpecializedAnalysisRuntimeService {
         this.properties = RvPortProperties.specializedAnalysis();
         this.processRunner = processRunner;
         this.bitcodeArtifactVerifier = bitcodeArtifactVerifier;
+        this.sourcePlans = sourcePlans;
+    }
+
+    public void runTask(SpecializedAnalysisTaskInput input, TaskExecutionContext context) {
+        if (input.inputPlan() == null) {
+            context.publish(() -> {
+                repository.fail(input.runId(), SpecializedAnalysisStatus.FAILED, Map.of("reasonCode", "ANALYSIS_INPUT_PLAN_REQUIRED",
+                        "resultAvailable", false, "message", "旧任务没有固定输入计划，请重新发起分析。",
+                        "message_en", "This legacy task has no immutable input plan; start a new analysis."), null, null, 0);
+                return null;
+            });
+            throw new cn.rvport.backend.task.TaskExecutionException("ANALYSIS_INPUT_PLAN_REQUIRED",
+                    "旧任务没有固定输入计划，请重新发起 / Start a new analysis with an immutable input plan", null);
+        }
+        run(input, context);
     }
 
     public void run(SpecializedAnalysisTaskInput input, TaskExecutionContext context) {
@@ -111,16 +127,32 @@ public class SpecializedAnalysisRuntimeService {
         JsonNode resultDocument = null;
         Integer processExitCode = null;
         PreparedInput prepared = null;
+        cn.rvport.backend.report.review.ReportSourceMaterializer.Materialized fixedSource = null;
         try {
             context.publish(() -> { repository.markRunning(input.runId(), toolVersion(input.analyzerType())); return null; });
             context.progress(5, "正在解析专项分析输入制品");
             workspace = createWorkspace(context.task().id());
-            prepared = materialize(input, workspace);
+            if (input.inputPlan() != null) {
+                SourceRevisionView source = sourceRepository.findById(input.sourceRevisionId()).orElseThrow();
+                fixedSource = sourcePlans.materialize(input.inputPlan(), source);
+            }
+            SpecializedAnalysisTaskInput executionInput = resumeInput(input);
+            prepared = materialize(executionInput, workspace, fixedSource == null ? null : fixedSource.sourceRoot());
             SpecializedBitcodeCapability capability = prepared.capability();
+            AnalysisInputPlan effectivePlan = executionInput.inputPlan();
+            if (effectivePlan != null && effectivePlan.inputOrigin() == AnalysisInputPlan.InputOrigin.BUILD_ARTIFACTS) {
+                if (prepared.compileDatabase() == null) effectivePlan = effectivePlan.sourceFallback("OPTIONAL_ARTIFACT_UNAVAILABLE");
+                else if (!capability.hasUsableBitcode()) effectivePlan = effectivePlan.withoutBitcode("BITCODE_UNAVAILABLE");
+            }
+            AnalysisInputPlan actualPlan = effectivePlan;
+            if (actualPlan != null) context.publish(() -> {
+                repository.storeEffectivePlan(input.runId(), input.inputPlan(), actualPlan);
+                return null;
+            });
             context.publish(() -> { repository.updateEvidenceMode(input.runId(), capability); return null; });
             context.throwIfCancellationRequested();
             context.progress(20, "正在生成分析器请求");
-            PreparedRequest preparedRequest = prepareRequest(input, prepared, workspace, context);
+            PreparedRequest preparedRequest = prepareRequest(executionInput, prepared, workspace, context);
             Path request = preparedRequest.request();
             sourceLocalCache = preparedRequest.sourceLocalCache();
             validateRequest(input.analyzerType(), request, workspace, context);
@@ -137,6 +169,16 @@ public class SpecializedAnalysisRuntimeService {
             context.progress(80, "正在导入专项分析结果");
             List<SpecializedFindingImport> findings = parseFindings(input.analyzerType(), document);
             Map<String, Object> summary = summary(input.analyzerType(), document, prepared, findings);
+            if (actualPlan != null) summary.putAll(AnalysisEvidenceSummary.from(actualPlan));
+            Path manifest = (sourceLocalCache == null ? workspace.resolve("cache") : sourceLocalCache)
+                    .resolve("source-analysis-plan.json");
+            JsonNode inventory = null;
+            if (Files.isRegularFile(manifest, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                if (Files.size(manifest) > 32L * 1024 * 1024)
+                    throw new SpecializedAnalysisRuntimeException("ANALYSIS_SOURCE_MANIFEST_LIMIT_EXCEEDED");
+                inventory = objectMapper.readTree(manifest.toFile());
+            }
+            summary.putAll(AnalysisEvidenceSummary.execution(input.analyzerType(), document, inventory));
             Path html = renderHtml(input.analyzerType(), input.runId(), summary, findings, workspace);
             Path audit = input.analyzerType() == SpecializedAnalyzerType.MEMORY_ORDER
                     ? archiveDirectory(workspace.resolve("output"), workspace.resolve("memory-order-audit.tgz")) : null;
@@ -179,16 +221,50 @@ public class SpecializedAnalysisRuntimeService {
             deleteTree(workspace);
             deleteTree(sourceLocalCache);
             deleteEmptyDirectory(sourceLocalCache == null ? null : sourceLocalCache.getParent());
+            if (fixedSource != null) {
+                try { fixedSource.close(); }
+                catch (IOException ignored) { /* 临时源码清理失败不能把已发布分析改为失败。 */ }
+            }
         }
     }
 
+    SpecializedAnalysisTaskInput resumeInput(SpecializedAnalysisTaskInput input) {
+        if (input.inputPlan() == null) return input;
+        AnalysisInputPlan actual = repository.effectivePlan(input.runId()).orElse(input.inputPlan());
+        if (!actual.originalInputDigest().equals(input.inputPlan().effectiveInputDigest()))
+            throw new SpecializedAnalysisRuntimeException("ANALYSIS_INPUT_PLAN_MISMATCH");
+        if (actual.effectiveInputDigest().equals(input.inputPlan().effectiveInputDigest())) return input;
+        boolean sourceOnly = actual.inputOrigin() == AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY;
+        return new SpecializedAnalysisTaskInput(input.projectId(), input.runId(), input.sourceRevisionId(),
+                sourceOnly ? null : input.buildRunId(), sourceOnly ? null : input.compileDatabaseArtifactId(),
+                null, null, null, SpecializedAnalysisMode.AST_ONLY, "MISSING", 0, 0, 0,
+                sourceOnly ? "OPTIONAL_ARTIFACT_UNAVAILABLE" : "BITCODE_UNAVAILABLE",
+                sourceOnly ? null : input.environmentConfigVersion(), input.analyzerType(), actual);
+    }
+
     private PreparedInput materialize(SpecializedAnalysisTaskInput input, Path workspace) throws IOException {
+        return materialize(input, workspace, null);
+    }
+
+    private PreparedInput materialize(SpecializedAnalysisTaskInput input, Path workspace, Path fixedSourceRoot) throws IOException {
         SourceRevisionView source = sourceRepository.findById(input.sourceRevisionId())
                 .filter(value -> value.projectId().equals(input.projectId()))
                 .orElseThrow(() -> new SpecializedAnalysisRuntimeException("源码版本不存在"));
-        Path sourceRoot = Path.of(source.workingCopyPath()).toAbsolutePath().normalize();
+        Path sourceRoot = fixedSourceRoot == null ? Path.of(source.workingCopyPath()).toAbsolutePath().normalize() : fixedSourceRoot;
         if (!Files.isDirectory(sourceRoot) || Files.isSymbolicLink(sourceRoot)) {
             throw new SpecializedAnalysisRuntimeException("源码工作副本不可用");
+        }
+        if (input.compileDatabaseArtifactId() == null) {
+            AnalysisInputPlan plan = input.inputPlan();
+            if (plan == null || plan.inputOrigin() != AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY
+                    || input.buildRunId() != null || input.bitcodeManifestArtifactId() != null
+                    || input.bitcodeBundleArtifactId() != null || input.artifactSetId() != null
+                    || !plan.projectId().equals(input.projectId()) || !plan.sourceRevisionId().equals(input.sourceRevisionId())) {
+                throw new SpecializedAnalysisRuntimeException("ANALYSIS_PLAN_INVALID");
+            }
+            var capability = new SpecializedBitcodeCapability(SpecializedAnalysisMode.AST_ONLY, "MISSING", 0, 0, 0,
+                    "SOURCE_DISCOVERY", null, null, null, Map.of("inputPlan", plan.summary()));
+            return new PreparedInput(sourceRoot, null, null, null, capability);
         }
         Path inputDir = workspace.resolve("input");
         Path artifacts = inputDir.resolve("shared-bitcode");
@@ -196,18 +272,38 @@ public class SpecializedAnalysisRuntimeService {
         Path compileDatabase = inputDir.resolve("compile_commands.json");
         Path platformManifest = artifacts.resolve("platform-manifest.json");
         Path bundle = inputDir.resolve("shared-bitcode.tgz");
-        writeArtifact(input.compileDatabaseArtifactId(), compileDatabase, properties.maxOutputBytes());
+        String remoteRoot = null;
         CompileEntryClassifier entryClassifier = new CompileEntryClassifier(objectMapper);
-        CompileEntryClassification classification = entryClassifier.classify(compileDatabase, sourceRoot);
+        CompileEntryClassification classification;
+        try {
+            writeBoundArtifact(input, input.compileDatabaseArtifactId(), "COMPILE_COMMANDS_JSON", compileDatabase, properties.maxOutputBytes());
+            if (input.inputPlan() != null) {
+                Object root = artifactService.download(input.compileDatabaseArtifactId()).artifact().summary().get("remoteSourceRoot");
+                if (!(root instanceof String path) || !path.startsWith("/") || path.equals("/")
+                        || path.chars().anyMatch(Character::isISOControl))
+                    throw new SpecializedAnalysisRuntimeException("ANALYSIS_ARTIFACT_IDENTITY_MISMATCH");
+                remoteRoot = path;
+            }
+            classification = entryClassifier.classify(compileDatabase, sourceRoot, remoteRoot);
+            if (input.inputPlan() != null && classification.projectTranslationUnitCount() == 0)
+                throw new SpecializedAnalysisRuntimeException("ANALYSIS_COMPILE_CONTEXT_UNAVAILABLE");
+        } catch (Exception unavailable) {
+            if (input.inputPlan() == null) throw unavailable;
+            return new PreparedInput(sourceRoot, null, null, null,
+                    new SpecializedBitcodeCapability(SpecializedAnalysisMode.AST_ONLY, "MISSING", 0, 0, 0,
+                            "OPTIONAL_ARTIFACT_UNAVAILABLE", null, null, null));
+        }
         SpecializedBitcodeCapability capability = withClassification(inputCapability(input), classification);
         if (capability.hasUsableBitcode()) {
             try {
-                writeArtifact(input.bitcodeManifestArtifactId(), platformManifest, 8L * 1024L * 1024L);
-                writeArtifact(input.bitcodeBundleArtifactId(), bundle, properties.maxExtractedBytes());
+                writeBoundArtifact(input, input.bitcodeManifestArtifactId(), "LLVM_BITCODE_MANIFEST_JSON", platformManifest, 8L * 1024L * 1024L);
+                writeBoundArtifact(input, input.bitcodeBundleArtifactId(), "LLVM_BITCODE_BUNDLE_TGZ", bundle, properties.maxExtractedBytes());
                 verifySha(input.bitcodeManifestArtifactId(), platformManifest);
                 verifySha(input.bitcodeBundleArtifactId(), bundle);
                 BitcodeManifest verifiedManifest = bitcodeArtifactVerifier.verify(platformManifest, bundle,
                         properties.maxFiles(), properties.maxExtractedBytes(), properties.maxOutputBytes());
+                if (input.inputPlan() != null && verifiedManifest != null)
+                    SharedBitcodeArtifactVerifier.requireCompatible(verifiedManifest, input.inputPlan(), classification);
                 extractBundle(bundle, artifacts);
                 JsonNode manifest = objectMapper.readTree(platformManifest.toFile());
                 String schema = manifest.path("schema_version").asText();
@@ -252,7 +348,7 @@ public class SpecializedAnalysisRuntimeService {
         }
         return new PreparedInput(sourceRoot, compileDatabase,
                 capability.hasUsableBitcode() ? platformManifest : null,
-                capability.hasUsableBitcode() ? artifacts : null, capability);
+                capability.hasUsableBitcode() ? artifacts : null, capability, remoteRoot);
     }
 
     private SpecializedBitcodeCapability inputCapability(SpecializedAnalysisTaskInput input) {
@@ -299,6 +395,9 @@ public class SpecializedAnalysisRuntimeService {
         try (InputStream stream = new ClassPathResource("analysis/prepare_specialized_analysis.py").getInputStream()) {
             Files.copy(stream, script, StandardCopyOption.REPLACE_EXISTING);
         }
+        try (InputStream stream = new ClassPathResource("analysis/source_analysis_plan.py").getInputStream()) {
+            Files.copy(stream, workspace.resolve("source_analysis_plan.py"), StandardCopyOption.REPLACE_EXISTING);
+        }
         Path request = workspace.resolve("request.json");
         Path sourceLocalCache = input.analyzerType() == SpecializedAnalyzerType.FLOATING_POINT
                 ? prepared.sourceRoot().resolve(".rvport-analysis-cache").resolve(input.runId().toString()).normalize()
@@ -312,9 +411,12 @@ public class SpecializedAnalysisRuntimeService {
         if (prepared.platformManifest() != null) {
             add(command, "--manifest", prepared.platformManifest(), "--artifact-root", prepared.artifactRoot());
         }
-        add(command, "--source-root", prepared.sourceRoot(), "--compile-database", prepared.compileDatabase(),
+        if (prepared.compileDatabase() != null) add(command, "--compile-database", prepared.compileDatabase());
+        if (prepared.remoteSourceRoot() != null) add(command, "--remote-source-root", prepared.remoteSourceRoot());
+        if (prepared.compileDatabase() != null && input.buildRunId() != null) add(command, "--build-run", input.buildRunId());
+        add(command, "--source-root", prepared.sourceRoot(),
                 "--output", request, "--run-id", input.runId(), "--source-revision", input.sourceRevisionId(),
-                "--build-run", input.buildRunId(), "--cache", cache, "--timeout", properties.timeoutSeconds(),
+                "--cache", cache, "--timeout", properties.timeoutSeconds(),
                 "--max-frontend-output-bytes", properties.floatingFrontendOutputBytes());
         if (input.analyzerType() == SpecializedAnalyzerType.MEMORY_ORDER) {
             ProjectView project = projectRepository.findById(input.projectId()).orElseThrow();
@@ -402,10 +504,11 @@ public class SpecializedAnalysisRuntimeService {
         } else {
             String status = document.path("status").asText();
             String verdict = document.path("verdict").asText();
+            if (exitCode == 2 && "cancelled".equals(status)) throw new TaskCancelledException("内存序分析已取消 / Memory-order analysis cancelled");
             boolean statusMatchesExit = exitCode == 0
                     && "complete".equals(status) && "no-finding-within-supported-model".equals(verdict)
                     || exitCode == 3 && "complete".equals(status) && "risk".equals(verdict)
-                    || exitCode == 2 && List.of("partial", "cancelled").contains(status)
+                    || exitCode == 2 && "partial".equals(status)
                     && "inconclusive".equals(verdict);
             if (!"UnifiedMemoryOrderAnalysisReport".equals(document.path("kind").asText())
                     || document.path("schema_version").asInt() != 1 || !List.of(0, 2, 3).contains(exitCode)
@@ -601,6 +704,9 @@ public class SpecializedAnalysisRuntimeService {
     }
 
     List<Map<String, Object>> languageContexts(Path compileDatabase) {
+        if (compileDatabase == null) return List.of(
+                Map.of("language", "c", "standard", "c17", "standardSource", "DEFAULT_ASSUMPTION"),
+                Map.of("language", "c++", "standard", "c++17", "standardSource", "DEFAULT_ASSUMPTION"));
         Map<String, Map<String, Object>> unique = new LinkedHashMap<>();
         try {
             JsonNode records = objectMapper.readTree(compileDatabase.toFile());
@@ -680,8 +786,29 @@ public class SpecializedAnalysisRuntimeService {
         if (resource.artifact().sizeBytes() > maximumBytes) throw new SpecializedAnalysisRuntimeException("输入制品超过大小预算");
         Files.createDirectories(target.getParent());
         try (InputStream input = resource.resource().getInputStream(); OutputStream output = Files.newOutputStream(target)) {
-            input.transferTo(output);
+            long copied = 0;
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                copied += read;
+                if (copied > maximumBytes) throw new SpecializedAnalysisRuntimeException("输入制品超过大小预算");
+                output.write(buffer, 0, read);
+            }
         }
+    }
+
+    private void writeBoundArtifact(SpecializedAnalysisTaskInput input, UUID id, String type, Path path, long maximumBytes) throws IOException {
+        if (input.inputPlan() != null) {
+            var expected = input.inputPlan().artifacts().stream().filter(a -> a.id().equals(id) && a.type().equals(type))
+                    .findFirst().orElseThrow(() -> new SpecializedAnalysisRuntimeException("ANALYSIS_ARTIFACT_IDENTITY_MISMATCH"));
+            var actual = artifactService.download(id).artifact();
+            if (!input.projectId().equals(actual.projectId()) || !expected.ownerId().equals(actual.ownerId())
+                    || actual.ownerType() != StoredArtifactOwnerType.BUILD_VALIDATION || !type.equals(actual.artifactType())
+                    || !expected.sha256().equals(actual.sha256()))
+                throw new SpecializedAnalysisRuntimeException("ANALYSIS_ARTIFACT_IDENTITY_MISMATCH");
+            writeArtifact(id, path, maximumBytes);
+            if (!expected.sha256().equals(sha256(path))) throw new SpecializedAnalysisRuntimeException("ANALYSIS_ARTIFACT_HASH_MISMATCH");
+        } else writeArtifact(id, path, maximumBytes);
     }
 
     private void verifySha(UUID artifactId, Path target) {
@@ -757,7 +884,7 @@ public class SpecializedAnalysisRuntimeService {
         }
     }
 
-    private String toolVersion(SpecializedAnalyzerType type) { return type == SpecializedAnalyzerType.FLOATING_POINT ? "0.5.1" : "0.1.0"; }
+    private String toolVersion(SpecializedAnalyzerType type) { return type == SpecializedAnalyzerType.FLOATING_POINT ? "0.6.0" : "0.1.0"; }
     private String safeMessage(Exception ex) { return ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(); }
     private String sha256(Path path) {
         try (InputStream input = Files.newInputStream(path)) {
@@ -787,7 +914,12 @@ public class SpecializedAnalysisRuntimeService {
     private static void add(List<String> command, Object... values) { for (Object value : values) command.add(String.valueOf(value)); }
 
     private record PreparedInput(Path sourceRoot, Path compileDatabase, Path platformManifest, Path artifactRoot,
-                                 SpecializedBitcodeCapability capability) { }
+                                 SpecializedBitcodeCapability capability, String remoteSourceRoot) {
+        private PreparedInput(Path sourceRoot, Path compileDatabase, Path platformManifest, Path artifactRoot,
+                SpecializedBitcodeCapability capability) {
+            this(sourceRoot, compileDatabase, platformManifest, artifactRoot, capability, null);
+        }
+    }
 
     private record PreparedRequest(Path request, Path sourceLocalCache) { }
     private record StatusMapping(SpecializedAnalysisStatus status, String verdict) { }

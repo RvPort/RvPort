@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ReportInputSelectionPolicy {
-    public static final String POLICY_VERSION="report-input-v1";
+    public static final String POLICY_VERSION="report-input-v2";
     private final KbScanContextService contexts;
     private final ProjectRuntimeEnvironmentRepository environments;
     private final BuildValidationRepository builds;
@@ -51,12 +51,18 @@ public class ReportInputSelectionPolicy {
         var runtime=environments.find(project).orElseGet(()->ProjectRuntimeEnvironmentView.empty(project));
         UUID revision=kb.sourceRevisionId();
         List<Source> selected=new ArrayList<>();
-        selected.add(source("KB_FINDING",kb.ready()?sources.kb(project,revision,kb.sourceEnvironmentId(),
-                kb.runtimeEnvironmentVersion(),kb.build().id()):Optional.empty()));
+        selected.add(source("KB_FINDING",revision == null ? Optional.empty() : sources.kb(project,revision,
+                kb.ready() ? kb.sourceEnvironmentId() : null, kb.runtimeEnvironmentVersion(),kb.ready() ? kb.build().id() : null)));
         BuildValidationRunView dependencyBuild=null, specializedBuild=null;
         if(revision!=null && runtime.sourceEnvironmentId()!=null) {
-            dependencyBuild=builds.findLatestSucceededSourceBuild(project,revision,runtime.sourceEnvironmentId(),runtime.version()).orElse(null);
-            specializedBuild=builds.findLatestSucceededSourceBuildWithCompileDatabase(project,revision,runtime.sourceEnvironmentId(),runtime.version()).orElse(null);
+            dependencyBuild=builds.findLatest(project,revision,runtime.sourceEnvironmentId(),runtime.version(),
+                    cn.rvport.backend.buildvalidation.BuildValidationScope.SOURCE_ONLY)
+                    .filter(build -> build.status() == cn.rvport.backend.task.TaskStatus.SUCCEEDED
+                            && build.buildScope() == cn.rvport.backend.buildvalidation.BuildValidationScope.SOURCE_ONLY
+                            && project.equals(build.projectId()) && revision.equals(build.sourceRevisionId())
+                            && runtime.sourceEnvironmentId().equals(build.environmentId())
+                            && java.util.Objects.equals(runtime.version(), build.environmentConfigVersion())).orElse(null);
+            specializedBuild=dependencyBuild;
         }
         Optional<Map<String,Object>> dependency=Optional.empty();
         UUID sourceSnapshot=null,targetSnapshot=null;
@@ -69,16 +75,13 @@ public class ReportInputSelectionPolicy {
         selected.add(source("DEPENDENCY_RESULT",dependency));
         SpecializedBitcodeCapability capability=specializedBuild==null?null:capabilities.resolve(specializedBuild.id());
         for(String analyzer:List.of("FLOATING_POINT","MEMORY_ORDER")) {
-            selected.add(source(analyzer+"_FINDING",capability==null?Optional.empty():sources.specialized(project,revision,
-                    analyzer,specializedBuild.id(),analyzer.equals("FLOATING_POINT")?runtime.version():null,
-                    capability.mode().name(),capability.artifactSetId())));
+            selected.add(source(analyzer+"_FINDING",revision == null ? Optional.empty() : sources.specialized(project,revision,
+                    analyzer,specializedBuild == null ? null : specializedBuild.id(),specializedBuild == null ? null : runtime.version(),
+                    capability == null ? null : capability.mode().name(),capability == null ? null : capability.artifactSetId())));
         }
         // 迁移结果作为第五类来源（loop change）：最新 SUCCEEDED 运行（无则 unavailable，不阻塞报告生成）
         selected.add(source("AI_MIGRATION_RESULT",revision==null?Optional.empty():sources.migration(project,revision)));
-        String identity=POLICY_VERSION+"|"+project+"|"+revision+"|"+runtime.sourceEnvironmentId()+"|"+runtime.targetEnvironmentId()
-                +"|"+runtime.version()+"|"+(kb.build()==null?null:kb.build().id())+"|"+sourceSnapshot+"|"+targetSnapshot
-                +"|"+(dependencyBuild==null?null:dependencyBuild.id())+"|"+(specializedBuild==null?null:specializedBuild.id())
-                +"|"+(capability==null?null:capability.mode())+"|"+(capability==null?null:capability.artifactSetId());
+        String identity=POLICY_VERSION+"|"+project+"|"+revision;
         for(Source source:selected) identity+="|"+source.type()+":"+source.runId()+":"+source.resultVersion();
         return new Selection(project,revision,SourceSelection.hash(identity.getBytes(StandardCharsets.UTF_8)),List.copyOf(selected));
     }
@@ -88,7 +91,9 @@ public class ReportInputSelectionPolicy {
         Map<String,Object> run=selected.get();
         UUID id=UUID.fromString(run.get("id").toString());
         String status=string(run.get("status"));
-        if (!java.util.Set.of("SUCCEEDED","COMPLETE","COMPLETE_WITH_RISK").contains(status)) {
+        if (!java.util.Set.of("SUCCEEDED","COMPLETE","COMPLETE_WITH_RISK","PARTIAL").contains(status)
+                || Boolean.FALSE.equals(run.get("resultAvailable"))
+                || ("PARTIAL".equals(status) && run.get("resultJsonArtifactId") == null)) {
             return new Source(type,null,status,null,"ANALYSIS_"+status,
                     java.util.Collections.unmodifiableMap(new LinkedHashMap<>(run)),List.of(),List.of());
         }
@@ -106,6 +111,14 @@ public class ReportInputSelectionPolicy {
             candidate.put("resultVersion",run.get("resultSchemaVersion"));
             candidate.put("sourceType",type); candidate.put("sourceRunId",id);
             candidate.put("sourceRefId",finding.get("id"));
+            if (run.get("summary") instanceof Map<?, ?> summary) {
+                Map<String,Object> evidence = new LinkedHashMap<>();
+                for (String key : List.of("effectiveInputDigest", "inputOrigin", "coverage", "assumptions",
+                        "missingEvidence", "limitations", "analysisReasonCodes", "analysisLayers")) {
+                    if (summary.containsKey(key)) evidence.put(key, summary.get(key));
+                }
+                if (!evidence.isEmpty()) candidate.put("analysisEvidence", java.util.Collections.unmodifiableMap(evidence));
+            }
             candidates.add(java.util.Collections.unmodifiableMap(candidate));
         }
         return new Source(type,id,string(run.get("status")),string(run.get("resultSchemaVersion")),null,

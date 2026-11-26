@@ -58,6 +58,7 @@ public class SpecializedAnalysisService {
     private final RvPortProperties properties;
     private final SpecializedAnalysisToolHealthService toolHealthService;
     private final SpecializedBitcodeCapabilityResolver bitcodeCapabilityResolver;
+    private final SourceAnalysisPlanService sourcePlans;
 
     public SpecializedAnalysisService(
             SpecializedAnalysisRepository repository, ProjectAccessService accessService,
@@ -66,7 +67,7 @@ public class SpecializedAnalysisService {
             TaskService taskService, TaskRepository taskRepository, ProjectContextService contextService,
             NodeReportInclusionService reportInclusionService, RvPortProperties properties,
             SpecializedAnalysisToolHealthService toolHealthService,
-            SpecializedBitcodeCapabilityResolver bitcodeCapabilityResolver
+            SpecializedBitcodeCapabilityResolver bitcodeCapabilityResolver, SourceAnalysisPlanService sourcePlans
     ) {
         this.repository = repository;
         this.accessService = accessService;
@@ -81,11 +82,12 @@ public class SpecializedAnalysisService {
         this.properties = properties;
         this.toolHealthService = toolHealthService;
         this.bitcodeCapabilityResolver = bitcodeCapabilityResolver;
+        this.sourcePlans = sourcePlans;
     }
 
     @Transactional
     public TaskResponse create(UUID projectId, SpecializedAnalyzerType type, UUID actorUserId, boolean superAdmin) {
-        accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
+        var project = accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
         if (!properties.specializedAnalysis().enabled()) {
             throw conflict("SPECIALIZED_ANALYSIS_DISABLED", "专项分析功能未启用");
         }
@@ -95,27 +97,57 @@ public class SpecializedAnalysisService {
         }
         SourceRevisionView source = sourceRepository.findActive(projectId)
                 .orElseThrow(() -> conflict("ACTIVE_SOURCE_REVISION_REQUIRED", "当前项目没有可分析的源码版本"));
-        ProjectRuntimeEnvironmentView runtime = runtimeEnvironmentService.requireComplete(projectId, actorUserId, superAdmin);
-        BuildValidationRunView build = buildRepository.findLatestSucceededSourceBuildWithCompileDatabase(
-                        projectId, source.id(), runtime.sourceEnvironmentId(), runtime.version())
-                .orElseThrow(() -> conflict("SUCCESSFUL_X86_BUILD_WITH_COMPILE_DATABASE_REQUIRED",
-                        "需要先完成当前源码和环境版本的 x86 构建，并生成 compile_commands.json"));
-        StoredArtifactView compileDatabase = requireArtifact(build.id(), BuildValidationArtifacts.COMPILE_COMMANDS_JSON,
-                "COMPILE_DATABASE_REQUIRED", "当前 x86 构建缺少 compile_commands.json 制品");
-        SpecializedBitcodeCapability capability = bitcodeCapabilityResolver.resolve(build.id());
+        var runtime = runtimeEnvironmentService.summary(projectId);
+        UUID environmentId = runtime.sourceEnvironment() == null ? null : runtime.sourceEnvironment().id();
+        BuildValidationRunView build = environmentId == null ? null : buildRepository.findLatest(
+                projectId, source.id(), environmentId, runtime.version(), cn.rvport.backend.buildvalidation.BuildValidationScope.SOURCE_ONLY)
+                .filter(value -> value.status() == cn.rvport.backend.task.TaskStatus.SUCCEEDED
+                        && value.buildScope() == cn.rvport.backend.buildvalidation.BuildValidationScope.SOURCE_ONLY
+                        && projectId.equals(value.projectId()) && source.id().equals(value.sourceRevisionId())
+                        && environmentId.equals(value.environmentId())
+                        && java.util.Objects.equals(runtime.version(), value.environmentConfigVersion()))
+                .orElse(null);
+        StoredArtifactView compileDatabase = build == null ? null : artifactService.findByOwner(
+                StoredArtifactOwnerType.BUILD_VALIDATION, build.id(), BuildValidationArtifacts.COMPILE_COMMANDS_JSON).orElse(null);
+        if (compileDatabase != null && (!projectId.equals(compileDatabase.projectId())
+                || !build.id().equals(compileDatabase.ownerId())
+                || compileDatabase.ownerType() != StoredArtifactOwnerType.BUILD_VALIDATION
+                || !BuildValidationArtifacts.COMPILE_COMMANDS_JSON.equals(compileDatabase.artifactType())
+                || !artifactService.objectExists(compileDatabase))) compileDatabase = null;
+        if (compileDatabase == null) build = null;
+        AnalysisInputPlan plan = sourcePlans.create(project, source, type);
+        SpecializedBitcodeCapability capability = build == null
+                ? new SpecializedBitcodeCapability(SpecializedAnalysisMode.AST_ONLY, "MISSING", 0, 0, 0,
+                        "SOURCE_DISCOVERY", null, null, null) : bitcodeCapabilityResolver.resolve(build.id());
+        if (build != null) {
+            var boundArtifacts = new java.util.ArrayList<StoredArtifactView>();
+            boundArtifacts.add(compileDatabase);
+            if (capability.manifest() != null && capability.bundle() != null) {
+                boundArtifacts.add(capability.manifest());
+                boundArtifacts.add(capability.bundle());
+            }
+            plan = sourcePlans.enhance(plan, build, boundArtifacts);
+            if (plan.inputOrigin() == AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY) {
+                build = null;
+                compileDatabase = null;
+                capability = new SpecializedBitcodeCapability(SpecializedAnalysisMode.AST_ONLY, "MISSING", 0, 0, 0,
+                        "ANALYSIS_ARTIFACT_IDENTITY_MISMATCH", null, null, null);
+            }
+        }
         UUID runId = UUID.randomUUID();
-        SpecializedAnalysisTaskInput input = new SpecializedAnalysisTaskInput(projectId, runId, source.id(), build.id(),
-                compileDatabase.id(), capability.manifest() == null ? null : capability.manifest().id(),
+        SpecializedAnalysisTaskInput input = new SpecializedAnalysisTaskInput(projectId, runId, source.id(), build == null ? null : build.id(),
+                compileDatabase == null ? null : compileDatabase.id(), capability.manifest() == null ? null : capability.manifest().id(),
                 capability.bundle() == null ? null : capability.bundle().id(), capability.artifactSetId(),
                 capability.mode(), capability.status(), capability.plannedCount(), capability.usableCount(),
                 capability.failedCount(), capability.degradationReason(),
-                type == SpecializedAnalyzerType.FLOATING_POINT ? runtime.version() : null, type);
+                build == null ? null : runtime.version(), type, plan);
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("projectId", projectId);
         snapshot.put("runId", runId);
         snapshot.put("sourceRevisionId", source.id());
-        snapshot.put("buildRunId", build.id());
-        snapshot.put("compileDatabaseArtifactId", compileDatabase.id());
+        snapshot.put("buildRunId", input.buildRunId());
+        snapshot.put("compileDatabaseArtifactId", input.compileDatabaseArtifactId());
+        snapshot.put("inputPlan", plan);
         snapshot.put("bitcodeManifestArtifactId", input.bitcodeManifestArtifactId());
         snapshot.put("bitcodeBundleArtifactId", input.bitcodeBundleArtifactId());
         snapshot.put("artifactSetId", input.artifactSetId());
@@ -134,7 +166,7 @@ public class SpecializedAnalysisService {
         TaskResponse task = taskService.create(new TaskCreateCommand(projectId, taskType, snapshot, actorUserId,
                 properties.specializedAnalysis().timeoutSeconds(), type.displayName() + "任务已创建", stageId,
                 "SPECIALIZED_ANALYSIS", runId, type.name(), null));
-        repository.create(runId, projectId, task.id(), type, source.id(), build.id(), input,
+        repository.create(runId, projectId, task.id(), type, source.id(), input.buildRunId(), input,
                 input.environmentConfigVersion(), actorUserId);
         return task;
     }
@@ -142,39 +174,79 @@ public class SpecializedAnalysisService {
     @Transactional(readOnly = true)
     public PageResponse<SpecializedAnalysisResponse> list(UUID projectId, SpecializedAnalyzerType type,
             SpecializedAnalysisListRequest request, UUID actorUserId, boolean superAdmin) {
-        accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
+        var project = accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
         UUID active = contextService.snapshot(projectId).sourceRevisionId();
+        var runtime = runtimeEnvironmentService.summary(projectId);
+        UUID currentBuild = currentBuild(projectId, active, runtime);
         return PageResponse.of(repository.list(projectId, type, request).stream()
-                        .map(run -> SpecializedAnalysisResponse.from(run, active)).toList(),
+                        .map(run -> response(run, active, currentBuild, runtime.version(), project)).toList(),
                 request.normalizedPage(), request.normalizedPageSize(), repository.count(projectId, type, request));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public DomainLatestResponse<SpecializedAnalysisResponse> latest(UUID projectId, SpecializedAnalyzerType type,
             UUID actorUserId, boolean superAdmin) {
-        accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
+        var project = accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
         ProjectContextSnapshot context = contextService.snapshot(projectId);
         SpecializedAnalysisRunView run = repository.latest(projectId, type).orElse(null);
         if (run == null) return DomainLatestResponse.empty(context);
         TaskView task = run.taskId() == null ? null : taskRepository.findById(run.taskId()).orElse(null);
-        SpecializedAnalysisResponse result = SpecializedAnalysisResponse.from(run, context.sourceRevisionId());
         DomainLatestExecutionResponse execution = DomainLatestExecutionResponse.from(run.id(), task);
-        return result.currentSourceRevision() ? DomainLatestResponse.current(context, execution, result)
-                : DomainLatestResponse.stale(context, execution, result);
+        var runtime = runtimeEnvironmentService.summary(projectId);
+        UUID currentBuild = currentBuild(projectId, context.sourceRevisionId(), runtime);
+        SpecializedAnalysisResponse result = response(run, context.sourceRevisionId(), currentBuild, runtime.version(), project);
+        SpecializedAnalysisResponse published = repository.latestPublished(projectId, context.sourceRevisionId(), type,
+                        currentBuild, runtime.version())
+                .map(value -> response(value, context.sourceRevisionId(), currentBuild, runtime.version(), project)).orElse(null);
+        return new DomainLatestResponse<>(context, result.staleReasons().isEmpty()
+                ? cn.rvport.backend.workflow.DomainLatestFreshness.CURRENT : cn.rvport.backend.workflow.DomainLatestFreshness.STALE,
+                execution, result, published);
+    }
+
+    private UUID currentBuild(UUID projectId, UUID sourceId,
+            cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentResponse runtime) {
+        return runtime.sourceEnvironment() == null ? null : buildRepository.findLatest(
+                projectId, sourceId, runtime.sourceEnvironment().id(), runtime.version(),
+                cn.rvport.backend.buildvalidation.BuildValidationScope.SOURCE_ONLY)
+                .filter(value -> value.status() == cn.rvport.backend.task.TaskStatus.SUCCEEDED
+                        && projectId.equals(value.projectId()) && java.util.Objects.equals(sourceId, value.sourceRevisionId())
+                        && runtime.sourceEnvironment().id().equals(value.environmentId())
+                        && java.util.Objects.equals(runtime.version(), value.environmentConfigVersion())
+                        && value.buildScope() == cn.rvport.backend.buildvalidation.BuildValidationScope.SOURCE_ONLY)
+                .map(BuildValidationRunView::id).orElse(null);
+    }
+
+    private SpecializedAnalysisResponse response(SpecializedAnalysisRunView run, UUID active, UUID currentBuild, Long version, cn.rvport.backend.project.ProjectView project) {
+        boolean enhancement = false;
+        if (currentBuild != null && "SOURCE_DISCOVERY".equals(run.summary().get("inputOrigin"))) {
+            var artifact = artifactService.findByOwner(StoredArtifactOwnerType.BUILD_VALIDATION, currentBuild,
+                    BuildValidationArtifacts.COMPILE_COMMANDS_JSON).orElse(null);
+            enhancement = artifact != null && run.projectId().equals(artifact.projectId())
+                    && currentBuild.equals(artifact.ownerId()) && artifact.ownerType() == StoredArtifactOwnerType.BUILD_VALIDATION
+                    && BuildValidationArtifacts.COMPILE_COMMANDS_JSON.equals(artifact.artifactType())
+                    && run.summary().get("sourceDigest") != null
+                    && run.summary().get("sourceDigest").equals(artifact.summary().get("sourceDigest"))
+                    && "x86".equals(artifact.summary().get("sourceArch"))
+                    && artifact.sha256() != null && artifact.sha256().matches("[0-9a-f]{64}")
+                    && artifactService.objectExists(artifact);
+        }
+        return SpecializedAnalysisResponse.from(run, active, currentBuild, version, enhancement, SourceAnalysisPlanService.profileSupported(project));
     }
 
     @Transactional(readOnly = true)
     public SpecializedAnalysisResponse get(UUID projectId, SpecializedAnalyzerType type, UUID runId,
             UUID actorUserId, boolean superAdmin) {
-        accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
+        var project = accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
         SpecializedAnalysisRunView run = requireRun(projectId, type, runId);
-        return SpecializedAnalysisResponse.from(run, contextService.snapshot(projectId).sourceRevisionId());
+        UUID active = contextService.snapshot(projectId).sourceRevisionId();
+        var runtime = runtimeEnvironmentService.summary(projectId);
+        return response(run, active, currentBuild(projectId, active, runtime), runtime.version(), project);
     }
 
     @Transactional(readOnly = true)
     public PageResponse<SpecializedFindingResponse> findings(UUID projectId, SpecializedAnalyzerType type, UUID runId,
             SpecializedFindingListRequest request, UUID actorUserId, boolean superAdmin) {
-        accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
+        var project = accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
         requireRun(projectId, type, runId);
         MigrationInputSourceType sourceType = sourceType(type);
         List<SpecializedAnalysisFindingView> values = repository.listFindings(runId, request);
@@ -189,7 +261,7 @@ public class SpecializedAnalysisService {
     @Transactional(readOnly = true)
     public SpecializedFindingResponse finding(UUID projectId, SpecializedAnalyzerType type, UUID findingId,
             UUID actorUserId, boolean superAdmin) {
-        accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
+        var project = accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
         SpecializedAnalysisFindingView finding = repository.findFinding(findingId)
                 .filter(value -> value.projectId().equals(projectId) && value.analyzerType() == type)
                 .orElseThrow(() -> notFound("SPECIALIZED_FINDING_NOT_FOUND", "分析结果不存在"));
@@ -279,7 +351,7 @@ public class SpecializedAnalysisService {
     @Transactional(readOnly = true)
     public StoredArtifactResource download(UUID projectId, SpecializedAnalyzerType type, UUID runId, String format,
             UUID actorUserId, boolean superAdmin) {
-        accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
+        var project = accessService.requireProjectAccess(projectId, actorUserId, superAdmin);
         SpecializedAnalysisRunView run = requireRun(projectId, type, runId);
         UUID artifactId = switch (format == null ? "" : format.toLowerCase()) {
             case "json" -> run.resultJsonArtifactId();
@@ -295,12 +367,6 @@ public class SpecializedAnalysisService {
         return repository.findById(runId)
                 .filter(run -> run.projectId().equals(projectId) && run.analyzerType() == type)
                 .orElseThrow(() -> notFound("SPECIALIZED_ANALYSIS_NOT_FOUND", "专项分析不存在"));
-    }
-
-    private StoredArtifactView requireArtifact(UUID buildRunId, String artifactType, String code, String message) {
-        StoredArtifactView artifact = artifactService.findByOwner(StoredArtifactOwnerType.BUILD_VALIDATION, buildRunId, artifactType)
-                .filter(artifactService::objectExists).orElseThrow(() -> conflict(code, message));
-        return artifact;
     }
 
     private static MigrationInputSourceType sourceType(SpecializedAnalyzerType type) {

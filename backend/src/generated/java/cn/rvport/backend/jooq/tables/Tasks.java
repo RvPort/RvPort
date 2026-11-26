@@ -18,6 +18,7 @@ import cn.rvport.backend.jooq.tables.KbScanArtifacts.KbScanArtifactsPath;
 import cn.rvport.backend.jooq.tables.KbScanRuns.KbScanRunsPath;
 import cn.rvport.backend.jooq.tables.Projects.ProjectsPath;
 import cn.rvport.backend.jooq.tables.RecheckRuns.RecheckRunsPath;
+import cn.rvport.backend.jooq.tables.ReportAiReviewCheckpoints.ReportAiReviewCheckpointsPath;
 import cn.rvport.backend.jooq.tables.ReportComparisonRuns.ReportComparisonRunsPath;
 import cn.rvport.backend.jooq.tables.Reports.ReportsPath;
 import cn.rvport.backend.jooq.tables.SourceDeployRuns.SourceDeployRunsPath;
@@ -473,6 +474,19 @@ public class Tasks extends TableImpl<TasksRecord> {
             _recheckRuns = new RecheckRunsPath(this, null, Keys.RECHECK_RUNS__RECHECK_RUNS_TASK_ID_FKEY.getInverseKey());
 
         return _recheckRuns;
+    }
+
+    private transient ReportAiReviewCheckpointsPath _reportAiReviewCheckpoints;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.report_ai_review_checkpoints</code> table
+     */
+    public ReportAiReviewCheckpointsPath reportAiReviewCheckpoints() {
+        if (_reportAiReviewCheckpoints == null)
+            _reportAiReviewCheckpoints = new ReportAiReviewCheckpointsPath(this, null, Keys.REPORT_AI_REVIEW_CHECKPOINTS__REPORT_AI_REVIEW_CHECKPOINTS_TASK_ID_FKEY.getInverseKey());
+
+        return _reportAiReviewCheckpoints;
     }
 
     private transient ReportComparisonRunsPath _reportComparisonRuns;

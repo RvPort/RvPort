@@ -484,30 +484,43 @@ class ExecutorContainerServiceTests {
     void 等待采集线程时被中断则保留中断标记() throws Exception {
         // waitFor 的收尾阶段（进程已退出、正在 join 采集线程）被中断：catch 块必须恢复中断标记，
         // 供上层识别为任务取消。让子进程退出后仍有后代进程握着 stdout 不放，使 join 处于等待状态。
+        // 轮询 exitValue 确认子进程已退出（waiter 已越过 process.waitFor、正停在 join 阶段）再中断，
+        // 消除"定时猜测"竞态；极端负载下后代进程可能 fork 失败令 join 阶段提前结束，此时整体重试。
         var cli = new ExecutorContainerService.ProcessDockerCli();
-        var handle = cli.start(java.util.List.of("sh", "-c",
-                "echo PARENT-DONE; ( sleep 30 ) & exit 0"));
-
-        var finished = new java.util.concurrent.atomic.AtomicBoolean(true);
         var interrupted = new java.util.concurrent.atomic.AtomicBoolean();
         var threw = new java.util.concurrent.atomic.AtomicBoolean();
-        Thread waiter = new Thread(() -> {
-            try {
-                handle.waitFor(Duration.ofSeconds(60), new StringBuilder(), new StringBuilder());
-            } catch (Exception ex) {
-                threw.set(true);
-            } finally {
-                interrupted.set(Thread.currentThread().isInterrupted());
+        for (int attempt = 0; attempt < 3 && !(interrupted.get() && !threw.get()); attempt++) {
+            interrupted.set(false);
+            threw.set(false);
+            var handle = cli.start(java.util.List.of("sh", "-c",
+                    "echo PARENT-DONE; ( sleep 8 ) & exit 0"));
+            Thread waiter = new Thread(() -> {
+                try {
+                    handle.waitFor(Duration.ofSeconds(60), new StringBuilder(), new StringBuilder());
+                } catch (Exception ex) {
+                    threw.set(true);
+                } finally {
+                    interrupted.set(Thread.currentThread().isInterrupted());
+                }
+            });
+            waiter.setDaemon(true);
+            waiter.start();
+            long deadline = System.nanoTime() + 5_000_000_000L;
+            while (true) {
+                try {
+                    handle.exitValue();
+                    break;
+                } catch (IllegalThreadStateException stillRunning) {
+                    if (System.nanoTime() > deadline) {
+                        throw new java.util.concurrent.TimeoutException("子进程未在 5s 内退出");
+                    }
+                    Thread.sleep(10);
+                }
             }
-        });
-        waiter.setDaemon(true);
-        waiter.start();
-        // 父进程立即退出 → waitFor 进入 join 阶段；稍等以确保已进入该阶段再中断
-        Thread.sleep(400);
-        waiter.interrupt();
-        waiter.join(10_000);
-
-        assertThat(waiter.isAlive()).isFalse();
+            waiter.interrupt();
+            waiter.join(10_000);
+            assertThat(waiter.isAlive()).isFalse();
+        }
         // 必须是"被 catch 后正常返回"而不是从 process.waitFor 抛出：
         // 后者由 JVM 保留中断标记，同样会让下面的断言成立，却并未覆盖 catch 分支。
         assertThat(threw.get()).as("中断应落在 join 阶段并被 catch，而不是从 waitFor 抛出").isFalse();

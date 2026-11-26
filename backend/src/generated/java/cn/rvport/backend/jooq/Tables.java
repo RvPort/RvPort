@@ -35,6 +35,7 @@ import cn.rvport.backend.jooq.tables.OptimizationCycles;
 import cn.rvport.backend.jooq.tables.ProjectRuntimeEnvironments;
 import cn.rvport.backend.jooq.tables.Projects;
 import cn.rvport.backend.jooq.tables.RecheckRuns;
+import cn.rvport.backend.jooq.tables.ReportAiReviewCheckpoints;
 import cn.rvport.backend.jooq.tables.ReportAiReviewResults;
 import cn.rvport.backend.jooq.tables.ReportComparisonDiffItems;
 import cn.rvport.backend.jooq.tables.ReportComparisonRuns;
@@ -232,6 +233,11 @@ public class Tables {
      * The table <code>public.recheck_runs</code>.
      */
     public static final RecheckRuns RECHECK_RUNS = RecheckRuns.RECHECK_RUNS;
+
+    /**
+     * The table <code>public.report_ai_review_checkpoints</code>.
+     */
+    public static final ReportAiReviewCheckpoints REPORT_AI_REVIEW_CHECKPOINTS = ReportAiReviewCheckpoints.REPORT_AI_REVIEW_CHECKPOINTS;
 
     /**
      * The table <code>public.report_ai_review_results</code>.

@@ -20,6 +20,7 @@ public class WorkerHeartbeatService {
     private final WorkerInstanceRepository workerInstanceRepository;
     private final WorkerConcurrencyController workerConcurrencyController;
     private final TaskExecutionRegistry taskExecutionRegistry;
+    private boolean registered;
 
     public WorkerHeartbeatService(
             WorkerProperties properties,
@@ -39,6 +40,12 @@ public class WorkerHeartbeatService {
     public void heartbeat() {
         int concurrencyLimit = workerInstanceRepository.findConcurrencyLimit(workerInstanceIdProvider.workerInstanceId())
                 .orElse(properties.concurrencyLimit());
+        // 队列消费者只能在首次身份写入成功之后启动，避免启动窗口耗尽消息重试。
+        if (!registered) {
+            workerInstanceRepository.upsertHeartbeat(workerInstanceIdProvider.workerInstanceId(), hostname(),
+                    processId(), appVersion(), properties.concurrencyLimit(), 0, taskExecutionRegistry.activeCount());
+            registered = true;
+        }
         int activeConcurrency = workerConcurrencyController.apply(concurrencyLimit);
         workerInstanceRepository.upsertHeartbeat(
                 workerInstanceIdProvider.workerInstanceId(),

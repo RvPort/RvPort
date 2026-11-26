@@ -48,6 +48,30 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class StageReadinessServiceTests {
+    @Test void specializedReadinessUsesTheSameArchitectureProfileGuardWithoutCapturingSource() {
+        UUID project=UUID.randomUUID(), revision=UUID.randomUUID();
+        when(contextService.snapshot(project)).thenReturn(new ProjectContextSnapshot(revision,1L));
+        when(runtimeEnvironmentService.summary(project)).thenReturn(runtime(project,1L));
+        when(sourceRepository.findActive(project)).thenReturn(Optional.of(source(project,revision)));
+        when(specializedToolHealthService.health(SpecializedAnalyzerType.FLOATING_POINT)).thenReturn(
+                new SpecializedAnalysisToolHealthService.ToolHealth(true,"AVAILABLE",List.of(),Map.of()));
+        var projects=mock(cn.rvport.backend.project.ProjectRepository.class);
+        var service=serviceWithSpecializedHealth();
+        ReflectionTestUtils.setField(service,"analysisProjects",projects);
+        for(String arch:List.of("amd64","arm64","unknown")) {
+            when(projects.findById(project)).thenReturn(Optional.of(new cn.rvport.backend.project.ProjectView(project,"test",null,arch,
+                    "riscv64",null,null,null,null,null,null)));
+            var analyzer=service.resolve(project,StageIds.FLOATING_POINT_ANALYSIS).prerequisites().stream()
+                    .filter(p->p.key().equals(StagePrerequisiteKeys.SPECIALIZED_ANALYZER)).findFirst().orElseThrow();
+            assertThat(analyzer.status()).isEqualTo(arch.equals("amd64")?StagePrerequisiteStatus.SATISFIED:StagePrerequisiteStatus.UNAVAILABLE);
+            if(!arch.equals("amd64"))assertThat(analyzer.reasonCode()).isEqualTo("ANALYSIS_PROFILE_UNSUPPORTED");
+        }
+        when(projects.findById(project)).thenReturn(Optional.empty());
+        assertThat(service.resolve(project,StageIds.FLOATING_POINT_ANALYSIS).prerequisites())
+                .anySatisfy(p->assertThat(p.reasonCode()).isEqualTo("ANALYSIS_PROFILE_UNSUPPORTED"));
+        org.mockito.Mockito.verify(projects,org.mockito.Mockito.times(4)).findById(project);
+        org.mockito.Mockito.verifyNoMoreInteractions(projects);
+    }
 
     @Test
     void optimizeRemainsViewableWithoutBuildOrTestEvidence() {
@@ -135,15 +159,13 @@ class StageReadinessServiceTests {
         UUID sourceEnvironmentId = UUID.randomUUID();
         BuildValidationRunView build = x86BuildRun(
                 projectId, revisionId, sourceEnvironmentId, TaskStatus.SUCCEEDED);
-        when(contextService.snapshot(projectId)).thenReturn(new ProjectContextSnapshot(revisionId, 4L));
+        when(contextService.snapshot(projectId)).thenReturn(new ProjectContextSnapshot(revisionId, 3L));
         when(runtimeEnvironmentService.summary(projectId))
-                .thenReturn(runtime(projectId, 4L, sourceEnvironmentId, true, null, false));
+                .thenReturn(runtime(projectId, 3L, sourceEnvironmentId, true, null, false));
         when(sourceRepository.findActive(projectId)).thenReturn(Optional.of(source(projectId, revisionId)));
         when(buildValidationRepository.findLatest(
-                projectId, revisionId, sourceEnvironmentId, 4L, BuildValidationScope.SOURCE_ONLY))
+                projectId, revisionId, sourceEnvironmentId, 3L, BuildValidationScope.SOURCE_ONLY))
                 .thenReturn(Optional.of(build));
-        when(buildValidationRepository.findLatestSucceededSourceBuildWithCompileDatabase(
-                projectId, revisionId, sourceEnvironmentId, 4L)).thenReturn(Optional.of(build));
         when(specializedBitcodeCapabilityResolver.resolve(build.id())).thenReturn(
                 new SpecializedBitcodeCapability(SpecializedAnalysisMode.AST_BC_MIXED, "PARTIAL",
                         4, 2, 2, "BITCODE_PARTIAL_COVERAGE", null, null, "set"));
@@ -157,6 +179,7 @@ class StageReadinessServiceTests {
         assertThat(response.prerequisites())
                 .filteredOn(item -> item.key().equals(StagePrerequisiteKeys.SPECIALIZED_ANALYSIS_EVIDENCE))
                 .singleElement()
+                .satisfies(item -> assertThat(item.required()).isFalse())
                 .satisfies(item -> assertThat(item.details())
                         .containsEntry("analysisMode", "AST_BC_MIXED")
                         .containsEntry("bcStatus", "PARTIAL")
@@ -172,10 +195,55 @@ class StageReadinessServiceTests {
 
         assertThat(empty.details()).isEmpty();
         assertThat(populated.details()).containsEntry("count", 1);
+        assertThat(empty.required()).isTrue();
+        assertThat(empty.optional().required()).isFalse();
+        assertThat(empty.optional().status()).isEqualTo(StagePrerequisiteStatus.MISSING);
     }
 
     @Test
-    void kbReadinessRequiresActiveSourceAndSuccessfulX86Build() {
+    void specializedEnhancementRejectsEveryMismatchedBuildIdentity() {
+        UUID project = UUID.randomUUID(), revision = UUID.randomUUID(), environment = UUID.randomUUID();
+        when(contextService.snapshot(project)).thenReturn(new ProjectContextSnapshot(revision, 3L));
+        when(runtimeEnvironmentService.summary(project)).thenReturn(runtime(project, 3L, environment, true, null, false));
+        when(sourceRepository.findActive(project)).thenReturn(Optional.of(source(project, revision)));
+        when(specializedToolHealthService.health(SpecializedAnalyzerType.FLOATING_POINT)).thenReturn(
+                new SpecializedAnalysisToolHealthService.ToolHealth(true, "AVAILABLE", List.of(), Map.of(), Map.of()));
+        for (int wrong = 0; wrong < 6; wrong++) {
+            var candidate = new BuildValidationRunView(UUID.randomUUID(), wrong == 2 ? UUID.randomUUID() : project,
+                    UUID.randomUUID(), wrong == 3 ? UUID.randomUUID() : revision,
+                    wrong == 4 ? UUID.randomUUID() : environment,
+                    wrong == 1 ? BuildValidationScope.BOTH : BuildValidationScope.SOURCE_ONLY,
+                    null, wrong == 5 ? 99L : 3L, null, "hash", "make", "/source", 60, 0,
+                    wrong == 0 ? TaskStatus.RUNNING : TaskStatus.SUCCEEDED, null, null, null, null,
+                    null, null, OffsetDateTime.now(), Map.of(), Map.of());
+            when(buildValidationRepository.findLatest(project, revision, environment, 3L, BuildValidationScope.SOURCE_ONLY))
+                    .thenReturn(Optional.of(candidate));
+            var result = serviceWithBitcodeResolver().readiness(project, StageIds.FLOATING_POINT_ANALYSIS, UUID.randomUUID(), false);
+            assertThat(result.prerequisites()).filteredOn(p -> p.key().equals(StagePrerequisiteKeys.SPECIALIZED_ANALYSIS_EVIDENCE))
+                    .singleElement().satisfies(p -> {
+                        assertThat(p.required()).isFalse();
+                        assertThat(p.details()).containsEntry("inputOrigin","SOURCE_DISCOVERY").containsEntry("planFixed",false);
+                    });
+            assertThat(result.prerequisites()).filteredOn(p -> p.key().equals(StagePrerequisiteKeys.X86_BUILD))
+                    .allMatch(p -> !p.required());
+        }
+        org.mockito.Mockito.verifyNoInteractions(specializedBitcodeCapabilityResolver);
+    }
+
+    @Test
+    void failedOptionalX86DoesNotBlockSourceAnalysis() {
+        UUID project = UUID.randomUUID(), revision = UUID.randomUUID(), environment = UUID.randomUUID();
+        when(contextService.snapshot(project)).thenReturn(new ProjectContextSnapshot(revision, 3L));
+        when(runtimeEnvironmentService.summary(project)).thenReturn(runtime(project, 3L, environment, true, null, false));
+        when(sourceRepository.findActive(project)).thenReturn(Optional.of(source(project, revision)));
+        when(buildValidationRepository.findLatest(project, revision, environment, 3L, BuildValidationScope.SOURCE_ONLY))
+                .thenReturn(Optional.of(x86BuildRun(project, revision, environment, TaskStatus.FAILED)));
+        service().requireSatisfied(project, StageIds.KB,
+                List.of(StagePrerequisiteKeys.ACTIVE_SOURCE, StagePrerequisiteKeys.X86_BUILD), UUID.randomUUID(), false);
+    }
+
+    @Test
+    void kbReadinessRequiresSourceButTreatsX86BuildAsOptional() {
         UUID projectId = UUID.randomUUID();
         UUID sourceRevisionId = UUID.randomUUID();
         UUID sourceEnvironmentId = UUID.randomUUID();
@@ -423,39 +491,14 @@ class StageReadinessServiceTests {
     }
 
     @Test
-    void testReadinessUsesLatestAutomatedTestStatusForRunningAndFailure() {
-        UUID projectId = UUID.randomUUID();
-        UUID revisionId = UUID.randomUUID();
-        UUID runId = UUID.randomUUID();
-        var running = automatedTestRun(runId, projectId, cn.rvport.backend.task.TaskStatus.RUNNING);
-        var failed = automatedTestRun(runId, projectId, cn.rvport.backend.task.TaskStatus.FAILED);
-        when(contextService.snapshot(projectId)).thenReturn(new ProjectContextSnapshot(revisionId, 4L));
-        when(runtimeEnvironmentService.summary(projectId)).thenReturn(null);
-        when(automatedTestRepository.findLatest(projectId, revisionId, 4L))
-                .thenReturn(Optional.of(running), Optional.of(failed));
-
-        assertThat(service().readiness(projectId, StageIds.TEST, UUID.randomUUID(), false).prerequisites())
-                .singleElement().extracting(StagePrerequisiteResponse::status).isEqualTo(StagePrerequisiteStatus.RUNNING);
-        assertThat(service().readiness(projectId, StageIds.TEST, UUID.randomUUID(), false).prerequisites())
-                .singleElement().extracting(StagePrerequisiteResponse::status).isEqualTo(StagePrerequisiteStatus.FAILED);
-    }
-
-    @Test
-    void testReadinessUsesCompletedAutomatedTestStatuses() {
+    void oldAutomatedTestCannotSubstituteForCurrentBuildPair() {
         UUID projectId = UUID.randomUUID();
         UUID revisionId = UUID.randomUUID();
         when(contextService.snapshot(projectId)).thenReturn(new ProjectContextSnapshot(revisionId, 4L));
         when(runtimeEnvironmentService.summary(projectId)).thenReturn(null);
-        when(automatedTestRepository.findLatest(projectId, revisionId, 4L))
-                .thenReturn(Optional.of(automatedTestRun(UUID.randomUUID(), projectId, TaskStatus.SUCCEEDED)),
-                        Optional.of(automatedTestRun(UUID.randomUUID(), projectId, TaskStatus.CANCELLED)),
-                        Optional.of(automatedTestRun(UUID.randomUUID(), projectId, TaskStatus.TIMEOUT)));
-
-        assertTestPrerequisite(projectId, StagePrerequisiteStatus.SATISFIED, "BUILD_VALIDATION_READY");
-        assertTestPrerequisite(projectId, StagePrerequisiteStatus.FAILED, "BUILD_VALIDATION_CANCELLED");
-        assertTestPrerequisite(projectId, StagePrerequisiteStatus.FAILED, "BUILD_VALIDATION_TIMEOUT");
+        assertTestPrerequisite(projectId, StagePrerequisiteStatus.MISSING, "BUILD_VALIDATION_MISSING");
+        org.mockito.Mockito.verifyNoInteractions(automatedTestRepository);
     }
-
     @Test
     void testReadinessFallsBackToPairedBuildValidationResults() {
         UUID projectId = UUID.randomUUID();
@@ -465,7 +508,7 @@ class StageReadinessServiceTests {
         ProjectRuntimeEnvironmentResponse runtime = runtime(projectId, 4L, sourceId, true, targetId, true);
         when(contextService.snapshot(projectId)).thenReturn(new ProjectContextSnapshot(revisionId, 4L));
         when(runtimeEnvironmentService.summary(projectId)).thenReturn(runtime);
-        when(automatedTestRepository.findLatest(projectId, revisionId, 4L)).thenReturn(Optional.empty());
+
 
         BuildValidationRunView sourceSucceeded = buildRun(projectId, revisionId, sourceId, TaskStatus.SUCCEEDED,
                 OffsetDateTime.now().minusMinutes(2));
@@ -481,6 +524,12 @@ class StageReadinessServiceTests {
         assertThat(ready.status()).isEqualTo(StagePrerequisiteStatus.SATISFIED);
         assertThat(ready.details()).containsEntry("sourceBuildRunId", sourceSucceeded.id())
                 .containsEntry("targetBuildRunId", targetSucceeded.id());
+
+        when(buildValidationRepository.findLatest(projectId, revisionId, targetId, 4L, BuildValidationScope.BOTH))
+                .thenReturn(Optional.empty());
+        assertTestPrerequisite(projectId, StagePrerequisiteStatus.MISSING, "BUILD_VALIDATION_PAIR_INCOMPLETE");
+        when(buildValidationRepository.findLatest(projectId, revisionId, targetId, 4L, BuildValidationScope.BOTH))
+                .thenReturn(Optional.of(targetSucceeded));
 
         BuildValidationRunView sourceFailed = buildRun(projectId, revisionId, sourceId, TaskStatus.FAILED,
                 OffsetDateTime.now());
@@ -712,7 +761,7 @@ class StageReadinessServiceTests {
                 UUID.randomUUID(), projectId, UUID.randomUUID(), revisionId, environmentId,
                 BuildValidationScope.BOTH, null, 4L, UUID.randomUUID(), "hash", "make", "/tmp/source",
                 60, status == TaskStatus.SUCCEEDED ? 0 : null, status, null, null, null, null,
-                null, null, createdAt, java.util.Map.of(), java.util.Map.of()
+                null, null, createdAt, java.util.Map.of(), java.util.Map.of("buildBatchId", revisionId.toString())
         );
     }
 

@@ -124,6 +124,15 @@ public class AutomatedTestService {
         if (stageReadinessService != null && (buildRun.environmentConfigVersion() == null || buildRun.environmentConfigVersion() != currentEnvironmentVersion)) {
             throw badRequest("BUILD_RUN_STALE", "构建记录已不属于当前运行环境配置");
         }
+        if (stageReadinessService != null) {
+            var prerequisite = stageReadinessService.readiness(projectId, StageIds.TEST, actorUserId, superAdmin)
+                    .prerequisites().stream().filter(item -> StagePrerequisiteKeys.BUILD_VALIDATION.equals(item.key()))
+                    .findFirst().orElseThrow(() -> badRequest("BUILD_RUN_STALE", "当前双端构建验证不可用"));
+            if (!request.buildRunId().equals(prerequisite.details().get("sourceBuildRunId"))
+                    && !request.buildRunId().equals(prerequisite.details().get("targetBuildRunId"))) {
+                throw badRequest("BUILD_RUN_STALE", "自动化测试必须使用当前对应的双端构建验证");
+            }
+        }
         Map<String, String> envVars = validator.validateEnvironmentVariables(request.environmentVariables());
         var reportTargets = validator.validateReportTargets(request.reportTargets());
         int timeout = request.timeoutSeconds() == null ? DEFAULT_TIMEOUT_SECONDS : request.timeoutSeconds();

@@ -24,6 +24,10 @@ public final class CompileEntryClassifier {
     }
 
     public CompileEntryClassification classify(Path compileDatabase, Path sourceRoot) throws IOException {
+        return classify(compileDatabase, sourceRoot, null);
+    }
+
+    public CompileEntryClassification classify(Path compileDatabase, Path sourceRoot, String remoteRoot) throws IOException {
         JsonNode document = objectMapper.readTree(compileDatabase.toFile());
         if (!document.isArray()) {
             return new CompileEntryClassification(0, 0, 0, List.of(), Map.of("INVALID_DOCUMENT", 1));
@@ -45,7 +49,8 @@ public final class CompileEntryClassifier {
                 increment(excluded, "BUILD_SYSTEM_PROBE");
                 continue;
             }
-            String relative = relativeProjectPath(file, sourceIdentity);
+            String relative = remoteRoot == null ? relativeProjectPath(file, sourceIdentity)
+                    : relativeToPinnedRoot(file, entry.path("directory").asText(remoteRoot), remoteRoot);
             if (relative == null) {
                 increment(excluded, "OUTSIDE_SOURCE_ROOT");
                 continue;
@@ -63,6 +68,21 @@ public final class CompileEntryClassifier {
                 .thenComparing(CompileEntryClassification.ProjectUnit::contextKey));
         return new CompileEntryClassification(document.size(), candidates, ordered.size(),
                 List.copyOf(ordered), Map.copyOf(excluded));
+    }
+
+    private String relativeToPinnedRoot(String file, String directory, String root) {
+        String normalized = normalize(file);
+        if (!normalized.startsWith("/") && !normalized.contains(":")) {
+            normalized = directory.replace('\\', '/') + "/" + normalized;
+        }
+        if (java.util.Arrays.asList(normalized.split("/", -1)).contains("..")) return null;
+        normalized = normalized.replace("/./", "/");
+        String prefix = root.replace('\\', '/').replaceAll("/+$", "") + "/";
+        normalized = normalized.replaceAll("/+", "/");
+        if (normalized.startsWith(prefix)) normalized = normalized.substring(prefix.length());
+        if (normalized.startsWith("/") || normalized.contains(":")
+                || java.util.Arrays.asList(normalized.split("/", -1)).contains("..")) return null;
+        return normalized;
     }
 
     public Coverage coverage(CompileEntryClassification classification,

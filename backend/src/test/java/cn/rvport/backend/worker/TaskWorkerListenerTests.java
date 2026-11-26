@@ -21,6 +21,12 @@ import org.springframework.amqp.core.MessageProperties;
 @ExtendWith(MockitoExtension.class)
 class TaskWorkerListenerTests {
 
+    @Test void queueConsumerWaitsForRegisteredHeartbeat() throws Exception {
+        var annotation = TaskWorkerListener.class.getMethod("onMessage", TaskQueueMessage.class, Message.class, Channel.class)
+                .getAnnotation(org.springframework.amqp.rabbit.annotation.RabbitListener.class);
+        org.assertj.core.api.Assertions.assertThat(annotation.autoStartup()).isEqualTo("false");
+    }
+
     @Mock
     private TaskWorkerService taskWorkerService;
 

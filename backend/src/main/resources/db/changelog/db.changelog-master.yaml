@@ -183,8 +183,14 @@ databaseChangeLog:
       file: changes/0137-retire-node-confirmation.sql
       relativeToChangelogFile: true
   - include:
-      file: changes/0138-add-ai-migration.sql
+      file: changes/0138-source-analysis-input-plans.sql
       relativeToChangelogFile: true
   - include:
-      file: changes/0139-ai-migration-report-input.sql
+      file: changes/0139-report-ai-review-checkpoints.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0140-add-ai-migration.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0141-ai-migration-report-input.sql
       relativeToChangelogFile: true

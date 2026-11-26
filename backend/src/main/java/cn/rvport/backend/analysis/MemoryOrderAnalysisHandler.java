@@ -12,7 +12,7 @@ public class MemoryOrderAnalysisHandler implements TaskHandler {
     public MemoryOrderAnalysisHandler(SpecializedAnalysisRuntimeService runtime) { this.runtime = runtime; }
     @Override public String taskType() { return RvPortTaskTypes.MEMORY_ORDER_ANALYSIS; }
     @Override public TaskHandlerResult handle(TaskExecutionContext context) {
-        runtime.run(context.input(SpecializedAnalysisTaskInput.class), context);
+        runtime.runTask(context.input(SpecializedAnalysisTaskInput.class), context);
         return TaskHandlerResult.success("强弱内存序分析完成");
     }
 }

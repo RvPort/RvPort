@@ -60,6 +60,38 @@ import org.springframework.mock.web.MockHttpServletRequest;
 @ExtendWith(MockitoExtension.class)
 class SpecializedAnalysisServiceTests {
 
+    @Test void sourceResultStaysCurrentAndOnlyProvenCurrentArtifactOffersEnhancement() {
+        var service=service(true);
+        when(contextService.snapshot(projectId)).thenReturn(new ProjectContextSnapshot(source.id(),runtime.version()));
+        var result=new SpecializedAnalysisRunView(UUID.randomUUID(),projectId,null,SpecializedAnalyzerType.FLOATING_POINT,
+                source.id(),null,null,null,"1","1","2",null,SpecializedAnalysisStatus.COMPLETE,"complete",0,
+                Map.of("inputOrigin","SOURCE_DISCOVERY","sourceDigest","a".repeat(64),"analysisComplete",true),
+                null,UUID.randomUUID(),null,null,0,0,0,actorId,null,null,null,null);
+        when(repository.latest(projectId,SpecializedAnalyzerType.FLOATING_POINT)).thenReturn(Optional.of(result));
+        when(runtimeEnvironmentService.summary(projectId)).thenReturn(new cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentResponse(
+                projectId,new cn.rvport.backend.source.deploy.SourceDeployEnvironmentSummary(runtime.sourceEnvironmentId(),"source",
+                cn.rvport.backend.environment.EnvironmentRole.SOURCE_X86,"x86",cn.rvport.backend.environment.EnvironmentStatus.AVAILABLE,true),
+                null,7L,false,List.of(),null,null));
+        when(buildRepository.findLatest(projectId,source.id(),runtime.sourceEnvironmentId(),7L,
+                cn.rvport.backend.buildvalidation.BuildValidationScope.SOURCE_ONLY)).thenReturn(Optional.of(build));
+        assertThat(service.latest(projectId,SpecializedAnalyzerType.FLOATING_POINT,actorId,false).result().enhancementAvailable()).isFalse();
+        for(int variant=0;variant<10;variant++) {
+            var artifact=new StoredArtifactView(UUID.randomUUID(),variant==1?UUID.randomUUID():projectId,null,
+                    variant==2?StoredArtifactOwnerType.SOURCE_REVISION:StoredArtifactOwnerType.BUILD_VALIDATION,
+                    variant==3?UUID.randomUUID():build.id(),variant==4?"OTHER":BuildValidationArtifacts.COMPILE_COMMANDS_JSON,
+                    "bucket","key","application/json",1,variant==5?null:variant==6?"bad":"b".repeat(64),
+                    Map.of("sourceDigest",variant==7?"different":"a".repeat(64),"sourceArch",variant==8?"arm64":"x86"),null);
+            when(artifactService.findByOwner(StoredArtifactOwnerType.BUILD_VALIDATION,build.id(),BuildValidationArtifacts.COMPILE_COMMANDS_JSON))
+                    .thenReturn(Optional.of(artifact));
+            lenient().when(artifactService.objectExists(artifact)).thenReturn(variant!=9);
+            var response=service.latest(projectId,SpecializedAnalyzerType.FLOATING_POINT,actorId,false);
+            assertThat(response.freshness()).isEqualTo(DomainLatestFreshness.CURRENT);
+            assertThat(response.result().resultApplicability().get("applicable")).isEqualTo(true);
+            assertThat(response.result().enhancementAvailable()).isEqualTo(variant==0);
+        }
+        org.mockito.Mockito.verifyNoInteractions(sourcePlans,sourceRepository);
+    }
+
     @org.junit.jupiter.api.io.TempDir java.nio.file.Path sourceRoot;
     private final UUID contextFindingId = UUID.randomUUID();
 
@@ -75,6 +107,7 @@ class SpecializedAnalysisServiceTests {
     @Mock NodeReportInclusionService reportInclusionService;
     @Mock SpecializedAnalysisToolHealthService toolHealthService;
     @Mock SpecializedBitcodeCapabilityResolver bitcodeCapabilityResolver;
+    @Mock SourceAnalysisPlanService sourcePlans;
 
     private UUID projectId;
     private UUID actorId;
@@ -86,15 +119,26 @@ class SpecializedAnalysisServiceTests {
     void setUp() {
         projectId = UUID.randomUUID();
         actorId = UUID.randomUUID();
+        lenient().when(accessService.requireProjectAccess(eq(projectId), eq(actorId), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(new cn.rvport.backend.project.ProjectView(projectId,"fixture",null,"x86","riscv64",
+                        null,null,null,actorId,null,null));
         source = new SourceRevisionView(UUID.randomUUID(), projectId, SourceRevisionType.GIT, "main", null,
                 "https://example.invalid/repo.git", "main", "abc", null, "/runtime/source", null, true,
                 actorId, OffsetDateTime.now());
         runtime = new ProjectRuntimeEnvironmentView(projectId, UUID.randomUUID(), UUID.randomUUID(), 7L,
                 actorId, OffsetDateTime.now(), OffsetDateTime.now());
+        lenient().when(runtimeEnvironmentService.summary(projectId)).thenReturn(
+                new cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentResponse(projectId,null,null,7L,false,List.of(),null,null));
         build = new BuildValidationRunView(UUID.randomUUID(), projectId, UUID.randomUUID(), source.id(),
-                runtime.sourceEnvironmentId(), null, runtime.version(), null, "hash", "make", "/remote", 60,
+                runtime.sourceEnvironmentId(), cn.rvport.backend.buildvalidation.BuildValidationScope.SOURCE_ONLY,
+                null, runtime.version(), null, "hash", "make", "/remote", 60,
                 0, TaskStatus.SUCCEEDED, null, null, null, null, OffsetDateTime.now(), OffsetDateTime.now(),
-                OffsetDateTime.now(), Map.of());
+                OffsetDateTime.now(), Map.of(), Map.of());
+        lenient().when(sourcePlans.create(any(), any(), any())).thenAnswer(call -> new AnalysisInputPlan(1,
+                projectId, source.id(), "a".repeat(64), ((SpecializedAnalyzerType) call.getArgument(2)).name(), "1", "p1",
+                AnalysisInputPlan.Identity.of("c,cpp", "x86", "riscv64", Map.of(), List.of(), "r1"),
+                AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY, null, List.of(), List.of(), List.of(), null));
+        lenient().when(sourcePlans.enhance(any(), any(), any())).thenCallRealMethod();
     }
 
     @Test
@@ -119,7 +163,7 @@ class SpecializedAnalysisServiceTests {
     }
 
     @Test
-    void memoryOrderDoesNotBindEnvironmentVersion() {
+    void memoryOrderBindsEnvironmentVersionWhenItConsumesBuildArtifacts() {
         SpecializedAnalysisService service = service(true);
         readyInputs();
         when(toolHealthService.health(SpecializedAnalyzerType.MEMORY_ORDER)).thenReturn(available());
@@ -128,7 +172,7 @@ class SpecializedAnalysisServiceTests {
         TaskResponse result = service.create(projectId, SpecializedAnalyzerType.MEMORY_ORDER, actorId, true);
 
         verify(repository).create(any(), eq(projectId), eq(result.id()), eq(SpecializedAnalyzerType.MEMORY_ORDER),
-                eq(source.id()), eq(build.id()), any(SpecializedAnalysisTaskInput.class), eq(null), eq(actorId));
+                eq(source.id()), eq(build.id()), any(SpecializedAnalysisTaskInput.class), eq(7L), eq(actorId));
     }
 
     @Test
@@ -144,7 +188,7 @@ class SpecializedAnalysisServiceTests {
     }
 
     @Test
-    void rejectsMissingSourceBuildAndArtifactsWithStableCodes() {
+    void rejectsMissingSourceAndCreatesSourceDiscoveryWithoutBuild() {
         SpecializedAnalysisService service = service(true);
         when(toolHealthService.health(SpecializedAnalyzerType.FLOATING_POINT)).thenReturn(available());
         when(sourceRepository.findActive(projectId)).thenReturn(Optional.empty());
@@ -152,16 +196,21 @@ class SpecializedAnalysisServiceTests {
                 "ACTIVE_SOURCE_REVISION_REQUIRED");
 
         when(sourceRepository.findActive(projectId)).thenReturn(Optional.of(source));
-        when(runtimeEnvironmentService.requireComplete(projectId, actorId, false)).thenReturn(runtime);
-        when(buildRepository.findLatestSucceededSourceBuildWithCompileDatabase(projectId, source.id(),
-                runtime.sourceEnvironmentId(), runtime.version())).thenReturn(Optional.empty());
-        assertCode(() -> service.create(projectId, SpecializedAnalyzerType.FLOATING_POINT, actorId, false),
-                "SUCCESSFUL_X86_BUILD_WITH_COMPILE_DATABASE_REQUIRED");
-
-        when(buildRepository.findLatestSucceededSourceBuildWithCompileDatabase(any(), any(), any(),
-                org.mockito.ArgumentMatchers.anyLong())).thenReturn(Optional.of(build));
-        assertCode(() -> service.create(projectId, SpecializedAnalyzerType.FLOATING_POINT, actorId, false),
-                "COMPILE_DATABASE_REQUIRED");
+        when(runtimeEnvironmentService.summary(projectId)).thenReturn(new cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentResponse(
+                projectId, null, null, 0, false, List.of("sourceEnvironment"), null, null));
+        var plan = new AnalysisInputPlan(1, projectId, source.id(), "a".repeat(64), "FLOATING_POINT", "0.6.0", "p1",
+                AnalysisInputPlan.Identity.of("c,cpp", "x86", "riscv64", Map.of(), List.of(), "r1"),
+                AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY, null, List.of(), List.of(), List.of(), null);
+        org.mockito.Mockito.doReturn(plan).when(sourcePlans).create(any(), eq(source), eq(SpecializedAnalyzerType.FLOATING_POINT));
+        when(taskService.create(any())).thenAnswer(invocation -> task(invocation.getArgument(0)));
+        service.create(projectId, SpecializedAnalyzerType.FLOATING_POINT, actorId, false);
+        ArgumentCaptor<TaskCreateCommand> created = ArgumentCaptor.forClass(TaskCreateCommand.class);
+        verify(taskService).create(created.capture());
+        assertThat(created.getValue().inputSnapshot().get("inputPlan")).isEqualTo(plan);
+        for (String key : List.of("buildRunId", "compileDatabaseArtifactId", "environmentConfigVersion"))
+            assertThat(created.getValue().inputSnapshot().get(key)).isNull();
+        assertThat(created.getValue().inputSnapshot().get("analysisMode")).isEqualTo("AST_ONLY");
+        org.mockito.Mockito.verifyNoInteractions(buildRepository, artifactService, bitcodeCapabilityResolver);
     }
 
     @Test
@@ -211,7 +260,7 @@ class SpecializedAnalysisServiceTests {
         assertThat(runs.items()).singleElement().extracting(SpecializedAnalysisResponse::currentSourceRevision)
                 .isEqualTo(true);
         assertThat(service.latest(projectId, SpecializedAnalyzerType.FLOATING_POINT, actorId, false).freshness())
-                .isEqualTo(DomainLatestFreshness.CURRENT);
+                .isEqualTo(DomainLatestFreshness.STALE);
         assertThat(service.get(projectId, SpecializedAnalyzerType.FLOATING_POINT, runId, actorId, false).id())
                 .isEqualTo(runId);
         assertThat(service.findings(projectId, SpecializedAnalyzerType.FLOATING_POINT, runId,
@@ -283,6 +332,33 @@ class SpecializedAnalysisServiceTests {
                 withTask.taskId(), projectId, RvPortTaskTypes.MEMORY_ORDER_ANALYSIS, TaskStatus.RUNNING, 50,
                 "running", actorId, OffsetDateTime.now(), null, OffsetDateTime.now(), null, 60, null, null, 0)));
         assertThat(service.latest(projectId, SpecializedAnalyzerType.MEMORY_ORDER, actorId, false).execution()).isNotNull();
+    }
+
+    @Test void latestSelectsPublishedOutputAgainstActualCurrentBuildInsteadOfAnyOldSuccess() {
+        var service=service(true);
+        when(contextService.snapshot(projectId)).thenReturn(new ProjectContextSnapshot(source.id(),runtime.version()));
+        var execution=run(UUID.randomUUID(),source.id());
+        var published=run(UUID.randomUUID(),source.id());
+        when(repository.latest(projectId,SpecializedAnalyzerType.FLOATING_POINT)).thenReturn(Optional.of(execution));
+        when(repository.latestPublished(projectId,source.id(),SpecializedAnalyzerType.FLOATING_POINT,null,7L))
+                .thenReturn(Optional.of(published));
+        var response=service.latest(projectId,SpecializedAnalyzerType.FLOATING_POINT,actorId,false);
+        assertThat(response.result().id()).isEqualTo(execution.id());
+        assertThat(response.currentResult().id()).isEqualTo(published.id());
+        when(runtimeEnvironmentService.summary(projectId)).thenReturn(new cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentResponse(
+                projectId,new cn.rvport.backend.source.deploy.SourceDeployEnvironmentSummary(runtime.sourceEnvironmentId(),"source",
+                cn.rvport.backend.environment.EnvironmentRole.SOURCE_X86,"x86",cn.rvport.backend.environment.EnvironmentStatus.AVAILABLE,true),
+                null,7L,false,List.of(),null,null));
+        when(buildRepository.findLatest(projectId,source.id(),runtime.sourceEnvironmentId(),7L,
+                cn.rvport.backend.buildvalidation.BuildValidationScope.SOURCE_ONLY)).thenReturn(Optional.of(build));
+        when(repository.latestPublished(projectId,source.id(),SpecializedAnalyzerType.FLOATING_POINT,build.id(),7L))
+                .thenReturn(Optional.of(published));
+        assertThat(service.latest(projectId,SpecializedAnalyzerType.FLOATING_POINT,actorId,false).currentResult().id()).isEqualTo(published.id());
+        verify(repository).latestPublished(projectId,source.id(),SpecializedAnalyzerType.FLOATING_POINT,build.id(),7L);
+        when(buildRepository.findLatest(projectId,source.id(),runtime.sourceEnvironmentId(),7L,
+                cn.rvport.backend.buildvalidation.BuildValidationScope.SOURCE_ONLY)).thenReturn(Optional.empty());
+        service.latest(projectId,SpecializedAnalyzerType.FLOATING_POINT,actorId,false);
+        verify(buildRepository,never()).findLatestSucceededSourceBuild(any(),any(),any(),any());
     }
 
     @Test
@@ -524,11 +600,14 @@ class SpecializedAnalysisServiceTests {
 
     private void readyInputs() {
         when(sourceRepository.findActive(projectId)).thenReturn(Optional.of(source));
-        lenient().when(runtimeEnvironmentService.requireComplete(projectId, actorId, false)).thenReturn(runtime);
-        lenient().when(runtimeEnvironmentService.requireComplete(projectId, actorId, true)).thenReturn(runtime);
-        when(buildRepository.findLatestSucceededSourceBuildWithCompileDatabase(any(), any(), any(),
-                org.mockito.ArgumentMatchers.anyLong())).thenReturn(Optional.of(build));
-        StoredArtifactView compileDb = artifact(BuildValidationArtifacts.COMPILE_COMMANDS_JSON, Map.of());
+        when(runtimeEnvironmentService.summary(projectId)).thenReturn(new cn.rvport.backend.project.runtime.ProjectRuntimeEnvironmentResponse(
+                projectId, new cn.rvport.backend.source.deploy.SourceDeployEnvironmentSummary(runtime.sourceEnvironmentId(),
+                        "source", cn.rvport.backend.environment.EnvironmentRole.SOURCE_X86, "x86", cn.rvport.backend.environment.EnvironmentStatus.AVAILABLE, true),
+                null, runtime.version(), false, List.of("targetEnvironment"), null, null));
+        when(buildRepository.findLatest(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong(),
+                eq(cn.rvport.backend.buildvalidation.BuildValidationScope.SOURCE_ONLY))).thenReturn(Optional.of(build));
+        StoredArtifactView compileDb = artifact(BuildValidationArtifacts.COMPILE_COMMANDS_JSON,
+                Map.of("sourceDigest", "a".repeat(64), "sourceArch", "x86"));
         StoredArtifactView manifest = artifact(BuildValidationArtifacts.LLVM_BITCODE_MANIFEST_JSON,
                 Map.of("schemaVersion", "2.0", "succeededCount", 1, "artifactSetId", "a".repeat(64)));
         StoredArtifactView bundle = artifact(BuildValidationArtifacts.LLVM_BITCODE_BUNDLE_TGZ, Map.of());
@@ -552,7 +631,7 @@ class SpecializedAnalysisServiceTests {
         RvPortProperties properties = new RvPortProperties(null, null, null, null, config);
         return new SpecializedAnalysisService(repository, accessService, sourceRepository, runtimeEnvironmentService,
                 buildRepository, artifactService, taskService, taskRepository, contextService,
-                reportInclusionService, properties, toolHealthService, bitcodeCapabilityResolver);
+                reportInclusionService, properties, toolHealthService, bitcodeCapabilityResolver, sourcePlans);
     }
 
     private SpecializedAnalysisToolHealthService.ToolHealth available() {

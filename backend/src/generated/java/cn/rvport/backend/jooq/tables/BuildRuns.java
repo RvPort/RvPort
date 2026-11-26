@@ -267,7 +267,7 @@ public class BuildRuns extends TableImpl<BuildRunsRecord> {
 
     @Override
     public List<UniqueKey<BuildRunsRecord>> getUniqueKeys() {
-        return Arrays.asList(Keys.BUILD_RUNS_TASK_ID_KEY);
+        return Arrays.asList(Keys.BUILD_RUNS_PROJECT_SOURCE_ID_UK, Keys.BUILD_RUNS_TASK_ID_KEY);
     }
 
     @Override
@@ -402,30 +402,60 @@ public class BuildRuns extends TableImpl<BuildRunsRecord> {
         return _dependencyAnalysisRuns;
     }
 
-    private transient KbScanRunsPath _kbScanRuns;
+    private transient KbScanRunsPath _kbScanProjectSourceBuildFk;
 
     /**
      * Get the implicit to-many join path to the
-     * <code>public.kb_scan_runs</code> table
+     * <code>public.kb_scan_runs</code> table, via the
+     * <code>kb_scan_project_source_build_fk</code> key
      */
-    public KbScanRunsPath kbScanRuns() {
-        if (_kbScanRuns == null)
-            _kbScanRuns = new KbScanRunsPath(this, null, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_BUILD_RUN_ID_FKEY.getInverseKey());
+    public KbScanRunsPath kbScanProjectSourceBuildFk() {
+        if (_kbScanProjectSourceBuildFk == null)
+            _kbScanProjectSourceBuildFk = new KbScanRunsPath(this, null, Keys.KB_SCAN_RUNS__KB_SCAN_PROJECT_SOURCE_BUILD_FK.getInverseKey());
 
-        return _kbScanRuns;
+        return _kbScanProjectSourceBuildFk;
     }
 
-    private transient SpecializedAnalysisRunsPath _specializedAnalysisRuns;
+    private transient KbScanRunsPath _kbScanRunsBuildRunIdFkey;
 
     /**
      * Get the implicit to-many join path to the
-     * <code>public.specialized_analysis_runs</code> table
+     * <code>public.kb_scan_runs</code> table, via the
+     * <code>kb_scan_runs_build_run_id_fkey</code> key
      */
-    public SpecializedAnalysisRunsPath specializedAnalysisRuns() {
-        if (_specializedAnalysisRuns == null)
-            _specializedAnalysisRuns = new SpecializedAnalysisRunsPath(this, null, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_BUILD_RUN_ID_FKEY.getInverseKey());
+    public KbScanRunsPath kbScanRunsBuildRunIdFkey() {
+        if (_kbScanRunsBuildRunIdFkey == null)
+            _kbScanRunsBuildRunIdFkey = new KbScanRunsPath(this, null, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_BUILD_RUN_ID_FKEY.getInverseKey());
 
-        return _specializedAnalysisRuns;
+        return _kbScanRunsBuildRunIdFkey;
+    }
+
+    private transient SpecializedAnalysisRunsPath _specializedAnalysisRunsBuildRunIdFkey;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.specialized_analysis_runs</code> table, via the
+     * <code>specialized_analysis_runs_build_run_id_fkey</code> key
+     */
+    public SpecializedAnalysisRunsPath specializedAnalysisRunsBuildRunIdFkey() {
+        if (_specializedAnalysisRunsBuildRunIdFkey == null)
+            _specializedAnalysisRunsBuildRunIdFkey = new SpecializedAnalysisRunsPath(this, null, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_ANALYSIS_RUNS_BUILD_RUN_ID_FKEY.getInverseKey());
+
+        return _specializedAnalysisRunsBuildRunIdFkey;
+    }
+
+    private transient SpecializedAnalysisRunsPath _specializedProjectSourceBuildFk;
+
+    /**
+     * Get the implicit to-many join path to the
+     * <code>public.specialized_analysis_runs</code> table, via the
+     * <code>specialized_project_source_build_fk</code> key
+     */
+    public SpecializedAnalysisRunsPath specializedProjectSourceBuildFk() {
+        if (_specializedProjectSourceBuildFk == null)
+            _specializedProjectSourceBuildFk = new SpecializedAnalysisRunsPath(this, null, Keys.SPECIALIZED_ANALYSIS_RUNS__SPECIALIZED_PROJECT_SOURCE_BUILD_FK.getInverseKey());
+
+        return _specializedProjectSourceBuildFk;
     }
 
     private transient TestRunsPath _testRuns;

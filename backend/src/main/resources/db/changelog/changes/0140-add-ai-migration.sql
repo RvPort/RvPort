@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset rvport:0138-ai-migration-runs
+--changeset rvport:0140-ai-migration-runs
 CREATE TABLE ai_migration_runs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id uuid NOT NULL REFERENCES projects(id),
@@ -23,7 +23,7 @@ CREATE TABLE ai_migration_runs (
 CREATE INDEX ai_migration_runs_project_created_idx ON ai_migration_runs (project_id, created_at DESC);
 CREATE INDEX ai_migration_runs_scan_run_idx ON ai_migration_runs (scan_run_id);
 
---changeset rvport:0138-ai-migration-checks
+--changeset rvport:0140-ai-migration-checks
 ALTER TABLE tasks DROP CONSTRAINT tasks_type_chk;
 ALTER TABLE tasks ADD CONSTRAINT tasks_type_chk CHECK(type IN (
     'SOURCE_GIT_SYNC','SOURCE_DEPLOY','ENV_TEST_CONNECTION','ENV_COLLECT','ENV_RUN_SCRIPT',

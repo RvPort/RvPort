@@ -136,6 +136,16 @@ public class KbScanRuns extends TableImpl<KbScanRunsRecord> {
      */
     public final TableField<KbScanRunsRecord, UUID> BUILD_RUN_ID = createField(DSL.name("build_run_id"), SQLDataType.UUID, this, "");
 
+    /**
+     * The column <code>public.kb_scan_runs.input_plan</code>.
+     */
+    public final TableField<KbScanRunsRecord, JSONB> INPUT_PLAN = createField(DSL.name("input_plan"), SQLDataType.JSONB, this, "");
+
+    /**
+     * The column <code>public.kb_scan_runs.effective_input_plan</code>.
+     */
+    public final TableField<KbScanRunsRecord, JSONB> EFFECTIVE_INPUT_PLAN = createField(DSL.name("effective_input_plan"), SQLDataType.JSONB, this, "");
+
     private KbScanRuns(Name alias, Table<KbScanRunsRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
     }
@@ -205,7 +215,7 @@ public class KbScanRuns extends TableImpl<KbScanRunsRecord> {
 
     @Override
     public List<Index> getIndexes() {
-        return Arrays.asList(Indexes.KB_SCAN_RUNS_EXECUTION_CONTEXT_IDX, Indexes.KB_SCAN_RUNS_PROJECT_REVISION_STARTED_IDX, Indexes.KB_SCAN_RUNS_PROJECT_STARTED_IDX, Indexes.KB_SCAN_RUNS_PROJECT_STATUS_STARTED_IDX, Indexes.KB_SCAN_RUNS_SOURCE_REVISION_IDX);
+        return Arrays.asList(Indexes.KB_SCAN_RUNS_EXECUTION_CONTEXT_IDX, Indexes.KB_SCAN_RUNS_PROJECT_REVISION_STARTED_IDX, Indexes.KB_SCAN_RUNS_PROJECT_STARTED_IDX, Indexes.KB_SCAN_RUNS_PROJECT_STATUS_STARTED_IDX, Indexes.KB_SCAN_RUNS_SOURCE_REVISION_IDX, Indexes.KB_SCAN_SOURCE_PLAN_IDX);
     }
 
     @Override
@@ -220,19 +230,46 @@ public class KbScanRuns extends TableImpl<KbScanRunsRecord> {
 
     @Override
     public List<ForeignKey<KbScanRunsRecord, ?>> getReferences() {
-        return Arrays.asList(Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_BUILD_RUN_ID_FKEY, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_PROJECT_ID_FKEY, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_SOURCE_ENVIRONMENT_ID_FKEY, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_SOURCE_REVISION_ID_FKEY, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_TASK_ID_FKEY);
+        return Arrays.asList(Keys.KB_SCAN_RUNS__KB_SCAN_PROJECT_SOURCE_BUILD_FK, Keys.KB_SCAN_RUNS__KB_SCAN_PROJECT_SOURCE_FK, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_BUILD_RUN_ID_FKEY, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_PROJECT_ID_FKEY, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_SOURCE_ENVIRONMENT_ID_FKEY, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_SOURCE_REVISION_ID_FKEY, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_TASK_ID_FKEY);
     }
 
-    private transient BuildRunsPath _buildRuns;
+    private transient BuildRunsPath _kbScanProjectSourceBuildFk;
 
     /**
-     * Get the implicit join path to the <code>public.build_runs</code> table.
+     * Get the implicit join path to the <code>public.build_runs</code> table,
+     * via the <code>kb_scan_project_source_build_fk</code> key.
      */
-    public BuildRunsPath buildRuns() {
-        if (_buildRuns == null)
-            _buildRuns = new BuildRunsPath(this, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_BUILD_RUN_ID_FKEY, null);
+    public BuildRunsPath kbScanProjectSourceBuildFk() {
+        if (_kbScanProjectSourceBuildFk == null)
+            _kbScanProjectSourceBuildFk = new BuildRunsPath(this, Keys.KB_SCAN_RUNS__KB_SCAN_PROJECT_SOURCE_BUILD_FK, null);
 
-        return _buildRuns;
+        return _kbScanProjectSourceBuildFk;
+    }
+
+    private transient SourceRevisionsPath _kbScanProjectSourceFk;
+
+    /**
+     * Get the implicit join path to the <code>public.source_revisions</code>
+     * table, via the <code>kb_scan_project_source_fk</code> key.
+     */
+    public SourceRevisionsPath kbScanProjectSourceFk() {
+        if (_kbScanProjectSourceFk == null)
+            _kbScanProjectSourceFk = new SourceRevisionsPath(this, Keys.KB_SCAN_RUNS__KB_SCAN_PROJECT_SOURCE_FK, null);
+
+        return _kbScanProjectSourceFk;
+    }
+
+    private transient BuildRunsPath _kbScanRunsBuildRunIdFkey;
+
+    /**
+     * Get the implicit join path to the <code>public.build_runs</code> table,
+     * via the <code>kb_scan_runs_build_run_id_fkey</code> key.
+     */
+    public BuildRunsPath kbScanRunsBuildRunIdFkey() {
+        if (_kbScanRunsBuildRunIdFkey == null)
+            _kbScanRunsBuildRunIdFkey = new BuildRunsPath(this, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_BUILD_RUN_ID_FKEY, null);
+
+        return _kbScanRunsBuildRunIdFkey;
     }
 
     private transient ProjectsPath _projects;
@@ -259,17 +296,17 @@ public class KbScanRuns extends TableImpl<KbScanRunsRecord> {
         return _environments;
     }
 
-    private transient SourceRevisionsPath _sourceRevisions;
+    private transient SourceRevisionsPath _kbScanRunsSourceRevisionIdFkey;
 
     /**
      * Get the implicit join path to the <code>public.source_revisions</code>
-     * table.
+     * table, via the <code>kb_scan_runs_source_revision_id_fkey</code> key.
      */
-    public SourceRevisionsPath sourceRevisions() {
-        if (_sourceRevisions == null)
-            _sourceRevisions = new SourceRevisionsPath(this, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_SOURCE_REVISION_ID_FKEY, null);
+    public SourceRevisionsPath kbScanRunsSourceRevisionIdFkey() {
+        if (_kbScanRunsSourceRevisionIdFkey == null)
+            _kbScanRunsSourceRevisionIdFkey = new SourceRevisionsPath(this, Keys.KB_SCAN_RUNS__KB_SCAN_RUNS_SOURCE_REVISION_ID_FKEY, null);
 
-        return _sourceRevisions;
+        return _kbScanRunsSourceRevisionIdFkey;
     }
 
     private transient TasksPath _tasks;
@@ -354,7 +391,9 @@ public class KbScanRuns extends TableImpl<KbScanRunsRecord> {
     @Override
     public List<Check<KbScanRunsRecord>> getChecks() {
         return Arrays.asList(
+            Internal.createCheck(this, DSL.name("kb_scan_effective_plan_chk"), "(((effective_input_plan IS NULL) OR (((input_plan IS NOT NULL) AND (jsonb_typeof(effective_input_plan) = 'object'::text) AND ((effective_input_plan ->> 'planVersion'::text) = '1'::text) AND ((effective_input_plan ->> 'projectId'::text) = (project_id)::text) AND ((effective_input_plan ->> 'sourceRevisionId'::text) = (source_revision_id)::text) AND ((effective_input_plan ->> 'inputOrigin'::text) = ANY (ARRAY['SOURCE_DISCOVERY'::text, 'BUILD_ARTIFACTS'::text]))) IS TRUE)))", true),
             Internal.createCheck(this, DSL.name("kb_scan_execution_context_complete_chk"), "((((source_environment_id IS NULL) AND (runtime_environment_version IS NULL) AND (build_run_id IS NULL)) OR ((source_environment_id IS NOT NULL) AND (runtime_environment_version IS NOT NULL) AND (runtime_environment_version >= 0) AND (build_run_id IS NOT NULL))))", true),
+            Internal.createCheck(this, DSL.name("kb_scan_input_plan_chk"), "(((input_plan IS NULL) OR (((jsonb_typeof(input_plan) = 'object'::text) AND ((input_plan ->> 'planVersion'::text) = '1'::text) AND ((input_plan ->> 'projectId'::text) = (project_id)::text) AND ((input_plan ->> 'sourceRevisionId'::text) = (source_revision_id)::text) AND ((((input_plan ->> 'inputOrigin'::text) = 'SOURCE_DISCOVERY'::text) AND (build_run_id IS NULL) AND (source_environment_id IS NULL) AND (runtime_environment_version IS NULL) AND ((input_plan -> 'build'::text) = 'null'::jsonb) AND ((input_plan -> 'artifacts'::text) = '[]'::jsonb)) OR (((input_plan ->> 'inputOrigin'::text) = 'BUILD_ARTIFACTS'::text) AND (build_run_id IS NOT NULL) AND (((input_plan -> 'build'::text) ->> 'id'::text) = (build_run_id)::text) AND (((input_plan -> 'build'::text) ->> 'environmentId'::text) = (source_environment_id)::text) AND (((input_plan -> 'build'::text) ->> 'environmentVersion'::text) = (runtime_environment_version)::text)))) IS TRUE)))", true),
             Internal.createCheck(this, DSL.name("kb_scan_runs_status_chk"), "((status = ANY (ARRAY['PENDING'::text, 'QUEUED'::text, 'RUNNING'::text, 'SUCCEEDED'::text, 'FAILED'::text, 'CANCELLED'::text, 'TIMEOUT'::text])))", true)
         );
     }

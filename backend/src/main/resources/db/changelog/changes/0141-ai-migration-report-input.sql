@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset rvport:0139-ai-migration-report-input
+--changeset rvport:0141-ai-migration-report-input
 -- 迁移输入源切换为评估报告（change add-migration-report-loop）：报告 id 与冻结的
 -- 报告上下文哈希随运行落库，执行时复检（contextHash 不一致 → AI_MIGRATION_REPORT_STALE）。
 -- report_id 可空以兼容存量运行（task- 前缀时代的旧运行无报告输入）。

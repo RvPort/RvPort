@@ -263,9 +263,13 @@ class ProjectRuntimeEnvironmentServiceTests {
         ProjectRuntimeEnvironmentView onlySource = new ProjectRuntimeEnvironmentView(
                 projectId, source.id(), null, 6L, actorId, null, null);
         when(repository.find(projectId)).thenReturn(Optional.of(onlySource));
+        assertThat(service.requireSource(projectId, actorId, false)).isSameAs(onlySource);
         assertThatThrownBy(() -> service.requireComplete(projectId, actorId, false))
                 .isInstanceOf(ApiException.class).extracting("code")
                 .isEqualTo("PROJECT_RUNTIME_ENVIRONMENTS_REQUIRED");
+        when(repository.find(projectId)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.requireSource(projectId, actorId, false))
+                .isInstanceOf(ApiException.class).extracting("code").isEqualTo("PROJECT_SOURCE_ENVIRONMENT_REQUIRED");
     }
 
     @Test

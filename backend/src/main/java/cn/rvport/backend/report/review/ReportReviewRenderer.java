@@ -51,18 +51,10 @@ public class ReportReviewRenderer {
         return List.of("CRITICAL","HIGH","MEDIUM","LOW","INFO","COMMENT").stream().filter(levels::contains).findFirst().orElse("UNKNOWN");
     }
     public Map<String,Object> document(UUID report,ReportReviewManifest manifest,ReportAiReviewRuntime.Reviewed reviewed) {
-        Map<String,Object> result=new LinkedHashMap<>(); result.put("schemaVersion","report-review.v1"); result.put("reportId",report);
+        Map<String,Object> result=new LinkedHashMap<>(); result.put("schemaVersion","report-review.v2"); result.put("reportId",report);
         result.put("projectId",manifest.projectId()); result.put("sourceRevisionId",manifest.sourceRevisionId());
         result.put("contextHash",manifest.contextHash()); result.put("mode",manifest.mode()); result.put("summary",summary(manifest));
-        result.put("sources",manifest.selection().sources().stream().map(source->{
-            Map<String,Object> value=new LinkedHashMap<>(); value.put("type",source.type()); value.put("runId",source.runId());
-            value.put("available",source.available()); value.put("status",source.status()); value.put("resultVersion",source.resultVersion());
-            value.put("reasonCode",source.reasonCode()); value.put("rawFindingCount",source.findings().size());
-            value.put("candidateCount",source.candidates().size());
-            if("MEMORY_ORDER_FINDING".equals(source.type()))
-                value.put("dischargedCount",source.execution().getOrDefault("dischargedCount",0));
-            return value;
-        }).toList());
+        result.put("sources",sources(manifest));
         // 固定扫描事实与 AI 结论；人工工作台通过自己的版本和确认制品呈现。
         result.put("findings",manifest.items().stream().filter(item->item.origin().equals("SCANNER")).map(item->{
             Map<String,Object> value=new LinkedHashMap<>(); value.put("id",item.id()); value.put("sourceType",item.sourceType());
@@ -84,6 +76,30 @@ public class ReportReviewRenderer {
                     result.put("migrationResult",migration);
                 });
         return result;
+    }
+    public List<Map<String,Object>> sources(ReportReviewManifest manifest) {
+        return manifest.selection().sources().stream().map(source->{
+            Map<String,Object> value=new LinkedHashMap<>(); value.put("type",source.type()); value.put("runId",source.runId());
+            value.put("available",source.available()); value.put("status",source.status()); value.put("resultVersion",source.resultVersion());
+            value.put("reasonCode",source.reasonCode()); value.put("rawFindingCount",source.findings().size());
+            value.put("candidateCount",source.candidates().size());
+            value.put("resultAvailable",source.available());
+            value.put("analysisStatus",source.status());
+            if(source.execution().get("latestExecution") instanceof Map<?,?> execution) {
+                Map<String,Object> latest=new LinkedHashMap<>();
+                for(String key:List.of("id","status","reasonCode")) if(execution.containsKey(key)) latest.put(key,execution.get(key));
+                value.put("latestExecution",latest);
+            }
+            if(source.execution().get("summary") instanceof Map<?,?> evidence) {
+                for(String field:List.of("inputOrigin","analysisMode","analysisComplete","coverage","assumptions",
+                        "missingEvidence","limitations","analysisReasonCodes","analysisLayers",
+                        "requestedInputDigest","effectiveInputDigest","sourceDigest","inputPlan"))
+                    if(evidence.containsKey(field)) value.put(field,evidence.get(field));
+            }
+            if("MEMORY_ORDER_FINDING".equals(source.type()))
+                value.put("dischargedCount",source.execution().getOrDefault("dischargedCount",0));
+            return value;
+        }).toList();
     }
     public byte[] json(Object document) {
         try { return mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(document); }

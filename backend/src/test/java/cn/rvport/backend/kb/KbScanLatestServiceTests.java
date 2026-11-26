@@ -29,6 +29,50 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class KbScanLatestServiceTests {
+    @Test void currentPublishedSourceOutputIsSeparateFromNewestFailedExecutionWithChangedBuildContext() {
+        UUID project=UUID.randomUUID(),source=UUID.randomUUID();
+        var plan=new cn.rvport.backend.analysis.AnalysisInputPlan(1,project,source,"a".repeat(64),"KB","1","p1",
+                cn.rvport.backend.analysis.AnalysisInputPlan.Identity.of("c","x86","riscv64",Map.of(),java.util.List.of(),"rules"),
+                cn.rvport.backend.analysis.AnalysisInputPlan.InputOrigin.SOURCE_DISCOVERY,null,java.util.List.of(),java.util.List.of(),java.util.List.of(),null);
+        var published=new KbScanView(UUID.randomUUID(),project,UUID.randomUUID(),source,"r1",Map.of(),TaskStatus.SUCCEEDED,
+                Map.of("resultAvailable",true,"analysisComplete",true),null,null,new KbExecutionContext(null,null,null,plan));
+        var selection=new KbScanContextService.Selection(project,source,UUID.randomUUID(),8L,null);
+        var failed=KbContextFixtures.scan(project,source,TaskStatus.FAILED,KbContextFixtures.CONTEXT);
+        when(scanContextService.current(project)).thenReturn(selection);
+        when(kbScanRepository.findLatestHistoricalRun(project)).thenReturn(Optional.of(failed));
+        when(kbScanRepository.findLatestPublishedByContext(project,source,selection.executionContext())).thenReturn(Optional.of(published));
+        var latest=service().latest(project,UUID.randomUUID(),false);
+        assertThat(latest.result().id()).isEqualTo(failed.id());
+        assertThat(latest.freshness()).isEqualTo(DomainLatestFreshness.STALE);
+        assertThat(latest.currentResult().id()).isEqualTo(published.id());
+        assertThat(latest.currentResult().inputOrigin()).isEqualTo("SOURCE_DISCOVERY");
+        assertThat(latest.currentResult().resultAvailable()).isTrue();
+        assertThat(latest.currentResult().analysisComplete()).isTrue();
+        assertThat(latest.currentResult().resultApplicability()).containsEntry("applicable",true);
+        assertThat(latest.result().resultApplicability()).containsEntry("applicable",false);
+        assertThat(latest.result().analysisComplete()).isFalse();
+        var effective=new KbScanView(published.id(),project,published.taskId(),source,"r1",Map.of(),TaskStatus.SUCCEEDED,
+                Map.of("resultAvailable",true),null,null,published.executionContext(),plan);
+        assertThat(KbScanResponse.from(effective,selection).analysisComplete()).isFalse();
+        when(kbScanRepository.findLatestPublishedByContext(project,source,selection.executionContext())).thenReturn(Optional.of(failed));
+        assertThat(service().latest(project,UUID.randomUUID(),false).currentResult()).isNull();
+        var ready=KbContextFixtures.ready(project,source);
+        when(scanContextService.current(project)).thenReturn(ready);
+        when(kbScanRepository.findLatestHistoricalRun(project)).thenReturn(Optional.of(published));
+        var service=service();
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"sourcePlans",
+                new cn.rvport.backend.analysis.SourceAnalysisPlanService(null,null));
+        assertThat(service.latest(project,UUID.randomUUID(),false).result().enhancementAvailable()).isFalse();
+        for(int variant=0;variant<3;variant++) {
+            var artifact=new cn.rvport.backend.artifact.StoredArtifactView(UUID.randomUUID(),project,null,
+                    cn.rvport.backend.artifact.StoredArtifactOwnerType.BUILD_VALIDATION,ready.build().id(),"COMPILE_COMMANDS_JSON",
+                    "bucket","key","application/json",1,"b".repeat(64),Map.of("sourceDigest","a".repeat(64),"sourceArch",variant==2?"arm64":"x86"),null);
+            when(storedArtifactService.findByOwner(cn.rvport.backend.artifact.StoredArtifactOwnerType.BUILD_VALIDATION,ready.build().id(),"COMPILE_COMMANDS_JSON"))
+                    .thenReturn(Optional.of(artifact));
+            when(storedArtifactService.objectExists(artifact)).thenReturn(variant!=1);
+            assertThat(service.latest(project,UUID.randomUUID(),false).result().enhancementAvailable()).isEqualTo(variant==0);
+        }
+    }
     @Mock private KbScanContextService scanContextService;
 
     @Mock
@@ -80,7 +124,7 @@ class KbScanLatestServiceTests {
         UUID taskId = UUID.randomUUID();
         KbScanView failed = run(projectId, runId, taskId, sourceRevisionId, TaskStatus.FAILED);
         when(scanContextService.current(projectId)).thenReturn(KbContextFixtures.ready(projectId, sourceRevisionId));
-        when(scanContextService.latest(org.mockito.ArgumentMatchers.any())).thenReturn(Optional.of(failed));
+        when(kbScanRepository.findLatestHistoricalRun(projectId)).thenReturn(Optional.of(failed));
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task(projectId, taskId, TaskStatus.FAILED)));
 
         DomainLatestResponse<KbScanResponse> response = service().latest(projectId, UUID.randomUUID(), false);
@@ -113,7 +157,6 @@ class KbScanLatestServiceTests {
         UUID taskId = UUID.randomUUID();
         KbScanView stale = run(projectId, staleRunId, taskId, staleSourceRevisionId, TaskStatus.SUCCEEDED);
         when(scanContextService.current(projectId)).thenReturn(KbContextFixtures.ready(projectId, currentSourceRevisionId));
-        when(scanContextService.latest(org.mockito.ArgumentMatchers.any())).thenReturn(Optional.empty());
         when(kbScanRepository.findLatestHistoricalRun(projectId)).thenReturn(Optional.of(stale));
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task(projectId, taskId, TaskStatus.SUCCEEDED)));
 

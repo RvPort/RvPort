@@ -23,7 +23,7 @@ public class KbScanHandler implements TaskHandler {
 
     @Override
     public TaskHandlerResult handle(TaskExecutionContext context) {
-        runtimeService.scan(context.input(KbScanInput.class), context);
+        runtimeService.scanTask(context.input(KbScanInput.class), context);
         return TaskHandlerResult.success("KB 扫描完成");
     }
 }

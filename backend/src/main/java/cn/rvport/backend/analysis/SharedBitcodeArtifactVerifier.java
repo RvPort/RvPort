@@ -23,6 +23,32 @@ public class SharedBitcodeArtifactVerifier {
         this.objectMapper = objectMapper;
     }
 
+    /** 校验当前分析计划，而不只校验制品内部自洽性。失败由调用方降级到可信源码/编译上下文。 */
+    public static void requireCompatible(BitcodeManifest manifest, AnalysisInputPlan plan,
+            CompileEntryClassification classification) {
+        String compileHash = plan.artifacts().stream().filter(a -> "COMPILE_COMMANDS_JSON".equals(a.type()))
+                .map(AnalysisInputPlan.Artifact::sha256).findFirst().orElse("");
+        boolean contextMatches = manifest.compileContext() != null
+                && compileHash.equals(manifest.compileContext().rawCompileCommandsSha256());
+        if (!contextMatches || !"x86".equals(plan.identity().effectiveSourceArch()))
+            throw new SpecializedAnalysisRuntimeException("ANALYSIS_ARTIFACT_IDENTITY_MISMATCH");
+        var paths = classification.projectUnits().stream().map(CompileEntryClassification.ProjectUnit::path).toList();
+        for (var record : manifest.records()) {
+            if (!"produced".equals(record.status())) continue;
+            var producer = record.producer();
+            var target = record.target();
+            String path = record.source().path();
+            boolean cpp = !path.toLowerCase(java.util.Locale.ROOT).endsWith(".c");
+            if (!paths.contains(path) || !java.util.Objects.equals(producer, manifest.producer())
+                    || !"clang".equals(producer.family()) || !"21.1.8".equals(producer.llvmVersion())
+                    || !target.triple().startsWith("x86_64-") || !target.triple().contains("linux")
+                    || !"x86_64".equals(target.abi().get("architecture"))
+                    || !"little".equals(target.abi().get("endianness")) || !target.dataLayout().startsWith("e")
+                    || !(cpp ? "c++" : "c").equals(record.language()))
+                throw new SpecializedAnalysisRuntimeException("ANALYSIS_ARTIFACT_PROFILE_MISMATCH");
+        }
+    }
+
     public BitcodeManifest verify(
             Path manifestFile,
             Path bundleFile,

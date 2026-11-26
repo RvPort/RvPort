@@ -18,8 +18,18 @@ public record SpecializedAnalysisTaskInput(
         int bcFailedCount,
         String bcDegradationReason,
         Long environmentConfigVersion,
-        SpecializedAnalyzerType analyzerType
+        SpecializedAnalyzerType analyzerType,
+        AnalysisInputPlan inputPlan
 ) {
+    public SpecializedAnalysisTaskInput(UUID projectId, UUID runId, UUID sourceRevisionId, UUID buildRunId,
+            UUID compileDatabaseArtifactId, UUID bitcodeManifestArtifactId, UUID bitcodeBundleArtifactId,
+            String artifactSetId, SpecializedAnalysisMode analysisMode, String bcStatus, int bcPlannedCount,
+            int bcUsableCount, int bcFailedCount, String bcDegradationReason, Long environmentConfigVersion,
+            SpecializedAnalyzerType analyzerType) {
+        this(projectId, runId, sourceRevisionId, buildRunId, compileDatabaseArtifactId, bitcodeManifestArtifactId,
+                bitcodeBundleArtifactId, artifactSetId, analysisMode, bcStatus, bcPlannedCount, bcUsableCount,
+                bcFailedCount, bcDegradationReason, environmentConfigVersion, analyzerType, null);
+    }
     public SpecializedAnalysisTaskInput(
             UUID projectId, UUID runId, UUID sourceRevisionId, UUID buildRunId,
             UUID compileDatabaseArtifactId, UUID bitcodeManifestArtifactId, UUID bitcodeBundleArtifactId,

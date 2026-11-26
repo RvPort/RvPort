@@ -52,7 +52,9 @@ class ReportReviewPublicationTests {
         var kb = new ReportInputSelectionPolicy.Source("KB_FINDING",raw.sourceRunId(),"SUCCEEDED",null,null,Map.of(),
                 List.of(raw.originalSnapshot()),List.of(raw.originalSnapshot()));
         var mo = new ReportInputSelectionPolicy.Source("MEMORY_ORDER_FINDING",candidate.sourceRunId(),"SUCCEEDED",null,null,
-                Map.of("dischargedCount",1),List.of(memory),List.of(memory));
+                Map.of("latestExecution",Map.of("id","new-run","status","FAILED","reasonCode","ANALYSIS_PROCESS_TERMINATED","privatePath","secret"),
+                        "dischargedCount",1,"summary",Map.of("analysisComplete",false,
+                        "missingEvidence",List.of("BITCODE_UNAVAILABLE"),"coverage",Map.of("plannedTuCount",2))),List.of(memory),List.of(memory));
         var selection = new ReportInputSelectionPolicy.Selection(project,source,"ctx",List.of(kb,mo));
         var manifest = new ReportReviewManifest(project,source,"ctx",ReportMode.AI_ENHANCED,selection,
                 new ReportSourceSnapshotService.Manifest(source,"digest",List.of(file),null),
@@ -70,6 +72,12 @@ class ReportReviewPublicationTests {
         assertThat(document).containsEntry("aiReviews",List.of(result)).doesNotContainKeys("confirmationId","fixItems");
         assertThat((List<?>)document.get("findings")).hasSize(2);
         assertThat(((Map<?,?>)((List<?>)document.get("sources")).get(1)).get("dischargedCount")).isEqualTo(1);
+        assertThat(((Map<?,?>)((List<?>)document.get("sources")).get(1)).get("missingEvidence")).isEqualTo(List.of("BITCODE_UNAVAILABLE"));
+        assertThat(renderer.html(document)).contains("BITCODE_UNAVAILABLE","plannedTuCount");
+        assertThat(((Map<?,?>)((List<?>)document.get("sources")).get(1)).get("latestExecution"))
+                .isEqualTo(Map.of("id","new-run","status","FAILED","reasonCode","ANALYSIS_PROCESS_TERMINATED"));
+        assertThat(renderer.html(document)).doesNotContain("privatePath","secret");
+        assertThat(document).containsEntry("schemaVersion","report-review.v2");
     }
     @Test void lowerCaseRiskLevelsAreNormalizedForCountsAndOverallRisk() {
         var lowercase = new ReviewItemSnapshot(UUID.randomUUID(),"SCANNER","KB_FINDING",UUID.randomUUID(),UUID.randomUUID(),

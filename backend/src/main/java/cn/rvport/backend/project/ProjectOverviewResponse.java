@@ -34,7 +34,11 @@ public record ProjectOverviewResponse(
     }
 
     public record WorkflowStageResponse(String id, WorkflowStageStatus status, String reasonCode,
-            String analysisStatus, Boolean analysisComplete, String message, String messageEn) {
+            String analysisStatus, Boolean analysisComplete, String message, String messageEn, boolean optional, Boolean canStart) {
+        public WorkflowStageResponse(String id, WorkflowStageStatus status, String reasonCode,
+                String analysisStatus, Boolean analysisComplete, String message, String messageEn) {
+            this(id, status, reasonCode, analysisStatus, analysisComplete, message, messageEn, "x86-build".equals(id), null);
+        }
         public WorkflowStageResponse(String id, WorkflowStageStatus status, String reasonCode) {
             this(id, status, reasonCode, null, null, null, null);
         }

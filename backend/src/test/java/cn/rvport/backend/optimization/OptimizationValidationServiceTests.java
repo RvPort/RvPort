@@ -210,7 +210,8 @@ class OptimizationValidationServiceTests {
     BuildValidationRunView build(UUID env, TaskStatus status) {
         var r = new BuildRunsRecord(); r.setId(UUID.randomUUID()); r.setProjectId(project); r.setSourceRevisionId(source);
         r.setEnvironmentId(env); r.setEnvironmentConfigVersion(1L); r.setStatus(status.name()); r.setCreatedAt(now);
-        return BuildValidationRunView.from(r);
+        r.setScriptSha256("test-script-hash");
+        return BuildValidationRunView.from(r, Map.of(), BuildValidationScope.BOTH, Map.of("buildBatchId", batch.toString()));
     }
 
     TestEvidence test(BuildValidationRunView build, String role) {

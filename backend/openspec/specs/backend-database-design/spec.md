@@ -680,7 +680,7 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 - **AND** 如实现需要按源码来源筛选项目，数据库 MAY 为 `source_input_type` 建立索引
 
 ### Requirement: KB 扫描运行表必须支持异步任务和摘要查询
-数据库 SHALL 使用 `kb_scan_runs` 保存 KB 扫描运行事实，支持按项目、源码、执行上下文和状态查询，并持久化新扫描所绑定的 x86 构建身份。
+数据库 SHALL 使用 `kb_scan_runs` 保存 KB 扫描运行事实，支持按项目、源码、执行上下文和状态查询，并持久化新扫描的版本化实际输入计划及可选 x86 构建身份。
 
 #### Scenario: 创建 KB 扫描运行
 - **WHEN** 后端创建 KB 扫描任务
@@ -688,15 +688,15 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 - **AND** `project_id` SHALL 关联项目
 - **AND** `task_id` SHALL 唯一关联 `tasks.id`
 - **AND** `source_revision_id` SHALL 关联被扫描源码版本
-- **AND** 新服务 SHALL 完整写入 `source_environment_id`、`runtime_environment_version` 和 `build_run_id`
-- **AND** `build_run_id` SHALL 关联经服务验证与项目、源码、源环境、运行环境版本一致的成功 `SOURCE_ONLY` 构建
+- **AND** 新服务 SHALL 完整写入输入计划版本、inputOrigin、源码指纹和请求/实际输入摘要；SOURCE_DISCOVERY 的 `source_environment_id`、`runtime_environment_version` 和 `build_run_id` 可以为空，BUILD_ARTIFACTS SHALL 完整记录实际消费的构建环境关联
+- **AND** BUILD_ARTIFACTS 的非空 `build_run_id` SHALL 关联经服务验证与项目、源码、源环境、运行环境版本一致的成功 `SOURCE_ONLY` 构建
 - **AND** `status` SHALL 使用 `PENDING`、`QUEUED`、`RUNNING`、`SUCCEEDED`、`FAILED`、`CANCELLED` 或 `TIMEOUT`
 - **AND** `scope` SHALL 保存扫描范围、排除路径、语言、目标架构和规则集摘要
 
 #### Scenario: 更新运行摘要
 - **WHEN** KB 扫描完成或失败
 - **THEN** `kb_scan_runs.summary` SHALL 保存 schema version、tool version、rule pack、文件数、finding 数量、severity counts、diagnostics 摘要和 artifact 摘要
-- **AND** compile database 降级时 SHALL 仍保存绑定构建身份及安全原因
+- **AND** compile database 降级时 SHALL 保留请求绑定身份及安全原因，并独立保存实际 SOURCE_DISCOVERY 计划和 effectiveInputDigest
 - **AND** summary MUST NOT 保存源码工作副本路径、scanner 输出目录、明文凭据或完整 stdout/stderr
 - **AND** 执行结果更新 MUST NOT 改写创建时绑定的执行上下文
 
@@ -710,7 +710,7 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 
 #### Scenario: 旧数据升级
 - **WHEN** 数据库从没有扫描上下文列的版本升级
-- **THEN** 迁移 SHALL 以可空字段保留旧行，并允许新增上下文全空或完整填写，拒绝部分填写
+- **THEN** 迁移 SHALL 以可空字段保留旧行；新计划按版本和 inputOrigin 校验必填字段，SOURCE_DISCOVERY 不要求构建关联；旧未标记计划模式的记录继续保持原全空或完整关联约束，不将旧空字段推断成合法源码模式
 - **AND** 旧记录 SHALL 保留原状态、finding 和 artifact 关联
 - **AND** 迁移 MUST NOT 根据当前环境或 summary 中不完整信息推测回填
 - **AND** 新查询 SHALL 将上下文缺失的旧行判为历史，不能作为当前扫描
@@ -1077,7 +1077,7 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 - **THEN** last_probe_* 历史字段 SHALL 不再承接个人结果写入或作为共享兼容状态返回；历史数据不伪造或改写为新结果
 
 ### Requirement: 数据库必须支持构建上下文 artifact 引用
-数据库 SHALL 支持构建运行保存 compile database 输出制品引用，并 SHALL 支持 KB 扫描按项目和源码版本查询最新可用构建上下文。
+数据库 SHALL 支持构建运行保存 compile database 输出制品引用，并 SHALL 支持按项目、源码及实际环境上下文固定可选增强输入；不得按较早成功状态回退选择构建。
 
 #### Scenario: 构建运行保存 compile database 摘要
 - **WHEN** 构建验证成功并发现可用 `compile_commands.json`
@@ -1090,10 +1090,10 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 - **AND** `owner_id` SHALL 能引用对应业务 owner 的 ID
 - **AND** 构建上下文 artifact SHALL 使用 `build_runs.id` 作为 owner ID
 
-#### Scenario: 查询最新可用构建上下文
-- **WHEN** KB 扫描需要按项目和源码版本查询最新成功构建上下文
-- **THEN** 数据库 SHALL 支持按 `project_id`、`source_revision_id`、`build_scope`、`status` 和完成时间查询 `build_runs`
-- **AND** 查询 SHALL 能过滤或识别 `build_facts.compileDatabase.available=true` 的记录
+#### Scenario: 查询当前可选构建上下文
+- **WHEN** KB 扫描创建时按项目、源码版本和实际环境选择可选构建上下文
+- **THEN** 数据库 SHALL 支持按 `project_id`、`source_revision_id`、环境版本和 `build_scope=SOURCE_ONLY` 查询，活动优先、否则按创建时间和 ID 稳定选择；只在选中构建成功时消费其可信制品
+- **AND** 查询 SHALL 识别所选记录的 `build_facts.compileDatabase.available`；该制品不可用时采用源码模式，不再查找更早成功构建
 - **AND** 查询 MUST NOT 依赖跨源码版本的最近构建记录
 
 #### Scenario: 对象存储元数据安全
@@ -1219,7 +1219,7 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 - **AND** `build_runs.status` MUST 保持由真实构建结果决定
 
 ### Requirement: 数据库必须持久化专项分析运行
-数据库 SHALL 保存 analyzer type、项目、任务、源码版本、构建、artifact set、可选环境配置版本、协议版本、状态、verdict、退出码、计数、摘要、制品引用和时间字段。
+数据库 SHALL 保存 analyzer type、项目、任务、源码版本、输入计划、可空构建、可空 artifact set、实际消费的可选环境配置版本、协议版本、状态、verdict、退出码、计数、摘要、制品引用和时间字段。
 
 #### Scenario: 保存成功运行
 - **WHEN** 工具结果通过协议校验
@@ -1229,6 +1229,10 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 - **WHEN** 输入、工具或结果导入失败
 - **THEN** 运行记录 SHALL 保存失败阶段和安全错误摘要
 - **AND** MUST NOT 保存成功态 Finding 计数
+
+#### Scenario: 保存源码独立分析
+- **WHEN** 无构建引用但 source plan 合法
+- **THEN** SHALL 可持久化完整或部分分析、覆盖和缺失证据，不创建占位 build_runs 或伪造 artifact-set；实际存在的关联仍校验项目、源码和外键。
 
 ### Requirement: 数据库必须逐条持久化专项分析 Finding
 数据库 SHALL 为每条 Finding 保存外部稳定 ID、领域类型、风险、置信度、状态、规则/类别、双语摘要、主位置、人工确认要求、semantic digest 和单条详情 JSON。
@@ -1268,3 +1272,25 @@ SBOM 相关表中的摘要、元数据和 artifact 内容 SHALL 避免保存明�
 #### Scenario: 执行和源码存储
 - **WHEN** 任务跨 worker 恢复
 - **THEN** SHALL 持久安全主体/profile/runtime/尝试版本及不可变源码制品引用，禁止消息/审计保存明文凭据，jOOQ 在 Docker 从迁移后 schema 生成。
+
+### Requirement: 分析输入计划必须允许无构建引用并保持关系约束
+数据库 SHALL 为 KB 和专项持久化版本化输入计划、requested/effective digest、模式、覆盖与证据缺口；无构建模式允许 buildRunId 为空，禁止以假运行满足外键。
+
+#### Scenario: 源码模式落库
+- **WHEN** SOURCE_DISCOVERY 运行没有环境或构建
+- **THEN** SHALL 合法保存固定源码与解析计划，读取可区分新合法空关联与历史未知上下文，保持同项目同源码约束和安全摘要。
+
+#### Scenario: 增强模式落库
+- **WHEN** BUILD_ARTIFACTS 引用构建和制品
+- **THEN** SHALL 约束有效所属项目、源码、版本及 FK；不允许跨项目或错版本关联，不回填猜测历史上下文。
+
+### Requirement: AI 分批复核必须持久化唯一计划与已验证结果
+数据库 SHALL 保存报告/attempt/input digest/批次和逐项结果的幂等关系，租约与完整发布原子校验；不保存明文凭据。
+
+#### Scenario: 重复或迟到批次
+- **WHEN** 同一计划批次重复写入或旧 attempt 迟到
+- **THEN** SHALL 保持已校验结果唯一且拒绝不一致覆盖，只有全部应复核 ID 合法齐备才允许增强报告发布。
+
+#### Scenario: 迁移与并发
+- **WHEN** 空库或已有报告历史数据库升级并竞争发布
+- **THEN** SHALL 保留历史事实及约束，验证空构建关联、事务回滚与唯一键，Docker 生成 jOOQ 并以并发数据库测试验收。

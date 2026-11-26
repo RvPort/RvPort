@@ -46,6 +46,10 @@ public class OptimizationValidationService {
         if (!"SUCCEEDED".equals(build.latestStatus())) {
             return result(build, empty, null, source, target, null, null, null, "BUILD", "构建验证", "Build validation", "build");
         }
+        if (!cn.rvport.backend.buildvalidation.BuildValidationPair.succeeded(source, target)) {
+            return OptimizationValidation.unavailable("BUILD_VALIDATION_PAIR_INCOMPLETE",
+                    "双端构建不属于同一有效验证批次", "Builds do not belong to the same valid validation batch");
+        }
         var candidate = evidence.candidate(project, context.sourceRevisionId(), context.runtimeEnvironmentVersion(),
                 runtime.sourceEnvironment().id(), runtime.targetEnvironment().id()).orElse(null);
         if (candidate == null) {

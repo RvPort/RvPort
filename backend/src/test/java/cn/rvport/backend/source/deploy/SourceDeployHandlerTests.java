@@ -151,7 +151,7 @@ class SourceDeployHandlerTests {
     }
 
     private SourceDeployRunView run(UUID id, UUID projectId, UUID taskId, UUID revisionId, UUID environmentId, String remotePath) {
-        return new SourceDeployRunView(id, projectId, taskId, revisionId, environmentId, remotePath,
+        return new SourceDeployRunView(id, projectId, taskId, revisionId, environmentId, 0L, remotePath,
                 SourceDeployStrategy.TAR_OVER_SSH, false, TaskStatus.RUNNING, null, null, null,
                 JSONB.valueOf("{}"), null, null, OffsetDateTime.now());
     }

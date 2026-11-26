@@ -24,16 +24,23 @@ class KbCompileDatabaseTests {
     final StoredArtifactService artifacts = mock(StoredArtifactService.class);
     final TaskExecutionContext task = mock(TaskExecutionContext.class);
     String remoteRoot;
+    long maxBytes=10_485_760L;
     final KbScanView run = KbContextFixtures.scan(project, source, TaskStatus.RUNNING, KbContextFixtures.CONTEXT);
 
     KbScanRuntimeService service() {
-        return new KbScanRuntimeService(null, null, null, null, new ObjectMapper(), artifacts, null, null, null);
+        return new KbScanRuntimeService(null, null, null,
+                new cn.rvport.backend.config.RvPortProperties(null,new cn.rvport.backend.config.RvPortProperties.KbScan(
+                        null,null,null,null,null,maxBytes,null,null,null,null,null),new cn.rvport.backend.config.RvPortProperties.Worker(false)),
+                new ObjectMapper(), artifacts, null, null, null);
     }
     Map<?, ?> resolve(Map<String, Object> facts) {
+        return resolve(facts,run);
+    }
+    Map<?, ?> resolve(Map<String, Object> facts,KbScanView selected) {
         var build = new BuildValidationRunView(buildId, project, UUID.randomUUID(), source, KbContextFixtures.ENV,
                 BuildValidationScope.SOURCE_ONLY, null, 7L, null, "hash", "make", remoteRoot, 60, 0,
                 TaskStatus.SUCCEEDED, null, null, null, null, null, null, null, Map.of(), facts);
-        Object result = ReflectionTestUtils.invokeMethod(service(), "resolveCompileCommands", build, run, root, root, task);
+        Object result = ReflectionTestUtils.invokeMethod(service(), "resolveCompileCommands", build, selected, root, root, task);
         return ReflectionTestUtils.invokeMethod(result, "summary");
     }
     Map<String, Object> available(Object id) { return Map.of("compileDatabase", Map.of("available", true, "storedArtifactId", id)); }
@@ -45,6 +52,29 @@ class KbCompileDatabaseTests {
         when(artifacts.download(artifactId)).thenReturn(new StoredArtifactResource(
                 artifact(buildId, project, StoredArtifactOwnerType.BUILD_VALIDATION, BuildValidationArtifacts.COMPILE_COMMANDS_JSON),
                 new ByteArrayResource(json.getBytes(StandardCharsets.UTF_8))));
+    }
+
+    @Test void pinnedArtifactCannotBeReplacedAndItsBytesAreBoundedAndVerified() throws Exception {
+        String hash=java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest("[]".getBytes(StandardCharsets.UTF_8)));
+        var plan=new cn.rvport.backend.analysis.AnalysisInputPlan(1,project,source,"a".repeat(64),"KB","1","p1",
+                cn.rvport.backend.analysis.AnalysisInputPlan.Identity.of("c","x86","riscv64",Map.of(),List.of(),"r1"),
+                cn.rvport.backend.analysis.AnalysisInputPlan.InputOrigin.BUILD_ARTIFACTS,
+                new cn.rvport.backend.analysis.AnalysisInputPlan.BuildBinding(buildId,project,source,KbContextFixtures.ENV,7,"x86","producer","x86","unknown"),
+                List.of(new cn.rvport.backend.analysis.AnalysisInputPlan.Artifact(artifactId,buildId,BuildValidationArtifacts.COMPILE_COMMANDS_JSON,hash)),
+                List.of(),List.of(),null);
+        var selected=new KbScanView(run.id(),project,run.taskId(),source,"r1",Map.of(),TaskStatus.RUNNING,Map.of(),null,null,
+                new KbExecutionContext(KbContextFixtures.ENV,7L,buildId,plan));
+        for(int variant=0;variant<4;variant++) {
+            maxBytes=variant==3?1:1024;
+            var artifact=new StoredArtifactView(artifactId,project,null,StoredArtifactOwnerType.BUILD_VALIDATION,buildId,
+                    BuildValidationArtifacts.COMPILE_COMMANDS_JSON,"bucket","key","application/json",2,variant==1?"b".repeat(64):hash,Map.of(),null);
+            when(artifacts.download(artifactId)).thenReturn(new StoredArtifactResource(artifact,
+                    new ByteArrayResource((variant==2?"{}":"[]").getBytes(StandardCharsets.UTF_8))));
+            var summary=resolve(available(UUID.randomUUID()),selected);
+            if(variant==0) assertThat(summary.get("mode")).isEqualTo("USED");
+            else assertThat(summary.get("reason")).isEqualTo(variant==3?"ARTIFACT_SIZE_LIMIT_EXCEEDED":"ARTIFACT_HASH_MISMATCH");
+        }
+        verify(artifacts,times(4)).download(artifactId);
     }
 
     @Test void absentDatabaseAndMissingArtifactStayDistinctAndRetainBinding() {

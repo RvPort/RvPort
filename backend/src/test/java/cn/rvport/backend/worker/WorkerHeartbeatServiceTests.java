@@ -30,7 +30,14 @@ class WorkerHeartbeatServiceTests {
 
         service.heartbeat();
 
-        verify(repository).upsertHeartbeat(
+        var order = org.mockito.Mockito.inOrder(repository, concurrencyController);
+        order.verify(repository).upsertHeartbeat(org.mockito.Mockito.eq(idProvider.workerInstanceId()),
+                org.mockito.Mockito.anyString(),org.mockito.Mockito.anyLong(),org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.eq(2),org.mockito.Mockito.eq(0),org.mockito.Mockito.eq(1));
+        order.verify(concurrencyController).apply(2);
+        service.heartbeat();
+
+        verify(repository, org.mockito.Mockito.times(2)).upsertHeartbeat(
                 org.mockito.Mockito.eq(idProvider.workerInstanceId()),
                 org.mockito.Mockito.anyString(),
                 org.mockito.Mockito.anyLong(),
@@ -61,7 +68,7 @@ class WorkerHeartbeatServiceTests {
         service.heartbeat();
 
         verify(concurrencyController).apply(0);
-        verify(repository).upsertHeartbeat(
+        verify(repository, org.mockito.Mockito.times(2)).upsertHeartbeat(
                 org.mockito.Mockito.eq(idProvider.workerInstanceId()),
                 org.mockito.Mockito.anyString(),
                 org.mockito.Mockito.anyLong(),
