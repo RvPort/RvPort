@@ -7,12 +7,14 @@ import type {
   createProjectEvaluationReport,
   getProjectEvaluationReport,
   getProjectEvaluationReportDownloadUrl,
+  getProjectEvaluationReportGenerationReadiness,
   getProjectEvaluationReportLatest
 } from '@/api/project/assessment-report'
 import type { getProjectStageReadiness } from '@/api/project/workflow'
 import { advanceAuthSession } from '@/store/authSession'
 import {
   createEvaluationReport,
+  createGenerationReadiness,
   createLatestReport,
   createReportReadiness,
   createReportTask
@@ -27,6 +29,8 @@ const api = vi.hoisted(() => ({
   createProjectEvaluationReport: vi.fn<typeof createProjectEvaluationReport>(),
   getProjectEvaluationReport: vi.fn<typeof getProjectEvaluationReport>(),
   getProjectEvaluationReportDownloadUrl: vi.fn<typeof getProjectEvaluationReportDownloadUrl>(),
+  getProjectEvaluationReportGenerationReadiness:
+    vi.fn<typeof getProjectEvaluationReportGenerationReadiness>(),
   getProjectEvaluationReportLatest: vi.fn<typeof getProjectEvaluationReportLatest>(),
   getProjectStageReadiness: vi.fn<typeof getProjectStageReadiness>()
 }))
@@ -69,6 +73,8 @@ const task = createReportTask()
 describe('evaluation report source binding and record isolation', () => {
   beforeEach(() => {
     api.getProjectStageReadiness.mockResolvedValue(createReportReadiness())
+    api.getProjectEvaluationReportGenerationReadiness.mockResolvedValue(createGenerationReadiness())
+    api.getProjectEvaluationReport.mockResolvedValue(createEvaluationReport())
     api.getProjectEvaluationReportLatest.mockImplementation(async (projectId) =>
       createLatestReport(createEvaluationReport({ projectId }))
     )
@@ -95,7 +101,11 @@ describe('evaluation report source binding and record isolation', () => {
     })
     expect(api.createProjectEvaluationReport).toHaveBeenCalledExactlyOnceWith(
       'project-1',
-      'source-current'
+      expect.objectContaining({
+        sourceRevisionId: 'source-current',
+        mode: 'STANDARD',
+        selectionToken: 'selection-token-1'
+      })
     )
     expect(result.current.submitted).toBe(true)
   })
@@ -128,8 +138,20 @@ describe('evaluation report source binding and record isolation', () => {
     })
     await waitFor(() => expect(api.createProjectEvaluationReport).toHaveBeenCalledTimes(2))
     expect(api.createProjectEvaluationReport.mock.calls).toEqual([
-      ['project-1', 'source-current'],
-      ['project-1', 'source-new']
+      [
+        'project-1',
+        expect.objectContaining({
+          sourceRevisionId: 'source-current',
+          selectionToken: 'selection-token-1'
+        })
+      ],
+      [
+        'project-1',
+        expect.objectContaining({
+          sourceRevisionId: 'source-current',
+          selectionToken: 'selection-token-1'
+        })
+      ]
     ])
     await act(async () => {
       old.resolve(task)
@@ -192,8 +214,8 @@ describe('evaluation report source binding and record isolation', () => {
       await result.current.handleCreate()
     })
     expect(api.createProjectEvaluationReport.mock.calls).toEqual([
-      ['project-1', 'source-current'],
-      ['project-1', 'source-current']
+      ['project-1', expect.objectContaining({ selectionToken: 'selection-token-1' })],
+      ['project-1', expect.objectContaining({ selectionToken: 'selection-token-1' })]
     ])
     expect(result.current.report?.status).toBe('SUCCEEDED')
     expect(result.current.submitted).toBe(true)

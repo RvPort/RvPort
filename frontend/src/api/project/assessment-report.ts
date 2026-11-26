@@ -17,10 +17,47 @@ import type {
 import request from '../request'
 import type { BackendTask } from './shared'
 
-export function createProjectEvaluationReport(projectId: string, sourceRevisionId?: string) {
-  return request.post<BackendTask>(
+export type ProjectEvaluationReportMode = 'STANDARD' | 'AI_ENHANCED'
+
+export interface ProjectEvaluationReportGenerationReadiness {
+  sourceRevisionId: string | null
+  selectionToken: string
+  canGenerate: boolean
+  canGenerateStandard: boolean
+  canGenerateAi: boolean
+  recommendedMode: ProjectEvaluationReportMode
+  aiBlockers: Array<{ code: string; message: string; messageEn?: string; recoveryAction?: string }>
+  generationInProgress: boolean
+  sources: Array<{
+    type: string
+    available: boolean
+    rawFindingCount: number
+    candidateCount: number
+  }>
+}
+
+export interface ProjectEvaluationReportGeneratePayload {
+  sourceRevisionId?: string
+  mode: ProjectEvaluationReportMode
+  selectionToken: string
+  baseReportId?: string
+  expectedDraftVersion?: number
+}
+
+export function getProjectEvaluationReportGenerationReadiness(projectId: string) {
+  return request.get<ProjectEvaluationReportGenerationReadiness>(
+    `/projects/${projectId}/reports/evaluation/readiness`
+  )
+}
+
+export function createProjectEvaluationReport(
+  projectId: string,
+  payload: ProjectEvaluationReportGeneratePayload
+) {
+  return request.post<BackendTask & { reportId?: string }>(
     `/projects/${projectId}/reports/evaluation`,
-    sourceRevisionId ? { sourceRevisionId } : undefined
+    payload,
+    { headers: { 'Idempotency-Key': crypto.randomUUID() } }
   )
 }
 

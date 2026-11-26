@@ -8,6 +8,8 @@ import AssessmentReport from '.'
 
 const {
   createProjectEvaluationReport,
+  getProjectEvaluationReport,
+  getProjectEvaluationReportGenerationReadiness,
   getProjectEvaluationReportCodeFiles,
   getProjectEvaluationReportCodeFindings,
   getProjectEvaluationReportCodeModules,
@@ -19,6 +21,8 @@ const {
   monacoEditor
 } = vi.hoisted(() => ({
   createProjectEvaluationReport: vi.fn(),
+  getProjectEvaluationReport: vi.fn(),
+  getProjectEvaluationReportGenerationReadiness: vi.fn(),
   getProjectEvaluationReportCodeFiles: vi.fn(),
   getProjectEvaluationReportCodeFindings: vi.fn(),
   getProjectEvaluationReportCodeModules: vi.fn(),
@@ -32,6 +36,8 @@ const {
 
 vi.mock('@/api/project/assessment-report', () => ({
   createProjectEvaluationReport,
+  getProjectEvaluationReport,
+  getProjectEvaluationReportGenerationReadiness,
   getProjectEvaluationReportDownloadUrl: (reportId: string, format: string) =>
     `/api/reports/${reportId}/download?format=${format}`,
   getProjectEvaluationReportCodeFiles,
@@ -398,6 +404,17 @@ describe('Assessment report stage drawer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('open', vi.fn())
+    getProjectEvaluationReportGenerationReadiness.mockResolvedValue({
+      sourceRevisionId: 'source-1',
+      selectionToken: 'selection-token-1',
+      canGenerate: true,
+      canGenerateStandard: true,
+      canGenerateAi: false,
+      recommendedMode: 'STANDARD',
+      aiBlockers: [],
+      generationInProgress: false,
+      sources: []
+    })
   })
 
   it('navigates from an organized report module to its file context', async () => {
@@ -826,7 +843,10 @@ describe('Assessment report stage drawer', () => {
     await user.click(screen.getByRole('button', { name: '确认重新生成' }))
 
     await waitFor(() => {
-      expect(createProjectEvaluationReport).toHaveBeenCalledWith('project-1', 'source-1')
+      expect(createProjectEvaluationReport).toHaveBeenCalledWith(
+        'project-1',
+        expect.objectContaining({ sourceRevisionId: 'source-1', selectionToken: 'selection-token-1' })
+      )
     })
     expect(invalidateQueries).not.toHaveBeenCalled()
   })

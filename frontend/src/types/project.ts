@@ -57,7 +57,8 @@ export interface ProjectStageReadiness {
 }
 
 export interface ProjectDomainLatestExecution {
-  id: string
+  id?: string
+  reportId?: string
   taskId: string
   status: ProjectTaskStatus
   progress: number | null
@@ -74,6 +75,8 @@ export interface ProjectDomainLatest<T> {
   freshness: 'CURRENT' | 'STALE' | 'EMPTY'
   execution: ProjectDomainLatestExecution | null
   result: T | null
+  regenerationBaseReportId?: string | null
+  regenerationBaseDraftVersion?: number | null
 }
 
 export type ProjectResultFreshness = 'CURRENT' | 'STALE' | 'HISTORICAL'
@@ -290,6 +293,8 @@ export interface ProjectEvaluationReport {
   createdAt: string
   generatedAt: string | null
   id: string
+  /** latest 端点的指针形态携带 reportId（新后端 result 无 id/summary）。 */
+  reportId?: string
   organizationAvailable?: boolean
   organizationSchemaVersion?: string | null
   projectId: string

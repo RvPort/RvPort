@@ -8,12 +8,14 @@ import type {
   createProjectEvaluationReport,
   getProjectEvaluationReport,
   getProjectEvaluationReportDownloadUrl,
+  getProjectEvaluationReportGenerationReadiness,
   getProjectEvaluationReportLatest,
   getProjectEvaluationReports
 } from '@/api/project/assessment-report'
 import type { getProjectStageReadiness } from '@/api/project/workflow'
 import {
   createEvaluationReport,
+  createGenerationReadiness,
   createLatestReport,
   createReportReadiness,
   createReportTask
@@ -26,6 +28,8 @@ import AssessmentReport from '.'
 
 const api = vi.hoisted(() => ({
   createProjectEvaluationReport: vi.fn<typeof createProjectEvaluationReport>(),
+  getProjectEvaluationReportGenerationReadiness:
+    vi.fn<typeof getProjectEvaluationReportGenerationReadiness>(),
   getProjectEvaluationReport: vi.fn<typeof getProjectEvaluationReport>(),
   getProjectEvaluationReportDownloadUrl: vi.fn<typeof getProjectEvaluationReportDownloadUrl>(),
   getProjectEvaluationReportLatest: vi.fn<typeof getProjectEvaluationReportLatest>(),
@@ -91,6 +95,7 @@ function setup() {
 describe('evaluation report history navigation', () => {
   beforeEach(() => {
     api.getProjectStageReadiness.mockResolvedValue(createReportReadiness())
+    api.getProjectEvaluationReportGenerationReadiness.mockResolvedValue(createGenerationReadiness())
     api.getProjectEvaluationReportLatest.mockResolvedValue(createLatestReport())
     api.getProjectEvaluationReport.mockResolvedValue(historical)
     api.createProjectEvaluationReport.mockResolvedValue(createReportTask())
@@ -138,6 +143,9 @@ describe('evaluation report history navigation', () => {
     expect(api.getProjectEvaluationReportLatest).toHaveBeenCalledTimes(latestCalls)
     expect(api.getProjectStageReadiness).toHaveBeenCalledTimes(readinessCalls)
     api.getProjectStageReadiness.mockResolvedValue(createReportReadiness('source-new'))
+    api.getProjectEvaluationReportGenerationReadiness.mockResolvedValue(
+      createGenerationReadiness({ sourceRevisionId: 'source-new', selectionToken: 'selection-token-2' })
+    )
     api.getProjectEvaluationReportLatest.mockResolvedValue(
       createLatestReport(
         createEvaluationReport({
@@ -160,7 +168,7 @@ describe('evaluation report history navigation', () => {
     await waitFor(() =>
       expect(api.createProjectEvaluationReport).toHaveBeenCalledExactlyOnceWith(
         'project-1',
-        'source-new'
+        expect.objectContaining({ sourceRevisionId: 'source-new' })
       )
     )
   })

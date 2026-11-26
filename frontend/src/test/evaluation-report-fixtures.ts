@@ -1,3 +1,4 @@
+import type { ProjectEvaluationReportGenerationReadiness } from '@/api/project/assessment-report'
 import type { BackendTask } from '@/api/project/shared'
 import type {
   ProjectDomainLatest,
@@ -77,6 +78,23 @@ export function createLatestReport(
       startedAt: report.createdAt,
       finishedAt: report.generatedAt
     },
+    ...overrides
+  }
+}
+
+export function createGenerationReadiness(
+  overrides: Partial<ProjectEvaluationReportGenerationReadiness> = {}
+): ProjectEvaluationReportGenerationReadiness {
+  return {
+    sourceRevisionId: 'source-current',
+    selectionToken: 'selection-token-1',
+    canGenerate: true,
+    canGenerateStandard: true,
+    canGenerateAi: false,
+    recommendedMode: 'STANDARD',
+    aiBlockers: [],
+    generationInProgress: false,
+    sources: [],
     ...overrides
   }
 }

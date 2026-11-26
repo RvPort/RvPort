@@ -832,7 +832,11 @@ describe('project API contract', () => {
   })
 
   it('uses evaluation report endpoints', () => {
-    createProjectEvaluationReport('project-1', 'source-1')
+    createProjectEvaluationReport('project-1', {
+      sourceRevisionId: 'source-1',
+      mode: 'STANDARD',
+      selectionToken: 'selection-token-1'
+    })
     getProjectEvaluationReports('project-1', {
       page: 1,
       pageSize: 20,
@@ -866,9 +870,15 @@ describe('project API contract', () => {
     })
     getProjectEvaluationReportFileContext('report-1', 'file/1', { fromLine: 20, lines: 80 })
 
-    expect(request.post).toHaveBeenCalledWith('/projects/project-1/reports/evaluation', {
-      sourceRevisionId: 'source-1'
-    })
+    expect(request.post).toHaveBeenCalledWith(
+      '/projects/project-1/reports/evaluation',
+      {
+        sourceRevisionId: 'source-1',
+        mode: 'STANDARD',
+        selectionToken: 'selection-token-1'
+      },
+      { headers: { 'Idempotency-Key': expect.any(String) } }
+    )
     expect(request.get).toHaveBeenCalledWith('/projects/project-1/reports/evaluation', {
       params: {
         page: 1,
