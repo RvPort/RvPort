@@ -74,8 +74,8 @@ export default function AiMigration({ projectId, visible, stage, onClose }: Stag
                 <Alert
                   showIcon
                   type="info"
-                  message="需要一次有效的知识库扫描"
-                  description="AI 迁移以当前源码的扫描结果为输入，请先完成知识库扫描。"
+                  message="请先生成评估报告"
+                  description="AI 迁移以当前评估报告的全部条目为输入。请先完成知识库扫描并生成评估报告，再发起迁移。"
                 />
               ) : null}
             </div>

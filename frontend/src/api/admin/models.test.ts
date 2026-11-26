@@ -31,25 +31,25 @@ describe('model profile API contract', () => {
     testModelProfileAgents('profile-1', ['runtime-1', 'runtime-2'])
     getModelProfileAgentTestRun('run-1')
 
-    expect(request.get).toHaveBeenCalledWith('/admin/agent-runtimes')
-    expect(request.patch).toHaveBeenNthCalledWith(1, '/admin/model-stage-assignments', {
+    expect(request.get).toHaveBeenCalledWith('/me/agent-runtimes')
+    expect(request.patch).toHaveBeenNthCalledWith(1, '/me/model-stage-assignments', {
       assignments: [
         { agentRuntimeId: 'runtime-1', modelProfileId: 'profile-1', stage: 'TEST_LOG_COMPARE' }
       ]
     })
-    expect(request.patch).toHaveBeenNthCalledWith(2, '/admin/model-stage-assignments', {
+    expect(request.patch).toHaveBeenNthCalledWith(2, '/me/model-stage-assignments', {
       assignments: [
         { agentRuntimeId: 'runtime-1', modelProfileId: 'profile-1', stage: 'KB_AI_EXTENSION' }
       ]
     })
     expect(request.post).toHaveBeenCalledWith(
-      '/admin/model-profiles/profile-1:test-connectivity',
+      '/me/model-profiles/profile-1:test-connectivity',
       undefined,
       { timeout: 3_600_000 }
     )
-    expect(request.post).toHaveBeenCalledWith('/admin/model-profiles/profile-1:test-agents', {
+    expect(request.post).toHaveBeenCalledWith('/me/model-profiles/profile-1:test-agents', {
       agentRuntimeIds: ['runtime-1', 'runtime-2']
     })
-    expect(request.get).toHaveBeenCalledWith('/admin/model-profile-agent-test-runs/run-1')
+    expect(request.get).toHaveBeenCalledWith('/me/model-profile-agent-test-runs/run-1')
   })
 })

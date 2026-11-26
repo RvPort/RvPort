@@ -13,45 +13,45 @@ import type {
 import request, { LONG_RUNNING_REQUEST_TIMEOUT_MS } from '../request'
 
 export function getModelProfiles(params: ModelProfileListParams) {
-  return request.get<PageResponse<ModelProfile>>('/admin/model-profiles', { params })
+  return request.get<PageResponse<ModelProfile>>('/me/model-profiles', { params })
 }
 
 export function createModelProfile(data: ModelProfilePayload) {
-  return request.post<ModelProfile>('/admin/model-profiles', data)
+  return request.post<ModelProfile>('/me/model-profiles', data)
 }
 
 export function updateModelProfile(profileId: string, data: ModelProfilePayload) {
-  return request.patch<ModelProfile>(`/admin/model-profiles/${profileId}`, data)
+  return request.patch<ModelProfile>(`/me/model-profiles/${profileId}`, data)
 }
 
 export function deleteModelProfile(profileId: string) {
-  return request.delete<{ deleted: boolean }>(`/admin/model-profiles/${profileId}`)
+  return request.delete<{ deleted: boolean }>(`/me/model-profiles/${profileId}`)
 }
 
 export function testModelProfileConnectivity(profileId: string) {
   return request.post<ModelProfileConnectivityTestResult>(
-    `/admin/model-profiles/${profileId}:test-connectivity`,
+    `/me/model-profiles/${profileId}:test-connectivity`,
     undefined,
     { timeout: LONG_RUNNING_REQUEST_TIMEOUT_MS }
   )
 }
 
 export function testModelProfileAgents(profileId: string, agentRuntimeIds: string[]) {
-  return request.post<ModelProfileAgentProbeRun>(`/admin/model-profiles/${profileId}:test-agents`, {
+  return request.post<ModelProfileAgentProbeRun>(`/me/model-profiles/${profileId}:test-agents`, {
     agentRuntimeIds
   })
 }
 
 export function getModelProfileAgentTestRun(runId: string) {
-  return request.get<ModelProfileAgentProbeRun>(`/admin/model-profile-agent-test-runs/${runId}`)
+  return request.get<ModelProfileAgentProbeRun>(`/me/model-profile-agent-test-runs/${runId}`)
 }
 
 export function getAgentRuntimes() {
-  return request.get<AgentRuntime[]>('/admin/agent-runtimes')
+  return request.get<AgentRuntime[]>('/me/agent-runtimes')
 }
 
 export function getModelStageAssignments() {
-  return request.get<ModelStageAssignment[]>('/admin/model-stage-assignments')
+  return request.get<ModelStageAssignment[]>('/me/model-stage-assignments')
 }
 
 export function updateModelStageAssignments(
@@ -59,7 +59,7 @@ export function updateModelStageAssignments(
   modelProfileId: string,
   agentRuntimeId: string
 ) {
-  return request.patch<ModelStageAssignment[]>('/admin/model-stage-assignments', {
+  return request.patch<ModelStageAssignment[]>('/me/model-stage-assignments', {
     assignments: [{ stage, modelProfileId, agentRuntimeId }]
   })
 }

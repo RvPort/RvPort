@@ -49,8 +49,13 @@ vi.mock('@/components/BaseDrawer', () => ({
   )
 }))
 
+// 保留传入的属性：高度由 height 属性交给编辑器，桩若丢弃属性就测不到它的缺失。
 vi.mock('@/components/MonacoEditor', () => ({
-  default: ({ value }: { value?: string }) => <pre aria-label="迁移补丁内容">{value}</pre>
+  default: ({ height, value }: { height?: string | number; value?: string }) => (
+    <pre aria-label="迁移补丁内容" data-editor-height={height}>
+      {value}
+    </pre>
+  )
 }))
 
 const stage = {
@@ -181,6 +186,34 @@ describe('AI migration drawer', () => {
     expect(screen.queryByLabelText('迁移补丁内容')).not.toBeInTheDocument()
   })
 
+  it('gives the patch editor an explicit height so the whole diff is visible', async () => {
+    const user = userEvent.setup()
+    getProjectAiMigrations.mockResolvedValue({
+      hasMore: false,
+      items: [migrationRun()],
+      page: 0,
+      pageSize: 50,
+      total: 1
+    })
+    getAiMigrationArtifactContent.mockResolvedValue({
+      content: Array.from({ length: 40 }, (_, index) => `+line ${index + 1}`).join('\n'),
+      filename: 'migration-diff.patch',
+      kind: 'diff',
+      truncated: false
+    })
+
+    renderDrawer()
+    await user.click(await screen.findByRole('button', { name: /查看补丁/ }))
+
+    // 编辑器组件把 className 与内联 height 放在同一元素上，样式表里的高度会被默认的 100%
+    // 覆盖并塌缩成一条缝；高度必须经 height 属性显式传入。
+    expect(await screen.findByLabelText('迁移补丁内容')).toHaveAttribute(
+      'data-editor-height',
+      'clamp(320px, 55vh, 720px)'
+    )
+    expect(screen.getByLabelText('迁移补丁内容')).toHaveTextContent('+line 40')
+  })
+
   it('explains a run that produced no code changes instead of showing an empty editor', async () => {
     const user = userEvent.setup()
     getProjectAiMigrations.mockResolvedValue({
@@ -204,13 +237,41 @@ describe('AI migration drawer', () => {
     expect(screen.queryByLabelText('迁移补丁内容')).not.toBeInTheDocument()
   })
 
+  it('gives the patch editor an explicit height so the whole diff is visible', async () => {
+    const user = userEvent.setup()
+    getProjectAiMigrations.mockResolvedValue({
+      hasMore: false,
+      items: [migrationRun()],
+      page: 0,
+      pageSize: 50,
+      total: 1
+    })
+    getAiMigrationArtifactContent.mockResolvedValue({
+      content: Array.from({ length: 40 }, (_, index) => `+line ${index + 1}`).join('\n'),
+      filename: 'migration-diff.patch',
+      kind: 'diff',
+      truncated: false
+    })
+
+    renderDrawer()
+    await user.click(await screen.findByRole('button', { name: /查看补丁/ }))
+
+    // 编辑器组件把 className 与内联 height 放在同一元素上，样式表里的高度会被默认的 100%
+    // 覆盖并塌缩成一条缝；高度必须经 height 属性显式传入。
+    expect(await screen.findByLabelText('迁移补丁内容')).toHaveAttribute(
+      'data-editor-height',
+      'clamp(320px, 55vh, 720px)'
+    )
+    expect(screen.getByLabelText('迁移补丁内容')).toHaveTextContent('+line 40')
+  })
+
   it('requires a succeeded scan before a migration can be started', async () => {
     getProjectKnowledgeBaseScanLatest.mockResolvedValue(latestScan('RUNNING'))
 
     renderDrawer()
 
     // 最新扫描查询返回前不显示提示，等待扫描态落定后再断言。
-    expect(await screen.findByText('需要一次有效的知识库扫描')).toBeInTheDocument()
+    expect(await screen.findByText('请先生成评估报告')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /发起迁移/ })).toBeDisabled()
     expect(await screen.findByText('还没有发起过 AI 迁移')).toBeInTheDocument()
     expect(createProjectAiMigration).not.toHaveBeenCalled()

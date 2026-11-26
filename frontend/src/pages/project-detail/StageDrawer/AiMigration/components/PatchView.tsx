@@ -69,6 +69,9 @@ export default function PatchView({
       <MonacoEditor
         ariaLabel="迁移补丁内容"
         className={styles.patch}
+        // 高度必须经 height 属性交给编辑器：组件把 className 与内联 height 放在同一元素上，
+        // 仅写在样式表里的高度会被默认的 100% 覆盖，容器塌缩后只露出首行。
+        height="clamp(320px, 55vh, 720px)"
         language="diff"
         readOnly
         value={value}
