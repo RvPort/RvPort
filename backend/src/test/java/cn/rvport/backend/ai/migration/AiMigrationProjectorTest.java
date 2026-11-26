@@ -332,4 +332,47 @@ class AiMigrationProjectorTest {
                 "DETECTED",
                 null);
     }
+
+    @Test
+    void 源根与文件路径归一的静态边界() {
+        assertThat(AiMigrationProjector.normalizeRoot((java.nio.file.Path) null))
+                .isEqualTo(AiMigrationProjector.normalizeRoot("  "));
+        assertThat(AiMigrationProjector.normalizeRoot("/ws/root/")).isEqualTo("/ws/root");
+        assertThat(AiMigrationProjector.filePath("/ws/root", "src/a.c")).isEqualTo("/ws/root/src/a.c");
+        assertThat(AiMigrationProjector.filePath("/ws/root", "/abs/a.c")).isEqualTo("/ws/root/abs/a.c");
+        assertThat(AiMigrationProjector.filePath("/ws/root", "/ws/root/a.c")).isEqualTo("/ws/root/a.c");
+        assertThat(AiMigrationProjector.filePath("/ws/root", "/ws/root")).isEqualTo("/ws/root");
+    }
+
+    @Test
+    void Item构造退化与静态文件名归一() {
+        var degenerate = new AiMigrationProjector.Item("intrinsic", "a.c", "src/a.c", "solver", 1, "desc",
+                3, null, "suggestion", "PENDING", "", "id", null, "sym", "mt", "high", true, false, "d",
+                java.util.List.of(), "src/a.c", "/app/source");
+        assertThat(degenerate.endLine()).isEqualTo(3);
+        assertThat(degenerate.sourceFindingIds()).isEmpty();
+        assertThat(degenerate.evidence()).isEmpty();
+        var inverted = new AiMigrationProjector.Item("intrinsic", "a.c", "src/a.c", "solver", 1, "desc",
+                3, 1, "suggestion", "PENDING", "", "id", java.util.List.of(), "sym", "mt", "high", true, false, "d",
+                java.util.List.of(), "src/a.c", "/app/source");
+        assertThat(inverted.endLine()).isEqualTo(3);
+        assertThat(AiMigrationProjector.fileNameOf(null)).isNull();
+        assertThat(AiMigrationProjector.fileNameOf("  ")).isNull();
+        assertThat(AiMigrationProjector.fileNameOf("a/b/")).isNull();
+        assertThat(AiMigrationProjector.fileNameOf("a\\b.c")).isEqualTo("b.c");
+    }
+
+    @Test
+    void 不确定类非法结论状态回退普通投影() {
+        FindingView invalid = finding("u3", evidence(Map.of(
+                "scannerFindingId", "finding:ub",
+                "factKind", "intrinsic_call",
+                "findingType", "x86_intrinsic_reference",
+                "actionable", true,
+                "archReachability", "unknown",
+                "conclusionStatus", "bogus")), "src/u.c", 3, "high");
+        var projection = AiMigrationProjector.project(SCAN_RUN, List.of(invalid));
+        assertThat(projection.suggestionClass()).hasSize(1);
+        assertThat(projection.suggestionClass().getFirst().uncertain()).isFalse();
+    }
 }

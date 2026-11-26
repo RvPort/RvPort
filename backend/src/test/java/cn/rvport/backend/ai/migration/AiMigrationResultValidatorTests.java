@@ -124,4 +124,21 @@ class AiMigrationResultValidatorTests {
                 mapper.readTree("{\"entries\":[{\"id\":\"\",\"status\":\"DONE\"}]}")))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void 重复条目两次计数与files字段形态容错() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var json = mapper.readTree(mapper.writeValueAsString(java.util.Map.of("entries", java.util.List.of(
+                java.util.Map.of("id", "a", "status", "DONE", "files", "not-array"),
+                java.util.Map.of("id", "b", "status", "DONE", "files", java.util.List.of("", "b.c")),
+                java.util.Map.of("id", "c", "status", "DONE", "files", java.util.List.of("a.c")),
+                java.util.Map.of("id", "c", "status", "DONE"),
+                java.util.Map.of("id", "c", "status", "NO_WORK_NEEDED")))));
+        var result = AiMigrationResultValidator.validate(List.of("a", "b", "c"), json);
+        assertThat(result.duplicateIds()).containsExactly("c");
+        assertThat(result.entries()).hasSize(3);
+        assertThat(result.entries().stream().filter(e -> e.id().equals("a")).findFirst().orElseThrow().files()).isEmpty();
+        assertThat(result.entries().stream().filter(e -> e.id().equals("b")).findFirst().orElseThrow().files()).containsExactly("b.c");
+        assertThat(result.entries().stream().filter(e -> e.id().equals("c")).findFirst().orElseThrow().files()).containsExactly("a.c");
+    }
 }

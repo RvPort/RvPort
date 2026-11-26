@@ -119,4 +119,64 @@ class ReviewSnapshotFactoryTests {
         manual.put("sourceContentHash","different");assertThat(items(List.of(),base(source),List.of(manual))).isEmpty();
         manual.put("relativePath","missing.c");assertThat(items(List.of(),base(source),List.of(manual))).isEmpty();
     }
+
+    Map<String,Object> previous(Map<String,Object> base, Map<String,Object> originalSnapshot) {
+        var prev=new LinkedHashMap<>(base);
+        prev.put("originalSnapshot",originalSnapshot);
+        return prev;
+    }
+    @Test void migrationStateInheritsWhenEvidenceUnchangedWhateverTheReviewDecision() {
+        var row=fact("KB_FINDING"); row.put("titleEn","Custom EN");
+        var first=items(List.of(row),null,List.of()).getFirst();
+        assertThat(first.titleEn()).isEqualTo("Custom EN");
+        var runId="11111111-2222-3333-4444-555555555555";
+        // 复核已决（EXCLUDED）：迁移状态仍继承，复核结论原样保留
+        var decided=previous(old(first),new LinkedHashMap<>(Map.of("migrationState","MIGRATED","migrationRunId",runId)));
+        var second=items(List.of(row),base(source),List.of(decided)).getFirst();
+        assertThat(second.originalSnapshot().get("migrationState")).isEqualTo("MIGRATED");
+        assertThat(second.originalSnapshot().get("migrationRunId")).isEqualTo(runId);
+        assertThat(second.decision().state()).isEqualTo(ReviewState.EXCLUDED);
+        assertThat(second.inheritance()).containsEntry("reasonCode","SAME_SOURCE_EVIDENCE");
+        // 自动继承（人工未决）：决策回到 PENDING_REVIEW，迁移状态仍带入
+        var pending=new LinkedHashMap<>(old(first));
+        pending.put("hasManualDecision",false); pending.put("reviewState","PENDING_REVIEW");
+        var third=items(List.of(row),base(source),List.of(previous(pending,Map.of("migrationState","MIGRATION_NO_WORK")))).getFirst();
+        assertThat(third.originalSnapshot().get("migrationState")).isEqualTo("MIGRATION_NO_WORK");
+        assertThat(third.decision().state()).isEqualTo(ReviewState.PENDING_REVIEW);
+        assertThat(third.inheritance()).containsEntry("reasonCode","NO_MANUAL_DECISION");
+        // 上一代无 migrationState：不添加键；有 state 无 runId：不添加 migrationRunId
+        var plain=items(List.of(row),base(source),List.of(previous(old(first),Map.of("reviewState","EXCLUDED")))).getFirst();
+        assertThat(plain.originalSnapshot().containsKey("migrationState")).isFalse();
+        var noRun=items(List.of(row),base(source),List.of(previous(old(first),Map.of("migrationState","MIGRATED")))).getFirst();
+        assertThat(noRun.originalSnapshot().get("migrationState")).isEqualTo("MIGRATED");
+        assertThat(noRun.originalSnapshot().containsKey("migrationRunId")).isFalse();
+        // 证据变化：条目不继承任何复核结论（迁移状态同样不会出现在旧条目丢失的路径上）
+        var changed=items(List.of(row),base(UUID.randomUUID()),List.of()).getFirst();
+        assertThat(changed.originalSnapshot().containsKey("migrationState")).isFalse();
+        assertThat(changed.inheritance()).containsEntry("reasonCode","SOURCE_VERSION_CHANGED");
+    }
+    @Test void manualItemsReattachOnlyWhenFileContentAndSnippetIntact() {
+        var good=new LinkedHashMap<String,Object>();
+        good.put("origin","MANUAL"); good.put("id",UUID.randomUUID()); good.put("createdBy",UUID.randomUUID().toString()); good.put("identityHash","idh"); good.put("evidenceHash","evh");
+        good.put("relativePath","src/a.c"); good.put("sourceContentHash","hash"); good.put("title","人工补充"); good.put("titleEn","Manual");
+        good.put("snippetHash",SourceSelection.hash("snippet".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        good.put("manualDetails",Map.of("snippet","snippet")); good.put("reviewState","TO_FIX"); good.put("startLine",1); good.put("endLine",3);
+        good.put("exclusionReasonEn","Not applicable");
+        var attached=items(List.of(),base(source),List.of(good));
+        assertThat(attached).anySatisfy(i->{
+            assertThat(i.origin()).isEqualTo("MANUAL");
+            assertThat(i.exclusionReasonEn()).isEqualTo("Not applicable");
+            assertThat(i.decision().state()).isEqualTo(ReviewState.TO_FIX);
+        });
+        var stale=new LinkedHashMap<>(good); stale.put("sourceContentHash","other-hash");
+        assertThat(items(List.of(),base(source),List.of(stale))).noneMatch(i->"MANUAL".equals(i.origin()));
+        var badSnippet=new LinkedHashMap<>(good); badSnippet.put("snippetHash","mismatch");
+        assertThat(items(List.of(),base(source),List.of(badSnippet))).noneMatch(i->"MANUAL".equals(i.origin()));
+        var noSnippet=new LinkedHashMap<>(good); noSnippet.put("manualDetails",Map.of());
+        assertThat(items(List.of(),base(source),List.of(noSnippet))).noneMatch(i->"MANUAL".equals(i.origin()));
+        var noExclusion=new LinkedHashMap<>(good); noExclusion.remove("exclusionReasonEn");
+        assertThat(items(List.of(),base(source),List.of(noExclusion))).anySatisfy(i->{
+            if("MANUAL".equals(i.origin())) assertThat(i.exclusionReasonEn()).isNull();
+        });
+    }
 }

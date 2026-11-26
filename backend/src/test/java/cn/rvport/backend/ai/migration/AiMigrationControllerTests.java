@@ -105,4 +105,25 @@ class AiMigrationControllerTests {
                 .isInstanceOf(cn.rvport.backend.common.error.ApiException.class)
                 .extracting("code").isEqualTo("AI_MIGRATION_ARTIFACT_KIND_INVALID");
     }
+
+    @Test
+    void 历史三端点委托历史服务() {
+        when(historyService.history(runId, actor, false)).thenReturn(List.of());
+        when(historyService.repoFile(org.mockito.ArgumentMatchers.eq(runId),
+                org.mockito.ArgumentMatchers.eq("source/src/a.c"), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq(actor), org.mockito.ArgumentMatchers.eq(false)))
+                .thenReturn("int a;\n");
+        when(historyService.rollback(org.mockito.ArgumentMatchers.eq(runId), any(),
+                org.mockito.ArgumentMatchers.eq(actor), org.mockito.ArgumentMatchers.eq(false)))
+                .thenReturn(new AiMigrationHistoryService.RollbackResponse("headhash", List.of()));
+
+        assertThat(controller.history(principal, runId, request).data()).isEmpty();
+        assertThat(controller.repoFile(principal, runId, "source/src/a.c", null, request).data()).isEqualTo("int a;\n");
+        assertThat(controller.rollback(principal, runId,
+                new AiMigrationHistoryService.RollbackRequest("working-tree", null), request).data().head())
+                .isEqualTo("headhash");
+        verify(historyService).history(runId, actor, false);
+        verify(historyService).repoFile(runId, "source/src/a.c", null, actor, false);
+        verify(historyService).rollback(runId, new AiMigrationHistoryService.RollbackRequest("working-tree", null), actor, false);
+    }
 }

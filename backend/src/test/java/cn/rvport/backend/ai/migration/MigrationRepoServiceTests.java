@@ -267,4 +267,119 @@ class MigrationRepoServiceTests {
             return output;
         }
     }
+
+    @Test
+    void reflog解析跳过残缺行且同哈希去重保留结构化条目() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(realGitAvailable(), "unit-test 镜像无 git");
+        var svc = service();
+        Path repo = temp.resolve("repo-reflog");
+        Files.createDirectories(repo.resolve("source"));
+        Files.writeString(repo.resolve("source/a.c"), "int a;\n");
+        svc.initialize(repo);
+        svc.commitFirstInit(repo);
+        Files.writeString(repo.resolve("source/a.c"), "v2 __riscv;\n");
+        svc.commitAgentFinish(repo);
+        // 三条历史（agent-finish / first-init / reflog reset 条目去重）
+        var entries = svc.history(repo, 10);
+        assertThat(entries.size()).isGreaterThanOrEqualTo(2);
+        assertThat(entries.stream().filter(e -> e.label().structured() && "agent-finish".equals(e.label().reason())).count()).isEqualTo(1);
+        // maxCount 截断
+        assertThat(svc.history(repo, 1)).hasSize(1);
+    }
+
+    @Test
+    void cleanup只删白名单临时物() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(realGitAvailable(), "unit-test 镜像无 git");
+        var svc = service();
+        Path repo = temp.resolve("repo-clean");
+        Files.createDirectories(repo.resolve("source"));
+        Files.createDirectories(repo.resolve(".migrate_verify").resolve("nested"));
+        Files.writeString(repo.resolve(".migrate_verify/nested/x.o"), "obj");
+        Files.writeString(repo.resolve(".prompt.txt"), "tmp");
+        Files.writeString(repo.resolve("source/keep.c"), "keep");
+        svc.cleanup(repo);
+        assertThat(Files.exists(repo.resolve(".migrate_verify"))).isFalse();
+        assertThat(Files.exists(repo.resolve(".prompt.txt"))).isFalse();
+        assertThat(Files.readString(repo.resolve("source/keep.c"))).isEqualTo("keep");
+        // 幂等：不存在时再次清理不抛
+        svc.cleanup(repo);
+    }
+
+    @Test
+    void 基线哈希缺失时基线校验拒绝() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(realGitAvailable(), "unit-test 镜像无 git");
+        var svc = service();
+        Path repo = temp.resolve("repo-baseline");
+        Files.createDirectories(repo.resolve("source"));
+        Files.writeString(repo.resolve("source/a.c"), "int a;\n");
+        svc.initialize(repo);
+        svc.commitFirstInit(repo);
+        for (String blank : new String[]{null, "", "   "}) {
+            assertThatThrownBy(() -> svc.verifyBaselineUntouched(repo, blank))
+                    .isInstanceOf(java.io.IOException.class)
+                    .hasMessageContaining("AI_MIGRATION_BASELINE_MODIFIED");
+        }
+        // 正常基线：校验通过不抛
+        String base = svc.commitFirstInit(repo);
+        svc.verifyBaselineUntouched(repo, base);
+    }
+
+    @Test
+    void 未提交仓库的头哈希与首基线查询为空() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(realGitAvailable(), "unit-test 镜像无 git");
+        var svc = service();
+        Path repo = temp.resolve("repo-nohead");
+        Files.createDirectories(repo.resolve("source"));
+        svc.initialize(repo);
+        assertThat(svc.headHash(repo)).isEmpty();
+        assertThat(svc.firstInitHash(repo)).isNull();
+        assertThat(svc.isInitialized(repo)).isFalse();
+    }
+
+    @Test
+    void 标签与reflog主题解析的静态边界() {
+        assertThat(MigrationRepoService.messageOfReflogSubject(null)).isEmpty();
+        assertThat(MigrationRepoService.messageOfReflogSubject("reset: moving to abc")).isEqualTo("moving to abc");
+        assertThat(MigrationRepoService.messageOfReflogSubject("no-colon-subject")).isEqualTo("no-colon-subject");
+        var label = MigrationRepoService.parseLabel("commit (initial): Save type:ai stage:end src:rvport-agent reason:agent-finish");
+        assertThat(label.structured()).isTrue();
+        assertThat(label.reason()).isEqualTo("agent-finish");
+        var custom = MigrationRepoService.parseLabel("Save type:ai stage:end src:rvport-agent reason:custom-x");
+        assertThat(custom.structured()).isTrue();
+        assertThat(custom.display()).isEqualTo("custom-x");
+        assertThat(MigrationRepoService.parseLabel("random message").structured()).isFalse();
+        assertThat(MigrationRepoService.parseLabel(null).structured()).isFalse();
+    }
+
+    /** 直喂伪造 reflog 的假 Cli：覆盖解析层残行跳过、同哈希去重与短哈希截断。 */
+    static final class FakeReflogCli implements MigrationRepoService.GitCli {
+        private final String reflog;
+        FakeReflogCli(String reflog) { this.reflog = reflog; }
+        @Override public void run(Path workingDir, Duration timeout, String... args) { }
+        @Override public String read(Path workingDir, String... args) {
+            return java.util.Arrays.stream(args).anyMatch("reflog"::equals) ? reflog : "";
+        }
+    }
+
+    @Test
+    void reflog解析的假Cli直喂边界() {
+        String reflog = String.join("\n",
+                "",
+                "short\ttick",
+                "abc1234\ttick\tcommit: Save type:ai stage:end src:rvport-agent reason:agent-finish\tT1",
+                "abc1234\ttick\treset: moving to abc1234\tT2",
+                "deadbee\ttick\treset: moving to deadbee\tT4",
+                "deadbee\ttick\tcommit: Save type:marker stage:marker src:rvport-boundary reason:stage-end-success\tT5",
+                "zz9\ttick\treset: moving to zz9\tT3");
+        var svc = new MigrationRepoService(new FakeReflogCli(reflog));
+        var entries = svc.history(Path.of("/any"), 10);
+        assertThat(entries).hasSize(3);
+        assertThat(entries.get(0).hash()).isEqualTo("abc1234");
+        assertThat(entries.get(0).label().structured()).isTrue();
+        assertThat(entries.get(1).hash()).isEqualTo("deadbee");
+        assertThat(entries.get(1).label().structured()).isTrue();
+        assertThat(entries.get(2).hash()).hasSize(3);
+        // maxCount 截断
+        assertThat(svc.history(Path.of("/any"), 1)).hasSize(1);
+    }
 }

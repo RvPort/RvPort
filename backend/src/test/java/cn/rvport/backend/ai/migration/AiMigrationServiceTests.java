@@ -316,4 +316,20 @@ class AiMigrationServiceTests {
                 "原因", "src/a.c", 1, 1, "sym", Map.of("scannerFindingId", scannerId, "factKind", factKind,
                         "actionable", true), "建议", "fp", "DETECTED", null);
     }
+
+    @Test
+    void 产物类型别名与序列化短路() {
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue(null)).isNull();
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue(" DIFF ")).isEqualTo(AiMigrationService.ArtifactKind.DIFF);
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue("patch")).isEqualTo(AiMigrationService.ArtifactKind.DIFF);
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue("result")).isEqualTo(AiMigrationService.ArtifactKind.RESULT);
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue("source")).isEqualTo(AiMigrationService.ArtifactKind.SOURCE);
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue("snapshot")).isEqualTo(AiMigrationService.ArtifactKind.SOURCE);
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue("series")).isEqualTo(AiMigrationService.ArtifactKind.PATCH_SERIES);
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue("patch-series")).isEqualTo(AiMigrationService.ArtifactKind.PATCH_SERIES);
+        assertThat(AiMigrationService.ArtifactKind.fromPathValue("bogus")).isNull();
+        assertThat(AiMigrationService.ArtifactContent.of(AiMigrationService.ArtifactKind.DIFF, "d.patch", "x", false).kind()).isEqualTo("diff");
+        assertThat(AiMigrationService.ArtifactContent.of(AiMigrationService.ArtifactKind.RESULT, "r.json", "{}", true).kind()).isEqualTo("result");
+    }
+
 }

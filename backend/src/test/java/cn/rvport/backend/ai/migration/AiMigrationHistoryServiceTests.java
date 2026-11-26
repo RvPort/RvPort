@@ -232,4 +232,124 @@ class AiMigrationHistoryServiceTests {
             return output;
         }
     }
+
+    @Test
+    void 仓库文件读取的参数与安全分支() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(realGitAvailable(), "unit-test 镜像无 git");
+        seedRepo();
+        // 空/缺失路径必填
+        assertThatThrownBy(() -> service.repoFile(runId, " ", null, actor, false))
+                .extracting("code").isEqualTo("AI_MIGRATION_FILE_PATH_REQUIRED");
+        assertThatThrownBy(() -> service.repoFile(runId, null, null, actor, false))
+                .extracting("code").isEqualTo("AI_MIGRATION_FILE_PATH_REQUIRED");
+        // Windows 反斜杠归一后正常读取
+        assertThat(service.repoFile(runId, "source\\src\\a.c", null, actor, false)).contains("__riscv");
+        // 空路径段拒绝
+        assertThatThrownBy(() -> service.repoFile(runId, "source//a.c", null, actor, false))
+                .extracting("code").isEqualTo("AI_MIGRATION_FILE_PATH_UNSAFE");
+        // 版本中不存在的文件 → NOT_FOUND
+        assertThatThrownBy(() -> service.repoFile(runId, "source/src/missing.c", null, actor, false))
+                .extracting("code").isEqualTo("AI_MIGRATION_FILE_NOT_FOUND");
+        // 请求体缺失 → 非法 target
+        assertThatThrownBy(() -> service.rollback(runId, null, actor, false))
+                .extracting("code").isEqualTo("AI_MIGRATION_ROLLBACK_TARGET_INVALID");
+    }
+
+    @Test
+    void 回滚联动重算未变更文件的条目状态() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(realGitAvailable(), "unit-test 镜像无 git");
+        seedRepo();
+        UUID reportId = UUID.randomUUID();
+        when(repository.reportIdOf(runId)).thenReturn(java.util.Optional.of(reportId));
+        when(repository.reportItemsFor(reportId)).thenReturn(List.of(
+                Map.of("originalSnapshot", Map.of("filePath", "src/a.c", "evidence", Map.of("scannerFindingId", "f1"))),
+                Map.of("originalSnapshot", Map.of("filePath", "src/b.c", "evidence", Map.of("scannerFindingId", "f2"))),
+                Map.of("originalSnapshot", Map.of("filePath", "src/b.c")),                     // 无 scannerId → 跳过
+                Map.of("originalSnapshot", Map.of("evidence", Map.of("scannerFindingId", "f3"))), // 无文件 → 按 "" 处理
+                Map.of()));                                                                     // 无 originalSnapshot → 跳过
+        // a.c 在基线→HEAD 间已变更（seedRepo 改写），不动；其余重算
+        service.rollback(runId, new AiMigrationHistoryService.RollbackRequest("commit", repo.headHash(runRepo).orElseThrow()), actor, false);
+        org.mockito.Mockito.verify(statusWriter).resetToBaseline(reportId, List.of("f2", "f3"));
+        // 运行无报告输入：不触发重算
+        UUID runB = UUID.randomUUID();
+        when(repository.findRun(runB)).thenReturn(java.util.Optional.of(new AiMigrationRunView(runB, project,
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "SUCCEEDED", Map.of(), 2, 2, 0, 0,
+                UUID.randomUUID(), UUID.randomUUID(), null, null, null)));
+        when(repository.reportIdOf(runB)).thenReturn(java.util.Optional.empty());
+        // runB 需要自己的仓库（定位按运行 id 解析 runs/{runId}/）
+        Path runBRepo = workspaceRoot.resolve("runs").resolve(runB.toString());
+        Files.createDirectories(runBRepo.resolve("source"));
+        Files.writeString(runBRepo.resolve("source/a.c"), "int a;\n");
+        repo.initialize(runBRepo);
+        repo.commitFirstInit(runBRepo);
+        String base = repo.firstInitHash(runBRepo);
+        service.rollback(runB, new AiMigrationHistoryService.RollbackRequest("hard", base), actor, false);
+        // 无报告绑定 → 不新增重算调用（仍只有第一次的 1 次）
+        org.mockito.Mockito.verify(statusWriter, org.mockito.Mockito.times(1)).resetToBaseline(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        // 运行非 SUCCEEDED：不触发重算
+        UUID runC = UUID.randomUUID();
+        var failed = new AiMigrationRunView(runC, project, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "FAILED", Map.of(), 2, 2, 0, 0, UUID.randomUUID(), UUID.randomUUID(), null, null, null);
+        when(repository.findRun(runC)).thenReturn(java.util.Optional.of(failed));
+        when(repository.reportIdOf(runC)).thenReturn(java.util.Optional.of(reportId));
+        Path runCRepo = workspaceRoot.resolve("runs").resolve(runC.toString());
+        Files.createDirectories(runCRepo.resolve("source"));
+        Files.writeString(runCRepo.resolve("source/a.c"), "int a;\n");
+        repo.initialize(runCRepo);
+        repo.commitFirstInit(runCRepo);
+        String baseC = repo.firstInitHash(runCRepo);
+        service.rollback(runC, new AiMigrationHistoryService.RollbackRequest("hard", baseC), actor, false);
+        // 非 SUCCEEDED 运行 → 仍只有第一次的 1 次
+        org.mockito.Mockito.verify(statusWriter, org.mockito.Mockito.times(1)).resetToBaseline(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void 回滚参数与基线读取的剩余边界() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(realGitAvailable(), "unit-test 镜像无 git");
+        seedRepo();
+        // baseline/ 前缀放行（读取不存在文件 → NOT_FOUND 而非 UNSAFE）
+        assertThatThrownBy(() -> service.repoFile(runId, "baseline/src/a.c", null, actor, false))
+                .extracting("code").isEqualTo("AI_MIGRATION_FILE_NOT_FOUND");
+        // 空白 ref → HEAD
+        assertThat(service.repoFile(runId, "source/src/a.c", "  ", actor, false)).contains("__riscv");
+        // target null → 非法 target；空白 commitHash → 必填
+        assertThatThrownBy(() -> service.rollback(runId, new AiMigrationHistoryService.RollbackRequest(null, null), actor, false))
+                .extracting("code").isEqualTo("AI_MIGRATION_ROLLBACK_TARGET_INVALID");
+        assertThatThrownBy(() -> service.rollback(runId, new AiMigrationHistoryService.RollbackRequest("commit", "  "), actor, false))
+                .extracting("code").isEqualTo("AI_MIGRATION_ROLLBACK_COMMIT_REQUIRED");
+        // 全部条目文件都已变更 → 重算集合为空 → 不调用 statusWriter
+        UUID reportId = UUID.randomUUID();
+        when(repository.reportIdOf(runId)).thenReturn(java.util.Optional.of(reportId));
+        when(repository.reportItemsFor(reportId)).thenReturn(List.of(
+                Map.of("originalSnapshot", Map.of("filePath", "src/a.c", "evidence", Map.of("scannerFindingId", "f9")))));
+        service.rollback(runId, new AiMigrationHistoryService.RollbackRequest("commit", repo.headHash(runRepo).orElseThrow()), actor, false);
+        org.mockito.Mockito.verify(statusWriter, org.mockito.Mockito.never()).resetToBaseline(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void 仓库文件名归一静态边界() {
+        assertThat(AiMigrationHistoryService.safeRepoFileName(null)).isEmpty();
+        assertThat(AiMigrationHistoryService.safeRepoFileName("src\\a.c")).isEqualTo("src/a.c");
+    }
+
+    @Test
+    void 空diff回滚重算全部条目() throws Exception {
+        // HEAD 树回到基线（空 diff）→ 该报告全部条目重算
+        UUID runD = UUID.randomUUID();
+        when(repository.findRun(runD)).thenReturn(java.util.Optional.of(new AiMigrationRunView(runD, project,
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "SUCCEEDED", Map.of(), 2, 2, 0, 0,
+                UUID.randomUUID(), UUID.randomUUID(), null, null, null)));
+        UUID reportIdD = UUID.randomUUID();
+        when(repository.reportIdOf(runD)).thenReturn(java.util.Optional.of(reportIdD));
+        when(repository.reportItemsFor(reportIdD)).thenReturn(List.of(
+                Map.of("originalSnapshot", Map.of("filePath", "src/a.c", "evidence", Map.of("scannerFindingId", "f5")))));
+        Path runDRepo = workspaceRoot.resolve("runs").resolve(runD.toString());
+        Files.createDirectories(runDRepo.resolve("source"));
+        Files.writeString(runDRepo.resolve("source/a.c"), "int a;\n");
+        repo.initialize(runDRepo);
+        repo.commitFirstInit(runDRepo);
+        String baseD = repo.firstInitHash(runDRepo);
+        service.rollback(runD, new AiMigrationHistoryService.RollbackRequest("hard", baseD), actor, false);
+        org.mockito.Mockito.verify(statusWriter).resetToBaseline(reportIdD, List.of("f5"));
+    }
 }

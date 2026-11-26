@@ -155,7 +155,7 @@ class MigrationStatusWritebackTests {
                             Map.of("id", "finding:a", "status", "DONE"),
                             Map.of("id", "finding:b", "status", "NO_WORK_NEEDED"))))));
             return new cn.rvport.backend.ai.migration.AiMigrationAgentRuntime.Executed(result, new byte[0],
-                    null, null);
+                    new byte[0], new byte[0]);
         });
     }
 
@@ -220,4 +220,5 @@ class MigrationStatusWritebackTests {
                 Map.of("scannerFindingId", item.id(), "factKind", "macro_invocation", "actionable", true),
                 "s", "fp", "DETECTED", null);
     }
+
 }

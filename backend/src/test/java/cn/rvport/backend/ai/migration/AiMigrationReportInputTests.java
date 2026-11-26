@@ -174,4 +174,34 @@ class AiMigrationReportInputTests {
         item.put("originalSnapshot", original);
         return item;
     }
+
+    @Test
+    void 非数值行号与缺失字段容错() {
+        UUID ref = UUID.randomUUID();
+        var original = new java.util.LinkedHashMap<String, Object>();
+        original.put("scanRunId", UUID.randomUUID().toString());
+        original.put("sourceRevisionId", UUID.randomUUID().toString());
+        original.put("ruleId", "rule"); original.put("category", "c"); original.put("severity", "HIGH");
+        original.put("title", "t"); original.put("description", "d"); original.put("filePath", "src/a.c");
+        original.put("lineStart", "12"); original.put("lineEnd", "14"); original.put("suggestion", "s");
+        original.put("fingerprint", "fp"); original.put("status", "OPEN");
+        original.put("evidence", Map.of("scannerFindingId", ref.toString()));
+        var candidate = new java.util.LinkedHashMap<String, Object>();
+        candidate.put("origin", "SCANNER"); candidate.put("title", "夹具");
+        candidate.put("sourceRefId", ref.toString()); candidate.put("projectId", UUID.randomUUID().toString());
+        candidate.put("originalSnapshot", original);
+        var adapted = AiMigrationReportItems.adapt(List.of(candidate));
+        assertThat(adapted.findings()).hasSize(1);
+        assertThat(adapted.findings().getFirst().lineStart()).isNull();
+        assertThat(adapted.findings().getFirst().lineEnd()).isNull();
+    }
+
+    @Test
+    void 非常规条目形态防御性跳过() {
+        var adapted = AiMigrationReportItems.adapt(java.util.List.of(
+                java.util.Map.of("title", "无来源"),
+                java.util.Map.of("origin", "SCANNER", "title", "坏快照", "originalSnapshot", "not-a-map")));
+        assertThat(adapted.findings()).isEmpty();
+        assertThat(adapted.skippedManual()).containsExactly("无来源", "坏快照");
+    }
 }

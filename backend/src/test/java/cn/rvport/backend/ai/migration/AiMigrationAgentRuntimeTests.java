@@ -475,4 +475,26 @@ class AiMigrationAgentRuntimeTests {
         assertThatThrownBy(() -> service.run(projection(), sourceRoot, selection, context))
                 .hasMessage("AGENT_OUTPUT_INVALID");
     }
+
+    @Test
+    void 模型选择缺失拒绝与静态工具边界() throws Exception {
+        assertThatThrownBy(() -> service.resolveExecution(null, actor, project))
+                .isInstanceOf(Exception.class);
+        var tmp = java.nio.file.Files.createTempDirectory("agent-runtime-statics");
+        var shortFile = tmp.resolve("short.txt");
+        java.nio.file.Files.writeString(shortFile, "abc");
+        assertThat(AiMigrationAgentRuntime.excerpt(shortFile)).isEqualTo("abc");
+        var longFile = tmp.resolve("long.txt");
+        java.nio.file.Files.writeString(longFile, "x".repeat(5000));
+        assertThat(AiMigrationAgentRuntime.excerpt(longFile)).hasSize(4099).endsWith("...");
+        // 目录树指纹：目录、普通文件、断裂符号链接（O 类）都参与且内容稳定
+        var root = tmp.resolve("tree");
+        java.nio.file.Files.createDirectories(root.resolve("sub"));
+        java.nio.file.Files.writeString(root.resolve("sub/f.c"), "int f;\n");
+        var digestPlain = AiMigrationAgentRuntime.treeDigest(root);
+        Files.createSymbolicLink(root.resolve("broken"), java.nio.file.Path.of("no-such-target"));
+        var digestBroken = AiMigrationAgentRuntime.treeDigest(root);
+        assertThat(digestPlain).isNotEqualTo(digestBroken);
+        assertThat(AiMigrationAgentRuntime.treeDigest(root)).isEqualTo(digestBroken);
+    }
 }

@@ -26,8 +26,9 @@ RUN --mount=type=cache,target=/root/.m2 \
 
 FROM build-base AS unit-deps
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python-is-python3 \
-    python3-coverage python3-pytest python3-jsonschema python3-yaml \
+    python3-coverage python3-pytest python3-jsonschema python3-yaml git \
     && rm -rf /var/lib/apt/lists/*
+# git 供迁移任务级 git 历史的真实分支测试使用（与生产运行时镜像保持一致，无 git 时相关测试按假设跳过）。
 
 FROM unit-deps AS unit-test
 ENV MAVEN_OPTS=-Xmx1536m

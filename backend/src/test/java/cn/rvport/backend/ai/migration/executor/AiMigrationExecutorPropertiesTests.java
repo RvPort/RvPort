@@ -74,4 +74,29 @@ class AiMigrationExecutorPropertiesTests {
         assertThat(byFactory.workspaceRoot()).isEqualTo("/w");
         assertThat(byFactory.workspaceHostRoot()).isEqualTo("/w");
     }
+
+    @Test
+    void 技能仓库与代理配置显式保留且空白回退() {
+        var blank = new AiMigrationExecutorProperties("process", "img", "vol", Duration.ofSeconds(30), 2,
+                " ", "", "  ", " ", "/ws", null);
+        assertThat(blank.skillRepoUrl()).isEqualTo("https://github.com/zte-riscv/rvport-skills.git");
+        assertThat(blank.skillBranch()).isEqualTo("master");
+        assertThat(blank.skillsRoot()).isEqualTo("/var/lib/rvport/ai-skills");
+        assertThat(blank.skillsProxy()).isEmpty();
+        assertThat(blank.workspaceHostRoot()).isEqualTo("/ws");
+
+        var explicit = new AiMigrationExecutorProperties("process", "img", "vol", Duration.ofSeconds(30), 2,
+                "https://example.com/rvport-skills.git", "release-1", "/opt/skills", "  http://p  ", "/ws", "/host/ws");
+        assertThat(explicit.skillRepoUrl()).isEqualTo("https://example.com/rvport-skills.git");
+        assertThat(explicit.skillBranch()).isEqualTo("release-1");
+        assertThat(explicit.skillsRoot()).isEqualTo("/opt/skills");
+        assertThat(explicit.skillsProxy()).isEqualTo("http://p");
+        assertThat(explicit.workspaceHostRoot()).isEqualTo("/host/ws");
+
+        // null 代理与 null 宿主根路径：代理空串、宿主根回落 workspace 根
+        var nulls = new AiMigrationExecutorProperties("process", "img", "vol", Duration.ofSeconds(30), 2,
+                "u", "b", "/r", null, "/ws", null);
+        assertThat(nulls.skillsProxy()).isEmpty();
+        assertThat(nulls.workspaceHostRoot()).isEqualTo("/ws");
+    }
 }
