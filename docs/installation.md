@@ -50,6 +50,16 @@ docker compose logs --tail 100 backend backend-worker
 
 `backend` and `backend-worker` use the same image. The API node enables Liquibase at startup, initializing the schema in an empty database. Workers do not initialize the schema. Database extension scripts are in `backend/infra/postgres/init/`; application migrations are in `backend/src/main/resources/db/changelog/`.
 
+### AI migration executor image (optional)
+
+The AI migration feature requires an additional executor image that is **not part of the default Compose build**; build it once before starting the first migration task on an otherwise default deployment. Deployments that do not use AI migration can skip it. The image fetches the migration skills at build time (repository via the SKILLS_REPO_URL build arg; the default pulls the latest commit of the default branch, and SKILLS_REVISION can optionally pin a branch or commit, Apache-2.0), bundling qemu-user-static, the RISC-V cross toolchain, and the pi agent at a pinned version:
+
+```powershell
+docker build -t rvport-ai-executor:local -f backend/executor/Dockerfile .
+```
+
+On a public-network environment the command above works as-is; every external source (Ubuntu apt, Node.js, npm, PyPI) defaults to its official address. Restricted networks can override sources with build arguments, for example `--build-arg APT_URI=http://mirrors.aliyun.com/ubuntu --build-arg NPM_REGISTRY=https://registry.npmmirror.com`; the full list is documented at the top of `backend/executor/Dockerfile`. The image name must match `RVPORT_AI_EXECUTOR_IMAGE` in `.env`, and the image must be rebuilt after skills or executor dependencies change.
+
 The API health endpoint is `http://localhost:8080/actuator/health`; use the actual port configured in `.env`. Specialized-tool health and overall API health are separate checks. One unavailable scanner does not mean that every other feature is unavailable.
 
 The database initialization scripts create the development administrator `admin`, with initial password `admin123` and a mandatory password change on first login. This is a public development default, not a deployment credential. Review initialization before a public release, and do not expose a deployment with the default account state unchanged.
