@@ -54,7 +54,8 @@ class OptimizationEvidenceDatabaseIT {
                 UUID left = test(db, source, sourceEnv, sourceBuild, batch, "SOURCE", "SUCCEEDED", 1L, now);
                 UUID right = test(db, source, targetEnv, targetBuild, batch, "TARGET", "SUCCEEDED", 1L, now);
                 comparison(db, batch, left, right, "SUCCEEDED", now);
-                assertThat(resolver.resolve(project, context, runtime).status().name()).isEqualTo("DONE");
+                assertThat(resolver.resolve(project, context, runtime).status().name())
+                        .as("%s", resolver.resolve(project, context, runtime)).isEqualTo("DONE");
 
                 // 更近的旧环境、旧源码及 SOURCE_ONLY 记录不能污染当前上下文。
                 test(db, source, sourceEnv, sourceBuild, UUID.randomUUID(), "SOURCE", "RUNNING", 2L, now.plusDays(1));
@@ -100,10 +101,16 @@ class OptimizationEvidenceDatabaseIT {
     }
 
     UUID build(DSLContext db, UUID env, String status, String scope, OffsetDateTime created) {
-        UUID id = UUID.randomUUID();
+        UUID id = UUID.randomUUID(), task = UUID.randomUUID();
+        db.insertInto(TASKS).set(TASKS.ID, task).set(TASKS.CREATED_AT, created)
+                .set(TASKS.INPUT_SNAPSHOT, org.jooq.JSONB.valueOf(
+                        "{\"buildBatchId\":\"00000000-0000-4000-8000-000000000001\"}"))
+                .execute();
         db.insertInto(BUILD_RUNS).set(BUILD_RUNS.ID, id).set(BUILD_RUNS.PROJECT_ID, project)
+                .set(BUILD_RUNS.TASK_ID, task)
                 .set(BUILD_RUNS.SOURCE_REVISION_ID, source).set(BUILD_RUNS.ENVIRONMENT_ID, env)
                 .set(BUILD_RUNS.ENVIRONMENT_CONFIG_VERSION, 1L).set(BUILD_RUNS.STATUS, status)
+                .set(BUILD_RUNS.SCRIPT_SHA256, "fixture-script")
                 .set(BUILD_RUNS.BUILD_SCOPE, scope).set(BUILD_RUNS.CREATED_AT, created).execute();
         return id;
     }

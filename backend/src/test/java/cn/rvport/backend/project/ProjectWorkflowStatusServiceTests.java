@@ -216,7 +216,7 @@ class ProjectWorkflowStatusServiceTests {
                 "floating-point-analysis", "memory-order-analysis",
                 "report", "manual", "build", "test", "optimize", "archive");
         assertThat(response.stages().getFirst().status()).isEqualTo(WorkflowStageStatus.DONE);
-        assertThat(response.recommendedStageId()).isEqualTo("env");
+        assertThat(response.recommendedStageId()).isEqualTo("assets");
     }
 
     @Test
@@ -234,7 +234,7 @@ class ProjectWorkflowStatusServiceTests {
         assertThat(response.stages()).filteredOn(stage -> stage.id().equals("env")).singleElement()
                 .extracting(WorkflowStageResponse::status, WorkflowStageResponse::reasonCode)
                 .containsExactly(WorkflowStageStatus.RUNNING, "ENVIRONMENT_TEST_RUNNING");
-        assertThat(response.recommendedStageId()).isEqualTo("env");
+        assertThat(response.recommendedStageId()).isEqualTo("assets");
     }
 
     @Test
@@ -337,30 +337,8 @@ class ProjectWorkflowStatusServiceTests {
                 "assets", WorkflowStageStatus.PENDING, "ACTIVE_SOURCE_MISSING");
     }
 
-    @Test
-    void recommendationPrioritizesRunningThenBlockedThenPendingAndFinallyArchive() {
-        ProjectWorkflowStatusService service = service();
-        List<WorkflowStageResponse> stages = List.of(
-                new WorkflowStageResponse("done", WorkflowStageStatus.DONE, "ok"),
-                new WorkflowStageResponse("pending", WorkflowStageStatus.PENDING, "wait"),
-                new WorkflowStageResponse("blocked", WorkflowStageStatus.BLOCKED, "bad"),
-                new WorkflowStageResponse("running", WorkflowStageStatus.RUNNING, "go")
-        );
-        assertThat((String) ReflectionTestUtils.invokeMethod(service, "recommended", stages)).isEqualTo("running");
-        assertThat((String) ReflectionTestUtils.invokeMethod(service, "recommended", stages.subList(0, 3))).isEqualTo("blocked");
-        assertThat((String) ReflectionTestUtils.invokeMethod(service, "recommended", stages.subList(0, 2))).isEqualTo("pending");
-        assertThat((String) ReflectionTestUtils.invokeMethod(service, "recommended", stages.subList(0, 1))).isEqualTo("archive");
-    }
-
-    @Test void recommendationPrefersExecutableAnalysisToOptionalBuildAndTerminalNodes() {
+    @Test void runningStageKeepsItsIndependentExecutionGate() {
         var service = service();
-        var stages = new java.util.ArrayList<WorkflowStageResponse>();
-        stages.add(new WorkflowStageResponse("x86-build",WorkflowStageStatus.PENDING,"missing",null,null,null,null,true,true));
-        stages.add(new WorkflowStageResponse("kb",WorkflowStageStatus.DONE,"ready",null,true,null,null,false,true));
-        stages.add(new WorkflowStageResponse("optimize",WorkflowStageStatus.PENDING,"ready",null,null,null,null,false,true));
-        stages.add(new WorkflowStageResponse("archive",WorkflowStageStatus.PENDING,"ready",null,null,null,null,false,true));
-        stages.add(new WorkflowStageResponse("floating-point-analysis",WorkflowStageStatus.PENDING,"ready",null,null,null,null,false,true));
-        assertThat((String)ReflectionTestUtils.invokeMethod(service,"recommended",stages)).isEqualTo("floating-point-analysis");
         var readiness = org.mockito.Mockito.mock(cn.rvport.backend.workflow.StageReadinessService.class);
         ReflectionTestUtils.setField(service,"readiness",readiness);
         var running = new WorkflowStageResponse("kb",WorkflowStageStatus.RUNNING,"running");
@@ -424,10 +402,14 @@ class ProjectWorkflowStatusServiceTests {
             boolean available=reason.startsWith("CONFIRMED");
             var current=new cn.rvport.backend.report.review.CurrentFixListResolver.Current(available,UUID.randomUUID(),
                     available?UUID.randomUUID():null,0L,reason.equals("CONFIRMED_WITH_ITEMS")?1:0,reason);
-            when(fixLists.current(project)).thenReturn(current);
+            when(reportWorkflow.current(project)).thenReturn(new cn.rvport.backend.report.review.ReportWorkflowService.Snapshot(current,
+                    new cn.rvport.backend.report.review.ReportWorkflowSummary(reason.startsWith("REPORT_")
+                            ?cn.rvport.backend.report.review.ReportWorkflowSummary.State.STALE
+                            :cn.rvport.backend.report.review.ReportWorkflowSummary.State.valueOf(reason),
+                            current.reportId(),null,reason,0L,current.itemCount())));
             var workflow=aggregate.aggregate(project,revision,runtime,context);
             if(reason.startsWith("REPORT_")) {
-                assertStage(workflow,"report",WorkflowStageStatus.PENDING,"REPORT_MISSING");
+                assertStage(workflow,"report",WorkflowStageStatus.PENDING,"REPORT_CONTEXT_CHANGED");
                 assertStage(workflow,"manual",WorkflowStageStatus.PENDING,"REPORT_REQUIRED");
             } else {
                 assertStage(workflow,"report",WorkflowStageStatus.DONE,"REPORT_READY");
@@ -444,8 +426,8 @@ class ProjectWorkflowStatusServiceTests {
 
     private BuildValidationRunView buildRun(UUID projectId, UUID revisionId, UUID environmentId, TaskStatus status) {
         return new BuildValidationRunView(UUID.randomUUID(), projectId, UUID.randomUUID(), revisionId, environmentId,
-                BuildValidationScope.BOTH, UUID.randomUUID(), 1L, null, null, "make", null, 60, null, status,
-                null, null, null, null, null, null, OffsetDateTime.now(), Map.of(), Map.of());
+                BuildValidationScope.BOTH, UUID.randomUUID(), 1L, null, "script-sha", "make", null, 60, null, status,
+                null, null, null, null, null, null, OffsetDateTime.now(), Map.of(), Map.of("buildBatchId","00000000-0000-4000-8000-000000000001"));
     }
 
     private void assertBlockedReason(ProjectWorkflowStatusService service, TaskStatus status, String reason) {
@@ -468,7 +450,78 @@ class ProjectWorkflowStatusServiceTests {
                 expectedReason));
     }
 
-    private final cn.rvport.backend.report.review.CurrentFixListResolver fixLists=org.mockito.Mockito.mock(cn.rvport.backend.report.review.CurrentFixListResolver.class);
+    private final cn.rvport.backend.report.review.ReportWorkflowService reportWorkflow=org.mockito.Mockito.mock(cn.rvport.backend.report.review.ReportWorkflowService.class);
+    @Test void reportGenerationAndReviewStatesRemainSeparateInOverview() {
+        var instance=service();
+        var context=new ProjectContextSnapshot(UUID.randomUUID(),1L);
+        for(var state:cn.rvport.backend.report.review.ReportWorkflowSummary.State.values()) {
+            var review=new cn.rvport.backend.report.review.ReportWorkflowSummary(state,UUID.randomUUID(),UUID.randomUUID(),null,null,null);
+            WorkflowStageResponse stage=ReflectionTestUtils.invokeMethod(instance,"report",context,review);
+            var expected=switch(state) {
+                case GENERATING -> WorkflowStageStatus.RUNNING;
+                case GENERATION_FAILED,UNAVAILABLE -> WorkflowStageStatus.BLOCKED;
+                case NOT_GENERATED,STALE -> WorkflowStageStatus.PENDING;
+                default -> WorkflowStageStatus.DONE;
+            };
+            assertThat(stage.status()).as(state.name()).isEqualTo(expected);
+        }
+    }
+
+    @Test void regeneratedReportCannotBeHiddenByOldConfirmedList() {
+        var project=UUID.randomUUID();
+        var revision=new SourceRevisionResponse(UUID.randomUUID(),project,SourceRevisionType.GIT,"main",null,null,null,null,null,true,null,null);
+        var instance=service();
+        var list=new cn.rvport.backend.report.review.CurrentFixListResolver.Current(true,UUID.randomUUID(),UUID.randomUUID(),2L,22,"CONFIRMED_WITH_ITEMS");
+        var review=new cn.rvport.backend.report.review.ReportWorkflowSummary(
+                cn.rvport.backend.report.review.ReportWorkflowSummary.State.GENERATING,UUID.randomUUID(),UUID.randomUUID(),null,null,null);
+        when(reportWorkflow.current(project)).thenReturn(new cn.rvport.backend.report.review.ReportWorkflowService.Snapshot(list,review));
+        var response=instance.aggregate(project,revision,runtime(project,null,null,false),new ProjectContextSnapshot(revision.id(),1L));
+        assertThat(response.recommendedStageId()).isEqualTo("report");
+        assertThat(response.currentFixList()).isSameAs(list);
+        assertThat(response.reportReview()).isSameAs(review);
+        assertStage(response,"report",WorkflowStageStatus.RUNNING,"REPORT_RUNNING");
+        org.mockito.Mockito.verify(reportWorkflow).current(project);
+    }
+
+    @Test void testsMustReferenceCurrentSucceededBuildPair() {
+        var project=UUID.randomUUID();var revision=UUID.randomUUID();
+        var source=environment(EnvironmentRole.SOURCE_X86,1L);var target=environment(EnvironmentRole.TARGET_RISCV,1L);
+        var runtime=runtime(project,source,target,true);var context=new ProjectContextSnapshot(revision,1L);
+        var instance=service();
+        WorkflowStageResponse missing=ReflectionTestUtils.invokeMethod(instance,"test",project,context,runtime);
+        assertThat(missing.reasonCode()).isEqualTo("BUILD_VALIDATION_PAIR_INCOMPLETE");
+        var left=buildRun(project,revision,source.id(),TaskStatus.SUCCEEDED);
+        var right=buildRun(project,revision,target.id(),TaskStatus.SUCCEEDED);
+        when(buildValidationRepository.findLatest(project,revision,source.id(),1L,BuildValidationScope.BOTH)).thenReturn(Optional.of(left));
+        when(buildValidationRepository.findLatest(project,revision,target.id(),1L,BuildValidationScope.BOTH)).thenReturn(Optional.of(right));
+        for(int mismatch=0;mismatch<7;mismatch++) {
+            var run=new cn.rvport.backend.automatedtest.AutomatedTestRunView(UUID.randomUUID(),mismatch==1?UUID.randomUUID():project,null,
+                    mismatch==4?UUID.randomUUID():mismatch==6?right.id():left.id(),mismatch==2?UUID.randomUUID():revision,
+                    mismatch==5?UUID.randomUUID():mismatch==6?target.id():source.id(),mismatch==3?2L:1L,
+                    null,null,null,null,null,null,null,null,null,null,TaskStatus.SUCCEEDED,null,null,null,null,List.of(),null,null);
+            when(automatedTestRepository.findLatest(project,revision,1L)).thenReturn(Optional.of(run));
+            WorkflowStageResponse stage=ReflectionTestUtils.invokeMethod(instance,"test",project,context,runtime);
+            assertThat(stage.status()).as("mismatch %d",mismatch).isEqualTo(mismatch==0||mismatch==6?WorkflowStageStatus.DONE:WorkflowStageStatus.PENDING);
+        }
+        when(buildValidationRepository.findLatest(project,revision,source.id(),1L,BuildValidationScope.BOTH))
+                .thenReturn(Optional.of(buildRun(project,UUID.randomUUID(),source.id(),TaskStatus.SUCCEEDED)));
+        WorkflowStageResponse stale=ReflectionTestUtils.invokeMethod(instance,"test",project,context,runtime);
+        assertThat(stale.reasonCode()).isEqualTo("BUILD_VALIDATION_PAIR_INCOMPLETE");
+    }
+
+    @Test void workflowSummarySerializationKeepsUnknownDistinctFromZeroAndOldFields() throws Exception {
+        var mapper=new com.fasterxml.jackson.databind.ObjectMapper();
+        var review=new cn.rvport.backend.report.review.ReportWorkflowSummary(
+                cn.rvport.backend.report.review.ReportWorkflowSummary.State.UNAVAILABLE,UUID.randomUUID(),null,null,null,null);
+        var response=new ProjectOverviewResponse.WorkflowResponse("report",List.of(),null,review);
+        var json=mapper.valueToTree(response);
+        assertThat(json.path("recommendedStageId").asText()).isEqualTo("report");
+        assertThat(json.has("stages")).isTrue();
+        assertThat(json.has("currentFixList")).isTrue();
+        assertThat(json.path("reportReview").path("pendingReviewCount").isNull()).isTrue();
+        assertThat(json.path("reportReview").path("state").asText()).isEqualTo("UNAVAILABLE");
+        assertThat(mapper.valueToTree(new ProjectOverviewResponse.WorkflowResponse(null,null)).path("recommendedStageId").isNull()).isTrue();
+    }
     private ProjectWorkflowStatusService service() {
         var service = new ProjectWorkflowStatusService(
                 taskRepository,
@@ -479,9 +532,12 @@ class ProjectWorkflowStatusServiceTests {
                 automatedTestRepository,
                 optimizationCycleRepository,
                 archiveRepository);
-        ReflectionTestUtils.setField(service,"fixLists",fixLists);
-        org.mockito.Mockito.lenient().when(fixLists.current(org.mockito.ArgumentMatchers.any())).thenReturn(
-                new cn.rvport.backend.report.review.CurrentFixListResolver.Current(false,null,null,null,0,"REPORT_NOT_GENERATED"));
+        ReflectionTestUtils.setField(service,"reportWorkflow",reportWorkflow);
+        org.mockito.Mockito.lenient().when(reportWorkflow.current(org.mockito.ArgumentMatchers.any())).thenReturn(
+                new cn.rvport.backend.report.review.ReportWorkflowService.Snapshot(
+                    new cn.rvport.backend.report.review.CurrentFixListResolver.Current(false,null,null,null,0,"REPORT_NOT_GENERATED"),
+                    new cn.rvport.backend.report.review.ReportWorkflowSummary(
+                        cn.rvport.backend.report.review.ReportWorkflowSummary.State.NOT_GENERATED,null,null,null,null,null)));
         ReflectionTestUtils.setField(service, "scanContextService", scanContextService);
         return service;
     }

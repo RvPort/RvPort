@@ -8,6 +8,7 @@ import cn.rvport.backend.automatedtest.AutomatedTestRepository;
 import cn.rvport.backend.buildvalidation.BuildValidationRepository;
 import cn.rvport.backend.buildvalidation.BuildValidationRunView;
 import cn.rvport.backend.buildvalidation.BuildValidationScope;
+import cn.rvport.backend.buildvalidation.BuildValidationPair;
 import cn.rvport.backend.dependency.DependencyAnalysisRepository;
 import cn.rvport.backend.kb.KbScanRepository;
 import cn.rvport.backend.optimization.OptimizationCycleRepository;
@@ -53,7 +54,8 @@ public class ProjectWorkflowStatusService {
     private final BuildValidationRepository buildValidationRepository;
     private final DependencyAnalysisRepository dependencyAnalysisRepository;
     private final ReportRepository reportRepository;
-    @Autowired private cn.rvport.backend.report.review.CurrentFixListResolver fixLists;
+    @Autowired private cn.rvport.backend.report.review.ReportWorkflowService reportWorkflow;
+    private final WorkflowRecommendationPolicy recommendation = new WorkflowRecommendationPolicy();
     private final AutomatedTestRepository automatedTestRepository;
     private final OptimizationCycleRepository optimizationCycleRepository;
     private final ProjectArchiveRepository archiveRepository;
@@ -116,18 +118,20 @@ public class ProjectWorkflowStatusService {
         stages.add(dependency(projectId, context));
         stages.add(specialized(projectId, context, runtime, SpecializedAnalyzerType.FLOATING_POINT, FLOATING_POINT));
         stages.add(specialized(projectId, context, runtime, SpecializedAnalyzerType.MEMORY_ORDER, MEMORY_ORDER));
-        var currentList=fixLists.current(projectId);
-        WorkflowStageResponse report = report(projectId, context,currentList);
+        var reportSnapshot = reportWorkflow.current(projectId);
+        var currentList = reportSnapshot.currentFixList();
+        WorkflowStageResponse report = report(context, reportSnapshot.reportReview());
         stages.add(report);
         stages.add(manual(report, activeSource,currentList));
         stages.add(build(projectId, runtime, context));
-        stages.add(test(projectId, context));
+        stages.add(test(projectId, context, runtime));
         stages.add(optimize(projectId, context, runtime));
         stages.add(archive(projectId, context));
         if (readiness != null) {
             stages = stages.stream().map(stage -> withReadiness(projectId, stage)).toList();
         }
-        return new WorkflowResponse(recommended(stages), stages,currentList);
+        return new WorkflowResponse(recommendation.recommend(stages, currentList, reportSnapshot.reportReview()),
+                stages, currentList, reportSnapshot.reportReview());
     }
 
     private WorkflowStageResponse withReadiness(UUID project, WorkflowStageResponse stage) {
@@ -258,14 +262,18 @@ public class ProjectWorkflowStatusService {
         };
     }
 
-    private WorkflowStageResponse report(UUID projectId, ProjectContextSnapshot context,cn.rvport.backend.report.review.CurrentFixListResolver.Current list) {
+    private WorkflowStageResponse report(ProjectContextSnapshot context, cn.rvport.backend.report.review.ReportWorkflowSummary review) {
         if (context.sourceRevisionId() == null) {
             return pending(REPORT, "ACTIVE_SOURCE_MISSING");
         }
-        if(list.reportId()!=null && !List.of("REPORT_READ_ONLY","REPORT_CONTEXT_CHANGED").contains(list.reasonCode())) return done(REPORT,"REPORT_READY");
-        return reportRepository.latestEvaluation(projectId,context.sourceRevisionId())
-                .map(value->value.status()==TaskStatus.SUCCEEDED?pending(REPORT,"REPORT_CONTEXT_CHANGED"):fromStatus(REPORT,value.status(),"REPORT"))
-                .orElseGet(()->pending(REPORT,"REPORT_MISSING"));
+        return switch (review.state()) {
+            case GENERATING -> running(REPORT, "REPORT_RUNNING");
+            case GENERATION_FAILED -> blocked(REPORT, "REPORT_FAILED");
+            case STALE -> pending(REPORT, "REPORT_CONTEXT_CHANGED");
+            case UNAVAILABLE -> blocked(REPORT, "REPORT_REVIEW_UNAVAILABLE");
+            case NOT_GENERATED -> pending(REPORT, "REPORT_MISSING");
+            default -> done(REPORT, "REPORT_READY");
+        };
     }
 
     private WorkflowStageResponse manual(WorkflowStageResponse report, SourceRevisionResponse activeSource,cn.rvport.backend.report.review.CurrentFixListResolver.Current list) {
@@ -293,17 +301,17 @@ public class ProjectWorkflowStatusService {
         }
         Optional<BuildValidationRunView> source = buildValidationRepository.findLatest(
                 projectId, context.sourceRevisionId(), runtime.sourceEnvironment().id(),
-                context.runtimeEnvironmentVersion(), BuildValidationScope.BOTH);
+                context.runtimeEnvironmentVersion(), BuildValidationScope.BOTH)
+                .filter(run -> BuildValidationPair.matches(run, projectId, context.sourceRevisionId(), runtime.sourceEnvironment().id(), runtime.version()));
         Optional<BuildValidationRunView> target = buildValidationRepository.findLatest(
                 projectId, context.sourceRevisionId(), runtime.targetEnvironment().id(),
-                context.runtimeEnvironmentVersion(), BuildValidationScope.BOTH);
+                context.runtimeEnvironmentVersion(), BuildValidationScope.BOTH)
+                .filter(run -> BuildValidationPair.matches(run, projectId, context.sourceRevisionId(), runtime.targetEnvironment().id(), runtime.version()));
         if (source.map(BuildValidationRunView::status).filter(this::active).isPresent()
                 || target.map(BuildValidationRunView::status).filter(this::active).isPresent()) {
             return running(BUILD, "BUILD_VALIDATION_RUNNING");
         }
-        if (source.isPresent() && target.isPresent()
-                && source.get().status() == TaskStatus.SUCCEEDED
-                && target.get().status() == TaskStatus.SUCCEEDED) {
+        if (BuildValidationPair.succeeded(source.orElse(null), target.orElse(null))) {
             return done(BUILD, "BUILD_VALIDATION_READY");
         }
         if (source.map(BuildValidationRunView::status).filter(this::terminalFailure).isPresent()
@@ -313,11 +321,25 @@ public class ProjectWorkflowStatusService {
         return pending(BUILD, "BUILD_VALIDATION_MISSING");
     }
 
-    private WorkflowStageResponse test(UUID projectId, ProjectContextSnapshot context) {
+    private WorkflowStageResponse test(UUID projectId, ProjectContextSnapshot context, ProjectRuntimeEnvironmentResponse runtime) {
         if (context.sourceRevisionId() == null) {
             return pending(TEST, "ACTIVE_SOURCE_MISSING");
         }
+        if (runtime.sourceEnvironment() == null || runtime.targetEnvironment() == null) {
+            return pending(TEST, "BUILD_PREREQUISITE_MISSING");
+        }
+        var source = buildValidationRepository.findLatest(projectId, context.sourceRevisionId(), runtime.sourceEnvironment().id(),
+                runtime.version(), BuildValidationScope.BOTH).filter(run -> BuildValidationPair.matches(run, projectId,
+                        context.sourceRevisionId(), runtime.sourceEnvironment().id(), runtime.version())).orElse(null);
+        var target = buildValidationRepository.findLatest(projectId, context.sourceRevisionId(), runtime.targetEnvironment().id(),
+                runtime.version(), BuildValidationScope.BOTH).filter(run -> BuildValidationPair.matches(run, projectId,
+                        context.sourceRevisionId(), runtime.targetEnvironment().id(), runtime.version())).orElse(null);
+        if (!BuildValidationPair.succeeded(source, target)) return pending(TEST, "BUILD_VALIDATION_PAIR_INCOMPLETE");
         return automatedTestRepository.findLatest(projectId, context.sourceRevisionId(), context.runtimeEnvironmentVersion())
+                .filter(run -> projectId.equals(run.projectId()) && context.sourceRevisionId().equals(run.sourceRevisionId())
+                        && java.util.Objects.equals(context.runtimeEnvironmentVersion(), run.environmentConfigVersion()))
+                .filter(run -> source.id().equals(run.buildRunId()) && source.environmentId().equals(run.environmentId())
+                        || target.id().equals(run.buildRunId()) && target.environmentId().equals(run.environmentId()))
                 .map(run -> fromStatus(TEST, run.status(), "AUTOMATED_TEST"))
                 .orElseGet(() -> pending(TEST, "AUTOMATED_TEST_MISSING"));
     }
@@ -364,16 +386,6 @@ public class ProjectWorkflowStatusService {
 
     private boolean terminalFailure(TaskStatus status) {
         return status == TaskStatus.FAILED || status == TaskStatus.CANCELLED || status == TaskStatus.TIMEOUT;
-    }
-
-    private String recommended(List<WorkflowStageResponse> stages) {
-        return stages.stream().filter(stage -> stage.status() == WorkflowStageStatus.RUNNING).findFirst()
-                .or(() -> stages.stream().filter(stage -> !stage.optional() && Boolean.TRUE.equals(stage.canStart())
-                        && stage.status() != WorkflowStageStatus.DONE && !OPTIMIZE.equals(stage.id()) && !ARCHIVE.equals(stage.id())).findFirst())
-                .or(() -> stages.stream().filter(stage -> stage.status() == WorkflowStageStatus.BLOCKED).findFirst())
-                .or(() -> stages.stream().filter(stage -> stage.status() == WorkflowStageStatus.PENDING).findFirst())
-                .map(WorkflowStageResponse::id)
-                .orElse(ARCHIVE);
     }
 
     private WorkflowStageResponse pending(String id, String reason) {

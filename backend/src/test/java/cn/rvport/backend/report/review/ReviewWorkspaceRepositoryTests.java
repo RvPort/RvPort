@@ -15,6 +15,22 @@ import org.junit.jupiter.api.Test;
 class ReviewWorkspaceRepositoryTests {
     final UUID report=UUID.randomUUID(),project=UUID.randomUUID(),source=UUID.randomUUID(),actor=UUID.randomUUID(),item=UUID.randomUUID();
     final ObjectMapper mapper=new ObjectMapper();
+    @Test void generationReadIsBoundToProjectSourceAndContextAndNeverWrites() throws Exception {
+        try(var db=new JooqMockDatabase()) {
+            var repo=new ReviewWorkspaceRepository(db.dsl(),mapper);
+            UUID task=UUID.randomUUID();
+            enqueue(db,Map.of("report_id",report,"task_id",task,"status","RUNNING"));
+            assertThat(repo.currentGeneration(project,source,"context")).contains(
+                    new ReviewWorkspaceRepository.Generation(report,task,cn.rvport.backend.task.TaskStatus.RUNNING));
+            assertThat(db.lastExecution().bindings()).containsExactly(project,source,"context");
+            assertThat(db.lastExecution().sql()).contains("r.project_id=?", "r.source_revision_id=?", "r.context_hash=?",
+                    "order by r.generation_sequence desc limit 1");
+            db.enqueueResult(db.result(new Field<?>[]{DSL.field("report_id",UUID.class)}));
+            assertThat(repo.currentGeneration(project,source,"other")).isEmpty();
+            assertThat(db.executions()).hasSize(2).allSatisfy(ex->assertThat(ex.sql().stripLeading()).startsWith("select"));
+            db.verifyComplete();
+        }
+    }
     @Test void absentRunHasExplicitUnavailableAndNeverWritesDuringReads() throws Exception {
         try(var db=new JooqMockDatabase()) {
             var repo=new ReviewWorkspaceRepository(db.dsl(),mapper);

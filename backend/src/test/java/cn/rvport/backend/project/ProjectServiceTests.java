@@ -221,6 +221,30 @@ class ProjectServiceTests {
         assertThatThrownBy(() -> service.overview(projectId, actorId, false))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("项目不存在");
+        org.mockito.Mockito.verifyNoInteractions(workflowStatusService,sourceService,projectContextService,taskEventService);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+    void overviewPreservesAuthorizedReviewSummaryForOwnerAndAdministrator(boolean admin) throws Exception {
+        var projectId=UUID.randomUUID();var actor=UUID.randomUUID();
+        var service=service();
+        var context=new ProjectContextSnapshot(null,1L);
+        var summary=new cn.rvport.backend.report.review.ReportWorkflowSummary(
+                cn.rvport.backend.report.review.ReportWorkflowSummary.State.UNCONFIRMED,UUID.randomUUID(),null,"UNCONFIRMED",0L,22L);
+        var workflow=new ProjectOverviewResponse.WorkflowResponse("report",List.of(),null,summary);
+        when(projectAccessService.requireProjectAccess(projectId,actor,admin)).thenReturn(project(projectId,actor));
+        when(projectContextService.snapshot(projectId)).thenReturn(context);
+        when(workflowStatusService.aggregate(eq(projectId),org.mockito.ArgumentMatchers.isNull(),any(),eq(context))).thenReturn(workflow);
+        var response=service.overview(projectId,actor,admin);
+        assertThat(response.workflow().reportReview()).isSameAs(summary);
+        var order=org.mockito.Mockito.inOrder(projectAccessService,workflowStatusService);
+        order.verify(projectAccessService).requireProjectAccess(projectId,actor,admin);
+        order.verify(workflowStatusService).aggregate(eq(projectId),org.mockito.ArgumentMatchers.isNull(),any(),eq(context));
+        var transaction=ProjectService.class.getMethod("overview",UUID.class,UUID.class,boolean.class)
+                .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(transaction.readOnly()).isTrue();
+        assertThat(transaction.isolation()).isEqualTo(org.springframework.transaction.annotation.Isolation.REPEATABLE_READ);
     }
 
     @Test

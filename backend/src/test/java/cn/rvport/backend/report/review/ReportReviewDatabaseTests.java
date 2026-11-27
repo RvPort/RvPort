@@ -52,6 +52,11 @@ class ReportReviewDatabaseTests {
                 var items=new ReviewSnapshotFactory(mapper).create(selection,fixed,actor,null,List.of());
                 var manifest=new ReportReviewManifest(project,source,"ctx",ReportMode.STANDARD,selection,fixed,items,null,null);
                 reviews.lockProject(project); reviews.createRun(report,manifest,actor,null);
+                assertThat(reviews.currentGeneration(project,source,"ctx")).contains(
+                        new ReviewWorkspaceRepository.Generation(report,task,TaskStatus.PENDING));
+                assertThat(reviews.currentGeneration(project,source,"old-context")).isEmpty();
+                assertThat(reviews.currentGeneration(project,UUID.randomUUID(),"ctx")).isEmpty();
+                assertThat(reviews.currentGeneration(UUID.randomUUID(),source,"ctx")).isEmpty();
                 assertThat(reviews.matchesExecution(report,actor,null)).isTrue();
                 assertThat(reviews.matchesExecution(report,UUID.randomUUID(),null)).isFalse();
                 assertThat(reviews.manifest(report).items().getFirst().id()).isEqualTo(items.getFirst().id());
