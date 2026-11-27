@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -532,5 +534,28 @@ class AiMigrationAgentRuntimeTests {
         assertThatThrownBy(() -> service.run(projection(), sourceRoot, selection, context))
                 .isInstanceOf(java.io.IOException.class)
                 .hasMessageContaining("AI_MIGRATION_DIFF_SCOPE_VIOLATED");
+    }
+
+    @Test
+    void 模型连接信息缺失在起容器前快速失败() throws Exception {
+        prepareSource();
+        // Base URL 缺失：不触达 adapter（不起容器/子进程），以业务错误码快速失败
+        var blank = new AgentModelRuntimeConfig(new AgentRuntimesRecord(), new ModelProfilesRecord(),
+                new CodexProviderResolvedConfig(true, "opencode", CodexProviderType.OPENAI_COMPATIBLE,
+                        "", "fixture", CodexProviderWireApi.CHAT, "", 10, 1800));
+        when(models.resolveExecution(actor, project, profileId, runtimeId)).thenReturn(blank);
+        assertThatThrownBy(() -> service.run(projection(), sourceRoot, selection, context))
+                .isInstanceOf(java.io.IOException.class)
+                .hasMessageContaining("AI_MIGRATION_MODEL_NOT_CONFIGURED");
+        verify(adapter, never()).run(any());
+        // API Key 缺失：同样快速失败
+        var noKey = new AgentModelRuntimeConfig(new AgentRuntimesRecord(), new ModelProfilesRecord(),
+                new CodexProviderResolvedConfig(true, "opencode", CodexProviderType.OPENAI_COMPATIBLE,
+                        "http://mock.invalid", "fixture", CodexProviderWireApi.CHAT, " ", 10, 1800));
+        when(models.resolveExecution(actor, project, profileId, runtimeId)).thenReturn(noKey);
+        assertThatThrownBy(() -> service.run(projection(), sourceRoot, selection, context))
+                .isInstanceOf(java.io.IOException.class)
+                .hasMessageContaining("AI_MIGRATION_MODEL_NOT_CONFIGURED");
+        verify(adapter, never()).run(any());
     }
 }

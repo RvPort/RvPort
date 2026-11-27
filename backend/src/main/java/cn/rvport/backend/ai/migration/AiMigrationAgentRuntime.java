@@ -138,6 +138,12 @@ public class AiMigrationAgentRuntime {
             throw new IOException("AI_MIGRATION_NO_ENTRIES");
         }
         var config = resolveExecution(selection, context.task().createdBy(), context.task().projectId());
+        // 模型连接三要素必须来自用户模型配置且完整：不内置任何默认 Base URL/API Key，
+        // 缺失即以业务错误快速失败（在起容器之前），提示用户到「模型配置」补全。
+        var model = config.model();
+        if (model == null || isBlank(model.baseUrl()) || isBlank(model.apiKey()) || isBlank(model.model())) {
+            throw new IOException("AI_MIGRATION_MODEL_NOT_CONFIGURED");
+        }
         context.log(TaskLogType.STDOUT, selection.attemptAudit(config));
         Path workspace = createWorkspace(runId);
         // 任务级 git 仓库（design D1/D2）：有 repo 服务且带 runId 时启用持久仓库与提交挂点。
@@ -402,7 +408,7 @@ public class AiMigrationAgentRuntime {
         Path promptFile = workspace.resolve(".prompt.txt");
         Files.writeString(promptFile, containerPrompt(), StandardCharsets.UTF_8);
         Map<String, String> environment = new LinkedHashMap<>();
-        environment.put("WXAI_API_KEY", String.valueOf(config.model().apiKey()));
+        environment.put("WXAI_API_KEY", config.model().apiKey());
         environment.put("WXAI_MODEL", config.model().model());
         environment.put("WXAI_BASE_URL", config.model().baseUrl());
         cn.rvport.backend.ai.migration.executor.ExecutorContainerResult result = executorContainers.execute(
@@ -755,5 +761,9 @@ public class AiMigrationAgentRuntime {
                 }
             });
         }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

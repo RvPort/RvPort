@@ -274,6 +274,9 @@ public class AiMigrationRuntimeService {
     private TaskExecutionException translate(IOException ex) {
         String message = ex.getMessage() == null ? "" : ex.getMessage();
         return switch (message) {
+            case "AI_MIGRATION_MODEL_NOT_CONFIGURED" -> new TaskExecutionException(
+                    TaskErrorCode.AI_MIGRATION_MODEL_NOT_CONFIGURED,
+                    "模型配置缺少 Base URL / API Key / 模型名，请在「模型配置」补全后重试 / Model provider settings incomplete; complete Base URL, API key and model in Model Configuration", null);
             case "AI_MIGRATION_NO_ENTRIES" -> new TaskExecutionException(TaskErrorCode.AI_MIGRATION_NO_ENTRIES,
                     "当前扫描没有可迁移条目 / No projectable entries", null);
             case "AGENT_OUTPUT_INVALID" -> new TaskExecutionException(TaskErrorCode.AI_MIGRATION_OUTPUT_INVALID,
