@@ -6,6 +6,8 @@
 
 本索引包含 171 个路由，其中 3 个 SSE 入口。
 
+项目 overview 的主线推荐、报告复核摘要及旧前端覆盖逻辑的对接要求见 [工作流主线推荐契约](工作流主线推荐契约.md)。推荐为导航焦点，阶段执行资格仍由各自 readiness 决定。
+
 | 方法 | 路径 | 控制器 |
 |---|---|---|
 | `GET` | `/api/admin/agent-runtimes` | [AgentRuntimeController.java](../src/main/java/cn/rvport/backend/agentruntime/AgentRuntimeController.java) |

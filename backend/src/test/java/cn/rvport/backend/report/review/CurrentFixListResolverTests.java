@@ -29,6 +29,7 @@ class CurrentFixListResolverTests {
         draft(true,"CURRENT","valid",null,null);assertThat(resolver.current(project).reasonCode()).isEqualTo("UNCONFIRMED");
         draft(true,"CURRENT","valid",null,confirmation);assertThat(resolver.current(project).reasonCode()).isEqualTo("NEEDS_CONFIRMATION");
         draft(true,"CURRENT","valid",confirmation,null);
+        assertThat(resolver.current(project).reasonCode()).isEqualTo("REPORT_REVIEW_UNAVAILABLE");
         when(reviews.confirmation(report,confirmation)).thenReturn(Optional.of(Map.of("draftVersion",1L,"itemCount",1)));
         assertThatThrownBy(()->resolver.require(project,confirmation)).isInstanceOf(ApiException.class);
         assertThatThrownBy(()->resolver.items(resolver.current(project))).isInstanceOf(IllegalArgumentException.class);

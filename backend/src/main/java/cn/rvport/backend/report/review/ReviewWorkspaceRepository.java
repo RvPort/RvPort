@@ -60,6 +60,19 @@ public class ReviewWorkspaceRepository {
     public boolean activeGeneration(UUID projectId) {
         return Boolean.TRUE.equals(dsl.fetchOne("select exists(select 1 from report_review_runs where project_id=? and active) as present",projectId).get("present",Boolean.class));
     }
+    public record Generation(UUID reportId, UUID taskId, cn.rvport.backend.task.TaskStatus status) { }
+
+    /** 只读取当前输入身份，旧源码或旧 Context 的活动任务不能抢占导航。 */
+    public Optional<Generation> currentGeneration(UUID projectId, UUID sourceRevisionId, String contextHash) {
+        return dsl.fetchOptional("""
+                select r.report_id,p.task_id,p.status from report_review_runs r
+                join reports p on p.id=r.report_id
+                where r.project_id=? and r.source_revision_id=? and r.context_hash=?
+                order by r.generation_sequence desc limit 1
+                """,projectId,sourceRevisionId,contextHash)
+                .map(row -> new Generation(row.get("report_id",UUID.class),row.get("task_id",UUID.class),
+                        cn.rvport.backend.task.TaskStatus.valueOf(row.get("status",String.class))));
+    }
     public void createRun(UUID reportId,ReportReviewManifest manifest,UUID actor,cn.rvport.backend.modelprofile.ModelExecutionSelection model) {
         dsl.execute("""
                 insert into report_review_runs(report_id,project_id,source_revision_id,mode,context_hash,manifest,

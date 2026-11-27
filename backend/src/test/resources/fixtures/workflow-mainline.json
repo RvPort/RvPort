@@ -1,0 +1,20 @@
+[
+  {"id":"M01","sourceReady":false,"state":"NOT_GENERATED","expected":"assets"},
+  {"id":"M02","state":"NOT_GENERATED","expected":"kb"},
+  {"id":"M03","state":"NOT_GENERATED","reportCanStart":true,"expected":"report"},
+  {"id":"M04","state":"NOT_GENERATED","reportCanStart":true,"branchStatus":"RUNNING","expected":"report"},
+  {"id":"M05","state":"PENDING_REVIEW","pending":2,"confirmationState":"UNCONFIRMED","expected":"report"},
+  {"id":"M06","state":"UNCONFIRMED","toFix":22,"confirmationState":"UNCONFIRMED","expected":"report"},
+  {"id":"M07","state":"NEEDS_CONFIRMATION","confirmationState":"NEEDS_CONFIRMATION","expected":"report"},
+  {"id":"M08","state":"PENDING_REVIEW","pending":2,"confirmationState":"NEEDS_CONFIRMATION","expected":"report"},
+  {"id":"M09","state":"CONFIRMED_WITH_ITEMS","available":true,"itemCount":2,"branchStatus":"RUNNING","expected":"manual"},
+  {"id":"M10","state":"CONFIRMED_EMPTY","available":true,"buildCanStart":true,"expected":"build"},
+  {"id":"M11","state":"CONFIRMED_EMPTY","available":true,"expected":"env"},
+  {"id":"M12","state":"CONFIRMED_EMPTY","available":true,"buildStatus":"DONE","expected":"test"},
+  {"id":"M13","state":"STALE","reportCanStart":true,"expected":"report"},
+  {"id":"M14","state":"UNAVAILABLE","expected":"report"},
+  {"id":"M15","state":"GENERATING","available":true,"itemCount":2,"expected":"report"},
+  {"id":"M16","state":"CONFIRMED_EMPTY","available":true,"buildStatus":"DONE","testStatus":"DONE","optimizeStatus":"DONE","archiveStatus":"DONE","expected":null},
+  {"id":"M17","state":"CONFIRMED_WITH_ITEMS","available":true,"itemCount":2,"expected":"manual"},
+  {"id":"M18","state":"UNCONFIRMED","confirmationState":"UNCONFIRMED","expected":"report"}
+]
