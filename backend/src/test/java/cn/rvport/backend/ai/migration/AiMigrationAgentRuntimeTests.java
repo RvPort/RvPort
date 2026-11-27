@@ -497,4 +497,40 @@ class AiMigrationAgentRuntimeTests {
         assertThat(digestPlain).isNotEqualTo(digestBroken);
         assertThat(AiMigrationAgentRuntime.treeDigest(root)).isEqualTo(digestBroken);
     }
+
+    @Test
+    void 全量物化让非条目文件进入工作区() throws Exception {
+        prepareSource();
+        Files.writeString(sourceRoot.resolve("Makefile"), "all:\n\ttrue\n");
+        AtomicReference<Path> captured = new AtomicReference<>();
+        when(adapter.run(any())).thenAnswer(invocation -> {
+            var request = invocation.getArgument(0, AgentRuntimeExecutionRequest.class);
+            captured.set(request.workspace());
+            runSuccessfulAgent(request.workspace());
+            // 非 git 模式运行结束后工作区即被清理，断言在 agent 桩内完成
+            var ws = request.workspace();
+            // 非条目文件（构建配置等）进入 source/ 与 baseline/：agent 可读构建配置做必要性分析
+            assertThat(Files.exists(ws.resolve("source/Makefile"))).isTrue();
+            assertThat(Files.exists(ws.resolve("baseline/Makefile"))).isTrue();
+            assertThat(Files.exists(ws.resolve("source/src/b.h"))).isTrue();
+            return new CodexProcessResult(0, false, "DONE", "");
+        });
+        service.run(projection(), sourceRoot, selection, context);
+        assertThat(captured.get()).isNotNull();
+    }
+
+    @Test
+    void 非条目文件改动被范围守卫拒绝() throws Exception {
+        prepareSource();
+        when(adapter.run(any())).thenAnswer(invocation -> {
+            var request = invocation.getArgument(0, AgentRuntimeExecutionRequest.class);
+            runSuccessfulAgent(request.workspace());
+            // agent 越界：修改条目范围外的文件 → 拒绝运行且不产出补丁
+            Files.writeString(request.workspace().resolve("source/Makefile"), "all:\n\ttrue\n");
+            return new CodexProcessResult(0, false, "DONE", "");
+        });
+        assertThatThrownBy(() -> service.run(projection(), sourceRoot, selection, context))
+                .isInstanceOf(java.io.IOException.class)
+                .hasMessageContaining("AI_MIGRATION_DIFF_SCOPE_VIOLATED");
+    }
 }

@@ -165,15 +165,23 @@ public class AiMigrationAgentRuntime {
             Files.createDirectories(workspace.resolve("output"));
             // 技能释放按模式在 executeAgent 内进行：process 释放 classpath agent md，container 经 --skill 挂载卷。
             List<String> missingFiles = new ArrayList<>();
+            // 全量物化：source/ 与 baseline/ 承载完整源码树。agent 能读取构建配置与条件编译
+            // （技能协议要求按此做必要性分析）；SOURCE 产物即迁移后全量源码快照。
+            // 授权面不扩大：执行后 diff 范围守卫保证改动仍只落在条目涉及的文件上（见执行后校验）。
+            materializeTree(sourceRoot, source);
+            materializeTree(sourceRoot, baseline);
+            java.util.Set<String> entryFiles = new java.util.LinkedHashSet<>();
             for (AiMigrationProjector.Item item : projection.suggestionClass()) {
                 if (item.file() == null || item.file().isBlank()) {
                     continue;
                 }
-                boolean present = materialize(sourceRoot, item.file(), source);
-                if (present) {
-                    materialize(sourceRoot, item.file(), baseline);
+                entryFiles.add(item.file());
+                Path resolved = sourceRoot.resolve(item.file()).normalize();
+                if (!resolved.startsWith(sourceRoot) || resolved.equals(sourceRoot)) {
+                    // 条目路径逃逸出源码根：输入注入信号，硬拒绝而不是按缺失文件降级
+                    throw new IOException("AI_MIGRATION_SOURCE_PATH_UNSAFE");
                 }
-                if (!present) {
+                if (!Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
                     missingFiles.add(item.file());
                 }
             }
@@ -235,6 +243,9 @@ public class AiMigrationAgentRuntime {
             if (gitBacked && baselineCommit != null) {
                 repo.verifyBaselineUntouched(workspace, baselineCommit);
             }
+            // 全量物化下的授权面守卫：改动（相对 baseline）必须落在条目涉及的文件集合内，
+            // .migrate_verify/ 验证产物除外。越界即失败——不静默吞掉，也绝不把越界改动带进补丁。
+            enforceDiffScope(baseline, source, entryFiles, context);
             Path resultFile = workspace.resolve("output/migration_result.json");
             if (!Files.isRegularFile(resultFile, LinkOption.NOFOLLOW_LINKS) || Files.size(resultFile) > MAX_RESULT_BYTES) {
                 throw new IOException("AGENT_OUTPUT_INVALID");
@@ -459,18 +470,55 @@ public class AiMigrationAgentRuntime {
         }
     }
 
-    private boolean materialize(Path sourceRoot, String relative, Path targetRoot) throws IOException {
-        Path resolved = sourceRoot.resolve(relative).normalize();
-        if (!resolved.startsWith(sourceRoot) || resolved.equals(sourceRoot)) {
-            throw new IOException("AI_MIGRATION_SOURCE_PATH_UNSAFE");
+    /** 全量物化：把源码工作副本整树复制进 targetRoot（不跟随符号链接，符号链接由后续防御统一拒绝）。 */
+    private void materializeTree(Path sourceRoot, Path targetRoot) throws IOException {
+        try (var paths = Files.walk(sourceRoot)) {
+            for (Path file : paths.filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)).toList()) {
+                Path target = targetRoot.resolve(sourceRoot.relativize(file).toString());
+                Files.createDirectories(target.getParent());
+                Files.copy(file, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
         }
-        if (!Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)) {
-            return false;
+    }
+
+    /**
+     * 全量物化后的授权面守卫：相对 baseline 的改动必须落在条目涉及的文件集合内
+     * （`.migrate_verify/` 验证产物除外）。越界即失败——不静默吞掉，也绝不把越界改动带进补丁。
+     */
+    private void enforceDiffScope(Path baseline, Path source, java.util.Set<String> entryFiles,
+            TaskExecutionContext context) throws IOException {
+        java.util.Set<String> changed = new java.util.TreeSet<>();
+        try (var paths = Files.walk(baseline)) {
+            for (Path b : paths.filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)).toList()) {
+                String rel = baseline.relativize(b).toString();
+                Path s = source.resolve(rel);
+                if (!Files.isRegularFile(s, LinkOption.NOFOLLOW_LINKS) || Files.mismatch(b, s) >= 0) {
+                    changed.add(rel);
+                }
+            }
         }
-        Path target = targetRoot.resolve(relative);
-        Files.createDirectories(target.getParent());
-        Files.copy(resolved, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        return true;
+        try (var paths = Files.walk(source)) {
+            for (Path s : paths.filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)).toList()) {
+                String rel = source.relativize(s).toString();
+                if (!Files.isRegularFile(baseline.resolve(rel), LinkOption.NOFOLLOW_LINKS)) {
+                    changed.add(rel);
+                }
+            }
+        }
+        List<String> violations = new ArrayList<>();
+        for (String path : changed) {
+            String normalized = path.replace('\\', '/');
+            if (normalized.equals(".migrate_verify") || normalized.startsWith(".migrate_verify/")) {
+                continue;
+            }
+            if (!entryFiles.contains(normalized)) {
+                violations.add(normalized);
+            }
+        }
+        if (!violations.isEmpty()) {
+            context.log(TaskLogType.STDERR, "AI_MIGRATION_DIFF_SCOPE_VIOLATED " + String.join(",", violations));
+            throw new IOException("AI_MIGRATION_DIFF_SCOPE_VIOLATED");
+        }
     }
 
     /** diff 的最长运行时间：纯本地目录比较通常秒级完成，超时通常意味着符号链接环或异常输入。 */

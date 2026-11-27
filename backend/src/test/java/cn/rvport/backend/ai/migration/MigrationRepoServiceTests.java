@@ -382,4 +382,24 @@ class MigrationRepoServiceTests {
         // maxCount 截断
         assertThat(svc.history(Path.of("/any"), 1)).hasSize(1);
     }
+
+    @Test
+    void 初始化写入gitignore且运行期文件不进提交() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(realGitAvailable(), "unit-test 镜像无 git");
+        var svc = service();
+        Path repo = temp.resolve("repo-gitignore");
+        Files.createDirectories(repo.resolve("source"));
+        svc.initialize(repo);
+        assertThat(Files.readString(repo.resolve(".gitignore")))
+                .contains("/.prompt.txt").contains("/output/").contains("/.migrate_verify/");
+        svc.commitFirstInit(repo);
+        Files.writeString(repo.resolve(".prompt.txt"), "prompt");
+        Files.createDirectories(repo.resolve("output"));
+        Files.writeString(repo.resolve("output/migration_result.json"), "{}");
+        Files.writeString(repo.resolve("source/a.c"), "int a;\n");
+        svc.commitAgentFinish(repo);
+        var tracked = new Cli().read(repo, "ls-files");
+        assertThat(tracked).contains("source/a.c").contains(".gitignore");
+        assertThat(tracked).doesNotContain(".prompt.txt").doesNotContain("output/");
+    }
 }

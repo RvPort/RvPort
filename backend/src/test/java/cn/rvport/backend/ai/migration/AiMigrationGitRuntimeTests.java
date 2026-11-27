@@ -284,4 +284,22 @@ class AiMigrationGitRuntimeTests {
             return output;
         }
     }
+
+    @Test
+    void 全量物化使SOURCE产物承载完整源码树() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(realGitAvailable(), "unit-test 镜像无 git");
+        prepareSource();
+        Files.writeString(sourceRoot.resolve("Makefile"), "all:\n\ttrue\n");
+        Files.writeString(sourceRoot.resolve("src/helper.h"), "#pragma once\n");
+        stubSuccessfulAgent();
+        var executed = service.run(projection(), sourceRoot, selection, context, migrationRunId);
+        var tar = new org.apache.commons.compress.archivers.tar.TarArchiveInputStream(
+                new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(executed.sourceSnapshot())));
+        java.util.Set<String> names = new java.util.HashSet<>();
+        org.apache.commons.compress.archivers.tar.TarArchiveEntry tarEntry;
+        while ((tarEntry = tar.getNextTarEntry()) != null) {
+            names.add(tarEntry.getName());
+        }
+        assertThat(names).contains("src/a.c").contains("src/helper.h").contains("Makefile");
+    }
 }

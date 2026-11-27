@@ -96,6 +96,19 @@ public final class MigrationRepoService {
         Files.createDirectories(repo);
         git.run(repo, GIT_TIMEOUT, "init", "-q");
         configureIdentity(repo);
+        writeGitignore(repo);
+    }
+
+    /**
+     * 任务仓库根级 .gitignore：运行期文件（agent 提示词、结果输出、验证中间产物）不进提交，
+     * 使 diff/patch series 只承载真实源码改动。锚定仓库根（前导 /），不影响源码树内同名目录。
+     */
+    private void writeGitignore(Path repo) throws IOException {
+        Files.writeString(repo.resolve(".gitignore"), """
+                /.prompt.txt
+                /output/
+                /.migrate_verify/
+                """, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     private void configureIdentity(Path repo) throws IOException, InterruptedException {
